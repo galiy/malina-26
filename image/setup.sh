@@ -1,0 +1,38 @@
+#!/bin/bash -e
+
+PIGEN="${PIGEN:-/opt/raspberry_tmp/pi-gen}"
+SRC="$(cd "$(dirname "$0")" && pwd)"
+
+if [ ! -d "$PIGEN/.git" ]; then
+	echo "pi-gen not found at $PIGEN" >&2
+	exit 1
+fi
+
+git -C "$PIGEN" fetch --quiet origin
+git -C "$PIGEN" checkout -q bookworm
+git -C "$PIGEN" reset --hard -q origin/bookworm
+
+cp "$SRC/config" "$PIGEN/config"
+
+rm -rf "$PIGEN/stage-malina"
+cp -a "$SRC/stage-malina" "$PIGEN/stage-malina"
+find "$PIGEN/stage-malina" -name '*-run.sh' -exec chmod +x {} +
+chmod +x "$PIGEN/stage-malina/prerun.sh" "$PIGEN/stage-malina/EXPORT_IMAGE"
+
+touch "$PIGEN/stage2/SKIP_IMAGES"
+
+sed -i 's|^ROOT_PART_SIZE=.*|ROOT_PART_SIZE=$((8 * 1024 * 1024 * 1024))|' \
+	"$PIGEN/export-image/prerun.sh"
+
+cat > "$PIGEN/export-image/03-network/01-run.sh" <<'EOS'
+#!/bin/bash -e
+
+rm -f "${ROOTFS_DIR}/etc/resolv.conf"
+ln -sf /run/NetworkManager/resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
+EOS
+chmod +x "$PIGEN/export-image/03-network/01-run.sh"
+
+sed -i '1a sed -i "s| init=/usr/lib/raspberrypi-sys-mods/firstboot||" "${ROOTFS_DIR}/boot/firmware/cmdline.txt"' \
+	"$PIGEN/export-image/05-finalise/01-run.sh"
+
+echo "pi-gen prepared: $PIGEN (branch bookworm)"

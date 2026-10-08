@@ -1,0 +1,24 @@
+/* Превью Markdown на всю ширину (обход дефолтного max-width). */
+body,
+body.vscode-body,
+.markdown-body,
+.markdown-preview,
+#code,
+#preview,
+.vscode-body {
+    max-width: none !important;
+    width: 100% !important;
+}
+
+/* Таблицы: не сжимать, длинные ячейки переносить. */
+table {
+    width: 100% !important;
+    table-layout: auto !important;
+}
+
+table th,
+table td {
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+}
