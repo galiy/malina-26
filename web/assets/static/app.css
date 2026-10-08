@@ -467,3 +467,34 @@ h1, h2, h3 { font-family: "Open Sans Condensed", "Open Sans", "Noto Sans", "Noto
   .page-head { flex-wrap: wrap; }
   .powerbar { flex-wrap: wrap; white-space: normal; width: 100%; }
 }
+
+/* Сервисы: карточки на узких экранах (вместо горизонтального скролла) */
+@media (max-width: 820px) {
+  .svc-table { display: block; width: 100%; overflow: visible; border: 0; }
+  .svc-table thead { display: none; }
+  .svc-table tbody { display: block; }
+  .svc-table tr { display: block; border: 2px solid var(--accent); border-radius: 4px; margin-bottom: 10px; padding: 10px 12px; background: #fff; }
+  .svc-table tr:hover { background: #fff; }
+  .svc-table td { display: block; width: auto; padding: 2px 0; border: 0; white-space: normal; }
+  .svc-table td::before { content: attr(data-label) ": "; color: var(--muted); font-weight: 600; }
+  .svc-table td.svc-name::before, .svc-table td.svc-actions::before { content: ""; }
+  .svc-table td.svc-name { margin-bottom: 3px; }
+  .svc-table td.svc-actions { margin-top: 8px; }
+}
+/* Настройка сети: стопкой (метка над полем) на узких экранах */
+@media (max-width: 820px) {
+  .nettable, .nettable tbody, .nettable tr, .nettable td { display: block; width: auto; }
+  .nettable tr { margin-bottom: 12px; }
+  .nettable td { border: 0; padding: 3px 0; white-space: normal; }
+  .nettable td:first-child { color: var(--muted); }
+  .nettable input, .nettable select { width: 100%; max-width: 100%; }
+}
+
+/* Защита от горизонтального переполнения и узких карточек на мобиле */
+@media (max-width: 820px) {
+  html, body { overflow-x: hidden; max-width: 100%; }
+  .sysinfo { grid-template-columns: 1fr; }
+  .gauge { min-width: 0; flex: 1 1 30%; }
+  .srow { flex-wrap: wrap; }
+  .sv { text-align: left; }
+}

@@ -26,17 +26,17 @@
       var stopDis = active === "inactive" || active === "failed" || active === "deactivating" ? " disabled" : "";
       out +=
         '<tr>' +
-          '<td class="svc-name"><code>' + esc(s.unit) + '</code></td>' +
-          '<td class="svc-desc">' + esc(s.description || "") + '</td>' +
-          '<td><span class="badge ' + stateClass(active) + '" data-state="' + esc(active) + '">' +
+          '<td class="svc-name" data-label="' + esc(t("svc.col.service")) + '"><code>' + esc(s.unit) + '</code></td>' +
+          '<td class="svc-desc" data-label="' + esc(t("svc.col.description")) + '">' + esc(s.description || "") + '</td>' +
+          '<td class="svc-state" data-label="' + esc(t("svc.col.state")) + '"><span class="badge ' + stateClass(active) + '" data-state="' + esc(active) + '">' +
             esc(stateLabel(active)) + '</span></td>' +
-          '<td class="svc-actions">' +
+          '<td class="svc-actions" data-label="' + esc(t("svc.col.actions")) + '">' +
             '<button type="button" data-unit="' + esc(s.unit) + '" data-action="start"' + startDis + '>' +
               esc(t("svc.start")) + '</button> ' +
             '<button type="button" class="btn-ghost" data-unit="' + esc(s.unit) + '" data-action="stop"' + stopDis + '>' +
               esc(t("svc.stop")) + '</button>' +
           '</td>' +
-          '<td class="svc-note' + (s.note === "svc.note.critical" ? " crit" : "") + '">' +
+          '<td class="svc-note' + (s.note === "svc.note.critical" ? " crit" : "") + '" data-label="' + esc(t("svc.col.comment")) + '">' +
             (s.note ? esc(t(s.note)) : "") + '</td>' +
         '</tr>';
     });
