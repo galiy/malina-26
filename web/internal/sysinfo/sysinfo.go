@@ -2,6 +2,8 @@ package sysinfo
 
 import (
 	"bufio"
+	"context"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -77,19 +79,59 @@ type Network struct {
 }
 
 type Power struct {
-	Throttled string `json:"throttled"`
-	Volts     string `json:"volts"`
+	Throttled string   `json:"throttled"`
+	Volts     string   `json:"volts"`
+	Flags     []string `json:"flags"`      // расшифровка get_throttled (коды)
+	MemArmKB  uint64   `json:"mem_arm_kb"` // память ARM
+	MemGpuKB  uint64   `json:"mem_gpu_kb"` // память GPU
+}
+
+// WifiClient — подключённый к точке доступа Wi-Fi клиент.
+type WifiClient struct {
+	MAC      string `json:"mac"`
+	IP       string `json:"ip"`
+	Host     string `json:"host"`
+	LeaseEnd int64  `json:"lease_end"`
+	Signal   int    `json:"signal"` // dBm, 0 если неизвестно
+	RxRate   string `json:"rx_rate"`
+	TxRate   string `json:"tx_rate"`
+	Online   bool   `json:"online"`
+}
+
+// USBDevice — USB-устройство.
+type USBDevice struct {
+	Bus  string `json:"bus"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Proc — процесс для списка на странице информации.
+type Proc struct {
+	PID     int     `json:"pid"`
+	User    string  `json:"user"`
+	CPUPct  float64 `json:"cpu"`
+	MemPct  float64 `json:"mem"`
+	RSSKB   uint64  `json:"rss_kb"`
+	Command string  `json:"cmd"`
+}
+
+// Connected — подключённые устройства (Wi-Fi-клиенты AP и USB).
+type Connected struct {
+	Wifi []WifiClient `json:"wifi"`
+	USB  []USBDevice  `json:"usb"`
 }
 
 type Info struct {
-	Host   Host     `json:"host"`
-	CPU    CPU      `json:"cpu"`
-	Memory Memory   `json:"memory"`
-	Disks  []Disk   `json:"disks"`
-	Net    Network  `json:"network"`
-	Power  Power    `json:"power"`
-	Failed []string `json:"failed_units"`
-	TS     int64    `json:"ts"`
+	Host      Host      `json:"host"`
+	CPU       CPU       `json:"cpu"`
+	Memory    Memory    `json:"memory"`
+	Disks     []Disk    `json:"disks"`
+	Net       Network   `json:"network"`
+	Power     Power     `json:"power"`
+	Connected Connected `json:"connected"`
+	Errors    []string  `json:"errors"`
+	Failed    []string  `json:"failed_units"`
+	TS        int64     `json:"ts"`
 }
 
 type cpuTimes struct{ idle, total uint64 }
@@ -115,6 +157,13 @@ type Sampler struct {
 	powerCacheAt time.Time
 	failedCache  []string
 	failedAt     time.Time
+
+	connMu    sync.Mutex
+	connCache Connected
+
+	errMu    sync.Mutex
+	errs     map[string]time.Time
+	killFlag bool
 }
 
 func New() *Sampler {
@@ -128,6 +177,8 @@ func New() *Sampler {
 	if s.arch == "" {
 		s.arch = runtime.GOARCH
 	}
+	s.errs = map[string]time.Time{}
+	go s.connLoop()
 	return s
 }
 
@@ -178,9 +229,20 @@ func (s *Sampler) Snapshot() Info {
 	s.lastAt = now
 
 	info.Power = s.power(now)
+	info.Connected = s.connected(now)
 	info.Failed = s.failedUnits(now)
 	if info.Failed == nil {
 		info.Failed = []string{}
+	}
+	info.Errors = s.currentErrs()
+	if info.Errors == nil {
+		info.Errors = []string{}
+	}
+	if info.Connected.Wifi == nil {
+		info.Connected.Wifi = []WifiClient{}
+	}
+	if info.Connected.USB == nil {
+		info.Connected.USB = []USBDevice{}
 	}
 	if info.Disks == nil {
 		info.Disks = []Disk{}
@@ -540,23 +602,247 @@ func dnsServers() []string {
 	return out
 }
 
+// run — единая обёртка для внешних команд: лимит 1 с; при превышении процесс
+// убивается, событие логируется и возвращается ошибка (для показа в UI).
+func (s *Sampler) run(name string, args ...string) (string, error) {
+	const to = time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), to)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, name, args...).Output()
+	if ctx.Err() == context.DeadlineExceeded {
+		e := fmt.Errorf("%s %s: превышен лимит %s — процесс убит", name, strings.Join(args, " "), to)
+		s.noteErr(e.Error())
+		s.errMu.Lock()
+		s.killFlag = true
+		s.errMu.Unlock()
+		return "", e
+	}
+	if err != nil {
+		e := fmt.Errorf("%s %s: %v", name, strings.Join(args, " "), err)
+		s.noteErr(e.Error())
+		return "", e
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func (s *Sampler) noteErr(msg string) {
+	s.errMu.Lock()
+	if s.errs == nil {
+		s.errs = map[string]time.Time{}
+	}
+	s.errs[msg] = time.Now()
+	s.errMu.Unlock()
+}
+
+// currentErrs — недавние (за 5 минут) ошибки внешних команд для показа в UI.
+func (s *Sampler) currentErrs() []string {
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
+	cut := time.Now().Add(-5 * time.Minute)
+	var out []string
+	for m, t := range s.errs {
+		if t.After(cut) {
+			out = append(out, m)
+		} else {
+			delete(s.errs, m)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 func (s *Sampler) power(now time.Time) Power {
 	if now.Sub(s.powerCacheAt) < 5*time.Second {
 		return s.powerCache
 	}
 	var p Power
-	p.Throttled = cmdOut("vcgencmd", "get_throttled")
-	p.Volts = cmdOut("vcgencmd", "measure_volts")
+	if raw, err := s.run("vcgencmd", "get_throttled"); err == nil {
+		p.Throttled = raw
+		p.Flags = decodeThrottled(raw)
+	}
+	if raw, err := s.run("vcgencmd", "measure_volts"); err == nil {
+		p.Volts = raw
+	}
+	p.MemArmKB = s.vcgencmdMem("arm")
+	p.MemGpuKB = s.vcgencmdMem("gpu")
 	s.powerCache = p
 	s.powerCacheAt = now
 	return p
 }
 
-func (s *Sampler) failedUnits(now time.Time) []string {
-	if now.Sub(s.failedAt) < 10*time.Second {
-		return s.failedCache
+// decodeThrottled разбирает "throttled=0x..." в список кодов состояний.
+func decodeThrottled(raw string) []string {
+	i := strings.Index(raw, "0x")
+	if i < 0 {
+		return nil
 	}
-	out := cmdOutRaw("systemctl", "--failed", "--no-legend", "--plain")
+	v, err := strconv.ParseUint(strings.TrimSpace(raw[i+2:]), 16, 32)
+	if err != nil {
+		return nil
+	}
+	type bf struct {
+		bit  uint
+		code string
+	}
+	defs := []bf{
+		{0, "undervolt_now"}, {1, "freq_capped_now"}, {2, "throttled_now"}, {3, "soft_temp_now"},
+		{16, "undervolt_occ"}, {17, "freq_capped_occ"}, {18, "throttled_occ"}, {19, "soft_temp_occ"},
+	}
+	var out []string
+	for _, d := range defs {
+		if v&(1<<d.bit) != 0 {
+			out = append(out, d.code)
+		}
+	}
+	return out
+}
+
+// vcgencmdMem читает "arm=948M"/"gpu=76M" -> КБ.
+func (s *Sampler) vcgencmdMem(which string) uint64 {
+	out, err := s.run("vcgencmd", "get_mem", which) // arm=948M
+	if err != nil {
+		return 0
+	}
+	eq := strings.Index(out, "=")
+	if eq < 0 {
+		return 0
+	}
+	v := strings.TrimSpace(out[eq+1:])
+	v = strings.TrimSuffix(v, "M")
+	v = strings.TrimSuffix(v, "K")
+	n, _ := strconv.ParseUint(strings.TrimSpace(v), 10, 64)
+	return n * 1024
+}
+
+func (s *Sampler) connected(now time.Time) Connected {
+	s.connMu.Lock()
+	defer s.connMu.Unlock()
+	return s.connCache
+}
+
+// connLoop опрашивает устройства в фоне: `iw ... station dump` может зависать,
+// поэтому держим это вне Snapshot (чтобы не блокировать /api/system).
+func (s *Sampler) connLoop() {
+	for {
+		c := Connected{Wifi: s.wifiClients(), USB: s.usbDevices()}
+		s.connMu.Lock()
+		s.connCache = c
+		s.connMu.Unlock()
+		time.Sleep(15 * time.Second)
+	}
+}
+
+// wifiClients — клиенты AP: аренды dnsmasq + живые станции (сигнал/битрейты).
+func (s *Sampler) wifiClients() []WifiClient {
+	// Онлайн определяем по ARP-таблице (файл /proc/net/arp, без внешних команд):
+	// в AP-режиме на brcmfmac и `iw`, и `hostapd_cli` могут зависать.
+	online := map[string]bool{}
+	if b, err := os.ReadFile("/proc/net/arp"); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			f := strings.Fields(line)
+			// IPaddress HWtype Flags HWaddress Mask Device
+			if len(f) >= 4 && f[2] == "0x2" {
+				online[strings.ToLower(f[3])] = true
+			}
+		}
+	}
+
+	var res []WifiClient
+	seen := map[string]bool{}
+	for _, leasePath := range []string{"/run/malina-net/dnsmasq.leases", "/var/lib/misc/dnsmasq.leases"} {
+		b, err := os.ReadFile(leasePath)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			f := strings.Fields(line)
+			if len(f) < 3 {
+				continue
+			}
+			exp, _ := strconv.ParseInt(f[0], 10, 64)
+			mac := strings.ToLower(f[1])
+			if seen[mac] {
+				continue
+			}
+			seen[mac] = true
+			host := ""
+			if len(f) >= 4 {
+				host = f[3]
+			}
+			wc := WifiClient{MAC: mac, IP: f[2], Host: host, LeaseEnd: exp}
+			if online[mac] {
+				wc.Online = true
+			}
+			res = append(res, wc)
+		}
+		break
+	}
+	sort.Slice(res, func(i, j int) bool {
+		if res[i].Online != res[j].Online {
+			return res[i].Online
+		}
+		return res[i].IP < res[j].IP
+	})
+	return res
+}
+
+// usbDevices — список USB-устройств (lsusb).
+func (s *Sampler) usbDevices() []USBDevice {
+	out, _ := s.run("lsusb")
+	var res []USBDevice
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "Bus ") {
+			continue
+		}
+		f := strings.Fields(line)
+		if len(f) < 6 || f[4] != "ID" {
+			continue
+		}
+		name := strings.Join(f[6:], " ")
+		res = append(res, USBDevice{Bus: f[1], ID: f[5], Name: name})
+	}
+	return res
+}
+
+// Processes — снимок процессов (для отдельного эндпоинта /api/processes).
+func (s *Sampler) Processes() []Proc { return s.processes() }
+
+// processes — топ процессов (сортировка по CPU по убыванию; UI может пересортировать).
+func (s *Sampler) processes() []Proc {
+	out, _ := s.run("ps", "-eo", "pid=,user=,pcpu=,pmem=,rss=,comm=")
+	var res []Proc
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 6 {
+			continue
+		}
+		cmd := strings.Join(f[5:], " ")
+		if cmd == "ps" {
+			continue // не показываем сам процесс ps
+		}
+		pid, _ := strconv.Atoi(f[0])
+		cpu, _ := strconv.ParseFloat(f[2], 64)
+		mem, _ := strconv.ParseFloat(f[3], 64)
+		rss, _ := strconv.ParseUint(f[4], 10, 64)
+		res = append(res, Proc{PID: pid, User: f[1], CPUPct: cpu, MemPct: mem, RSSKB: rss, Command: cmd})
+	}
+	sort.Slice(res, func(i, j int) bool { return res[i].CPUPct > res[j].CPUPct })
+	return res
+}
+
+func (s *Sampler) failedUnits(now time.Time) []string {
+	// Перезапрашиваем список только если (а) ещё ни разу не читали, или
+	// (б) было kill-событие от обёртки run() и прошло не менее 30 c.
+	s.errMu.Lock()
+	kill := s.killFlag
+	s.errMu.Unlock()
+	if !s.failedAt.IsZero() {
+		if now.Sub(s.failedAt) < 30*time.Second || !kill {
+			return s.failedCache
+		}
+	}
+	out, _ := s.run("systemctl", "--failed", "--no-legend", "--plain")
 	var failed []string
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
@@ -567,17 +853,8 @@ func (s *Sampler) failedUnits(now time.Time) []string {
 	}
 	s.failedCache = failed
 	s.failedAt = now
+	s.errMu.Lock()
+	s.killFlag = false
+	s.errMu.Unlock()
 	return failed
-}
-
-func cmdOut(name string, args ...string) string {
-	return strings.TrimSpace(cmdOutRaw(name, args...))
-}
-
-func cmdOutRaw(name string, args ...string) string {
-	out, err := exec.Command(name, args...).Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
 }

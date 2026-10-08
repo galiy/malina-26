@@ -136,6 +136,7 @@ func applyMode1() error {
 	}
 	hostapd := fmt.Sprintf(`interface=wlan0
 driver=nl80211
+ctrl_interface=%s/hostapd
 ssid=%s
 hw_mode=g
 channel=%d
@@ -145,7 +146,10 @@ wpa=2
 wpa_passphrase=%s
 wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
-`, m.AP.SSID, ch, m.AP.Country, m.AP.Passphrase)
+`, runDir, m.AP.SSID, ch, m.AP.Country, m.AP.Passphrase)
+	if err := os.MkdirAll(filepath.Join(runDir, "hostapd"), 0o700); err != nil {
+		return err
+	}
 	if err := writeFile(filepath.Join(runDir, "hostapd.conf"), hostapd, 0o600); err != nil {
 		return err
 	}

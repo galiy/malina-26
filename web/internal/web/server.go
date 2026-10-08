@@ -124,6 +124,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/logout", s.handleLogout)
 	mux.HandleFunc("/lang", s.handleLang)
 	mux.HandleFunc("/api/system", s.handleAPISystem)
+	mux.HandleFunc("/api/processes", s.handleAPIProcesses)
 	mux.HandleFunc("/api/log", s.handleAPILog)
 	mux.HandleFunc("/system", s.handleSystem)
 	mux.HandleFunc("/system/hostname", s.handleSystemHostname)

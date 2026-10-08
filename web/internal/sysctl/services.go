@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 )
@@ -43,6 +44,7 @@ type Service struct {
 	Sub         string `json:"sub"`     // running/exited/dead/failed/…
 	Enabled     string `json:"enabled"` // enabled/disabled/static
 	Note        string `json:"note"`    // i18n-ключ комментария ("" — без комментария)
+	Group       string `json:"group"`   // "app" (управляемые) | "system" (только статус)
 }
 
 // svcNotes — комментарии к управляемым unit-ам (ключ нужен, чтобы текст
@@ -85,9 +87,57 @@ func IsManaged(unit string) bool {
 func ListServices() []Service {
 	out := make([]Service, 0, len(managedUnits))
 	for _, u := range managedUnits {
-		out = append(out, showUnit(u))
+		s := showUnit(u)
+		s.Group = "app"
+		out = append(out, s)
 	}
 	return out
+}
+
+// ListAll возвращает управляемые службы ("app") и все прочие службы ("system",
+// только для просмотра — без управления).
+func ListAll() []Service {
+	app := ListServices()
+	seen := make(map[string]bool, len(app))
+	for _, s := range app {
+		seen[s.Unit] = true
+	}
+	return append(app, listSystemServices(seen)...)
+}
+
+// listSystemServices читает все .service (включая неактивные) одним вызовом.
+func listSystemServices(exclude map[string]bool) []Service {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	b, err := exec.CommandContext(ctx, "systemctl", "list-units", "--type=service",
+		"--all", "--no-legend", "--plain", "--no-pager").Output()
+	if err != nil {
+		return nil
+	}
+	var res []Service
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		f := strings.Fields(line)
+		if len(f) < 4 || !strings.HasSuffix(f[0], ".service") {
+			continue
+		}
+		unit := f[0]
+		if exclude[unit] {
+			continue
+		}
+		res = append(res, Service{
+			Unit:        unit,
+			Description: strings.Join(f[4:], " "),
+			Active:      f[2],
+			Sub:         f[3],
+			Group:       "system",
+		})
+	}
+	sort.Slice(res, func(i, j int) bool { return res[i].Unit < res[j].Unit })
+	return res
 }
 
 func showUnit(unit string) Service {

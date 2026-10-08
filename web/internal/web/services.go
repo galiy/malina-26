@@ -17,7 +17,7 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 	}
 	data := s.baseData(r)
 	data["Active"] = "services"
-	data["Services"] = sysctl.ListServices()
+	data["Services"] = sysctl.ListAll()
 	lang := s.lang(r)
 	if ok := r.URL.Query().Get("ok"); ok != "" {
 		data["Ok"] = s.tr(lang, "svc.msg."+ok+"_ok")
@@ -43,7 +43,7 @@ func (s *Server) handleAPIServices(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(map[string]any{"services": sysctl.ListServices()})
+	_ = json.NewEncoder(w).Encode(map[string]any{"services": sysctl.ListAll()})
 }
 
 func (s *Server) redirectServices(w http.ResponseWriter, r *http.Request, key string) {

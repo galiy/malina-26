@@ -293,6 +293,23 @@ func (s *Server) handleLang(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
+func (s *Server) handleAPIProcesses(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.currentUser(r); !ok {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{"processes": s.sampler.Processes()})
+}
+
 func (s *Server) handleAPISystem(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.currentUser(r); !ok {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")

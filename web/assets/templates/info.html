@@ -1,7 +1,9 @@
 {{define "content"}}
 <div class="page-head">
   <h1>{{index .T "info.title"}}</h1>
-  <div id="powerbar" class="powerbar" style="display:none"></div>
+  <div class="page-head-right">
+    <label class="autoref"><input type="checkbox" id="autoref" checked> {{index .T "si.auto"}}</label>
+  </div>
 </div>
 <script>window.I18N = {{json .T}};</script>
 <div id="sysinfo" class="sysinfo">

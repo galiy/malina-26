@@ -1,8 +1,9 @@
 (function () {
   "use strict";
   var I18N = window.I18N || {};
-  var body = document.getElementById("svcBody");
-  if (!body) { return; }
+  var bodyApp = document.getElementById("svcBodyApp");
+  var bodySys = document.getElementById("svcBodySys");
+  if (!bodyApp) { return; }
 
   function t(k) { return I18N[k] || k; }
   function esc(s) {
@@ -17,8 +18,12 @@
     if (a === "activating" || a === "deactivating" || a === "reloading") { return "warn"; }
     return "muted";
   }
+  function badge(active) {
+    return '<span class="badge ' + stateClass(active) + '" data-state="' + esc(active) + '">' +
+      esc(stateLabel(active)) + '</span>';
+  }
 
-  function render(list) {
+  function renderApp(list) {
     var out = "";
     list.forEach(function (s) {
       var active = s.active || "unknown";
@@ -28,8 +33,7 @@
         '<tr>' +
           '<td class="svc-name" data-label="' + esc(t("svc.col.service")) + '"><code>' + esc(s.unit) + '</code></td>' +
           '<td class="svc-desc" data-label="' + esc(t("svc.col.description")) + '">' + esc(s.description || "") + '</td>' +
-          '<td class="svc-state" data-label="' + esc(t("svc.col.state")) + '"><span class="badge ' + stateClass(active) + '" data-state="' + esc(active) + '">' +
-            esc(stateLabel(active)) + '</span></td>' +
+          '<td class="svc-state" data-label="' + esc(t("svc.col.state")) + '">' + badge(active) + '</td>' +
           '<td class="svc-actions" data-label="' + esc(t("svc.col.actions")) + '">' +
             '<button type="button" data-unit="' + esc(s.unit) + '" data-action="start"' + startDis + '>' +
               esc(t("svc.start")) + '</button> ' +
@@ -40,7 +44,29 @@
             (s.note ? esc(t(s.note)) : "") + '</td>' +
         '</tr>';
     });
-    body.innerHTML = out;
+    bodyApp.innerHTML = out;
+  }
+
+  function renderSys(list) {
+    if (!bodySys) { return; }
+    var out = "";
+    list.forEach(function (s) {
+      var active = s.active || "unknown";
+      out +=
+        '<tr>' +
+          '<td class="svc-name" data-label="' + esc(t("svc.col.service")) + '"><code>' + esc(s.unit) + '</code></td>' +
+          '<td class="svc-desc" data-label="' + esc(t("svc.col.description")) + '">' + esc(s.description || "") + '</td>' +
+          '<td class="svc-state" data-label="' + esc(t("svc.col.state")) + '">' + badge(active) + '</td>' +
+        '</tr>';
+    });
+    bodySys.innerHTML = out;
+  }
+
+  function render(list) {
+    var app = [], sys = [];
+    list.forEach(function (s) { (s.group === "system" ? sys : app).push(s); });
+    renderApp(app);
+    renderSys(sys);
   }
 
   async function refresh() {
@@ -49,7 +75,7 @@
       if (!r.ok) { return; }
       var d = await r.json();
       render(d.services || []);
-    } catch (e) { /* сеть/перезагрузка — просто ждём следующий тик */ }
+    } catch (e) { /* сеть/перезагрузка — ждём следующий тик */ }
   }
 
   async function act(unit, action, btn) {
@@ -63,25 +89,36 @@
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: fd.toString()
       });
-      // Дадим systemd коротко применить изменение, затем обновим.
       setTimeout(refresh, r.ok ? 700 : 200);
     } catch (e) {
       setTimeout(refresh, 500);
     }
   }
 
-  body.addEventListener("click", function (ev) {
+  bodyApp.addEventListener("click", function (ev) {
     var btn = ev.target.closest("button[data-unit]");
     if (!btn) { return; }
     act(btn.getAttribute("data-unit"), btn.getAttribute("data-action"), btn);
   });
 
+  // Вкладки
+  var tabs = document.querySelectorAll(".svc-tab");
+  function show(tab) {
+    Array.prototype.forEach.call(tabs, function (b) {
+      b.classList.toggle("active", b.getAttribute("data-tab") === tab);
+    });
+    var pa = document.getElementById("pane-app"), ps = document.getElementById("pane-system");
+    if (pa) { pa.hidden = tab !== "app"; }
+    if (ps) { ps.hidden = tab !== "system"; }
+  }
+  Array.prototype.forEach.call(tabs, function (b) {
+    b.addEventListener("click", function () { show(b.getAttribute("data-tab")); });
+  });
+
   var form = document.getElementById("rebootForm");
   if (form) {
     form.addEventListener("submit", function (ev) {
-      if (!window.confirm(t("svc.reboot_confirm"))) {
-        ev.preventDefault();
-      }
+      if (!window.confirm(t("svc.reboot_confirm"))) { ev.preventDefault(); }
     });
   }
 

@@ -11,18 +11,38 @@
   <span class="muted">{{index .T "svc.reboot_hint"}}</span>
 </div>
 
-<table class="svc-table">
-  <thead>
-    <tr>
-      <th>{{index .T "svc.col.service"}}</th>
-      <th>{{index .T "svc.col.description"}}</th>
-      <th>{{index .T "svc.col.state"}}</th>
-      <th class="svc-actions-col">{{index .T "svc.col.actions"}}</th>
-      <th class="svc-note-col">{{index .T "svc.col.comment"}}</th>
-    </tr>
-  </thead>
-  <tbody id="svcBody"></tbody>
-</table>
+<div class="svc-tabs">
+  <button type="button" class="svc-tab active" data-tab="app">{{index .T "svc.tab.app"}}</button>
+  <button type="button" class="svc-tab" data-tab="system">{{index .T "svc.tab.system"}}</button>
+</div>
+
+<div id="pane-app">
+  <table class="svc-table">
+    <thead>
+      <tr>
+        <th>{{index .T "svc.col.service"}}</th>
+        <th>{{index .T "svc.col.description"}}</th>
+        <th>{{index .T "svc.col.state"}}</th>
+        <th class="svc-actions-col">{{index .T "svc.col.actions"}}</th>
+        <th class="svc-note-col">{{index .T "svc.col.comment"}}</th>
+      </tr>
+    </thead>
+    <tbody id="svcBodyApp"></tbody>
+  </table>
+</div>
+
+<div id="pane-system" hidden>
+  <table class="svc-table svc-table-ro">
+    <thead>
+      <tr>
+        <th>{{index .T "svc.col.service"}}</th>
+        <th>{{index .T "svc.col.description"}}</th>
+        <th>{{index .T "svc.col.state"}}</th>
+      </tr>
+    </thead>
+    <tbody id="svcBodySys"></tbody>
+  </table>
+</div>
 
 <script>window.I18N = {{json .T}}; window.SERVICES = {{json .Services}};</script>
 <script src="{{asset "services.js"}}"></script>

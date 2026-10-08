@@ -3,7 +3,11 @@
 const { chromium } = require("playwright");
 
 const BASE = process.argv[2] || "http://192.168.13.60";
-const PASS = process.env.MALINA_PASS || "malina";
+const PASS = process.env.MALINA_PASS || "";
+if (!PASS) {
+  console.error("задайте пароль веб-логина: MALINA_PASS=<пароль> node run-smoke.js");
+  process.exit(2);
+}
 
 function assert(cond, msg) {
   if (!cond) { console.error("FAIL:", msg); process.exitCode = 1; } else { console.log("ok:", msg); }
