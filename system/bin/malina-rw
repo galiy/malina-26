@@ -1,0 +1,41 @@
+#!/bin/sh
+# malina-rw — serialize access to the read-only root filesystem.
+#
+# The root filesystem is mounted ro. Operations that must change files on it
+# (systemctl enable/disable, unit files, chpasswd, apt, ...) need a short rw
+# window. This helper serializes such windows with flock.
+#
+# Usage:
+#   malina-rw on                 # remount / rw
+#   malina-rw off                # remount / ro
+#   malina-rw run <cmd> [args]   # rw -> run cmd (stdin inherited) -> ro
+#
+# Exit status of `run` is the command's exit status.
+
+LOCK=/run/malina-net/malina-rw.lock
+mkdir -p /run/malina-net 2>/dev/null || true
+: > "$LOCK" 2>/dev/null || true
+exec 9>"$LOCK"
+flock 9
+
+case "$1" in
+	on)
+		mount -o remount,rw /
+		;;
+	off)
+		mount -o remount,ro /
+		;;
+	run)
+		shift
+		[ $# -gt 0 ] || { echo "usage: malina-rw run <cmd> [args]" >&2; exit 2; }
+		mount -o remount,rw / || true
+		"$@"
+		rc=$?
+		mount -o remount,ro / || true
+		exit $rc
+		;;
+	*)
+		echo "usage: malina-rw on|off|run <cmd> [args]" >&2
+		exit 2
+		;;
+esac

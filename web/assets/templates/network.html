@@ -1,0 +1,99 @@
+{{define "content"}}
+{{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
+
+<form id="netform" method="post" action="/network/save">
+  <div class="page-head page-head-left">
+    <h1>{{index .T "net.title"}}</h1>
+    <div class="head-actions">
+      <span id="formerr" class="err"></span>
+      <button type="button" id="restorebtn">{{index .T "sys.restore"}}</button>
+      <button type="submit" id="savebtn">{{index .T "sys.save"}}</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <label class="tab"><input type="radio" name="mode" value="mode1" {{if eq .Mode "mode1"}}checked{{end}}> {{index .T "net.mode1"}}</label>
+    <label class="tab"><input type="radio" name="mode" value="mode2" {{if eq .Mode "mode2"}}checked{{end}}> {{index .T "net.mode2"}}</label>
+  </div>
+
+  <div id="pane-mode1" class="pane">
+    <table class="nettable"><tbody>
+      <tr class="group"><td colspan="2">{{index .T "net.mode1"}}</td></tr>
+      <tr><td>SSID</td><td><input name="m1_ap_ssid" value="{{.Mode1.AP.SSID}}"></td></tr>
+      <tr><td>{{index .T "login.password"}}</td><td><span class="pw"><input type="password" name="m1_ap_pass" value="{{.Mode1.AP.Passphrase}}"><button type="button" class="eye" title="show">👁</button></span></td></tr>
+      <tr><td>{{index .T "net.channel"}}</td><td>
+        <select name="m1_ap_channel">
+          <option value="0" {{if eq .Mode1.AP.Channel 0}}selected{{end}}>auto</option>
+          <option value="1" {{if eq .Mode1.AP.Channel 1}}selected{{end}}>1</option>
+          <option value="2" {{if eq .Mode1.AP.Channel 2}}selected{{end}}>2</option>
+          <option value="3" {{if eq .Mode1.AP.Channel 3}}selected{{end}}>3</option>
+          <option value="4" {{if eq .Mode1.AP.Channel 4}}selected{{end}}>4</option>
+          <option value="5" {{if eq .Mode1.AP.Channel 5}}selected{{end}}>5</option>
+          <option value="6" {{if eq .Mode1.AP.Channel 6}}selected{{end}}>6</option>
+          <option value="7" {{if eq .Mode1.AP.Channel 7}}selected{{end}}>7</option>
+          <option value="8" {{if eq .Mode1.AP.Channel 8}}selected{{end}}>8</option>
+          <option value="9" {{if eq .Mode1.AP.Channel 9}}selected{{end}}>9</option>
+          <option value="10" {{if eq .Mode1.AP.Channel 10}}selected{{end}}>10</option>
+          <option value="11" {{if eq .Mode1.AP.Channel 11}}selected{{end}}>11</option>
+        </select></td></tr>
+      <tr><td>Country</td><td>
+        <select name="m1_ap_country">
+          {{range $c := list "RU" "US" "CN" "BY" "DE" "GB" "FR" "NL" "PL" "TR" "KZ"}}
+          <option value="{{$c}}" {{if eq $c $.Mode1.AP.Country}}selected{{end}}>{{$c}}</option>
+          {{end}}
+        </select></td></tr>
+      <tr class="group"><td colspan="2">{{index .T "net.ip_dhcp"}}</td></tr>
+      <tr><td>{{index .T "net.ip_address"}}</td><td><input name="m1_lan_server" value="{{.Mode1.LAN.ServerIP}}"></td></tr>
+      <tr><td>{{index .T "net.mask"}}</td><td><input name="m1_lan_mask" value="{{.Mode1.LAN.Mask}}"></td></tr>
+      <tr><td>DHCP start</td><td><input name="m1_lan_start" value="{{.Mode1.LAN.Start}}"></td></tr>
+      <tr><td>DHCP end</td><td><input name="m1_lan_end" value="{{.Mode1.LAN.End}}"></td></tr>
+      <tr class="group"><td colspan="2">Ethernet</td></tr>
+      <tr><td>{{index .T "net.eth_mode"}}</td><td>
+        <select name="m1_eth_mode">
+          <option value="dhcp" {{if eq .Mode1.Eth.Mode "dhcp"}}selected{{end}}>DHCP</option>
+          <option value="static" {{if eq .Mode1.Eth.Mode "static"}}selected{{end}}>static</option>
+        </select></td></tr>
+      <tr class="static-row" data-for="m1_eth_mode" data-when="static"><td>IP</td><td><input name="m1_eth_ip" value="{{.Mode1.Eth.IP}}"></td></tr>
+      <tr class="static-row" data-for="m1_eth_mode" data-when="static"><td>{{index .T "net.mask"}}</td><td><input name="m1_eth_mask" value="{{.Mode1.Eth.Mask}}"></td></tr>
+      <tr class="static-row" data-for="m1_eth_mode" data-when="static"><td>Gateway</td><td><input name="m1_eth_gw" value="{{.Mode1.Eth.Gateway}}"></td></tr>
+      <tr class="static-row" data-for="m1_eth_mode" data-when="static"><td>DNS</td><td><input name="m1_eth_dns" value="{{range $i, $d := .Mode1.Eth.DNS}}{{if $i}},{{end}}{{$d}}{{end}}"></td></tr>
+      <tr class="group"><td colspan="2">{{index .T "net.transit"}}</td></tr>
+      <tr><td>{{index .T "net.nat"}}</td><td><input type="checkbox" name="m1_nat" {{if .Mode1.NAT}}checked{{end}}></td></tr>
+      <tr><td>{{index .T "net.portal"}}</td><td><input type="checkbox" name="m1_portal" {{if .Mode1.Portal}}checked{{end}}></td></tr>
+    </tbody></table>
+  </div>
+
+  <div id="pane-mode2" class="pane">
+    <table class="nettable"><tbody>
+      <tr class="group"><td colspan="2">{{index .T "net.mode2"}}</td></tr>
+      <tr><td>SSID</td><td><span class="val-inline"><input name="m2_sta_ssid" value="{{.Mode2.STA.SSID}}"><button type="button" id="scanbtn">{{index .T "net.scan_btn"}}</button></span></td></tr>
+      <tr><td>{{index .T "login.password"}}</td><td><span class="pw"><input type="password" name="m2_sta_pass" value="{{.Mode2.STA.Passphrase}}"><button type="button" class="eye" title="show">👁</button></span></td></tr>
+      <tr><td>{{index .T "net.sta_ipmode"}}</td><td>
+        <select name="m2_sta_ipmode">
+          <option value="dhcp" {{if eq .Mode2.STA.IPMode "dhcp"}}selected{{end}}>DHCP</option>
+          <option value="static" {{if eq .Mode2.STA.IPMode "static"}}selected{{end}}>static</option>
+        </select></td></tr>
+      <tr class="static-row" data-for="m2_sta_ipmode" data-when="static"><td>IP</td><td><input name="m2_sta_ip" value="{{.Mode2.STA.IP}}"></td></tr>
+      <tr class="static-row" data-for="m2_sta_ipmode" data-when="static"><td>{{index .T "net.mask"}}</td><td><input name="m2_sta_mask" value="{{.Mode2.STA.Mask}}"></td></tr>
+      <tr class="static-row" data-for="m2_sta_ipmode" data-when="static"><td>Gateway</td><td><input name="m2_sta_gw" value="{{.Mode2.STA.Gateway}}"></td></tr>
+      <tr class="static-row" data-for="m2_sta_ipmode" data-when="static"><td>DNS</td><td><input name="m2_sta_dns" value="{{range $i, $d := .Mode2.STA.DNS}}{{if $i}},{{end}}{{$d}}{{end}}"></td></tr>
+      <tr class="group"><td colspan="2">{{index .T "net.ip_dhcp"}} eth0</td></tr>
+      <tr><td>{{index .T "net.ip_address"}}</td><td><input name="m2_eth_server" value="{{.Mode2.LAN.ServerIP}}"></td></tr>
+      <tr><td>{{index .T "net.mask"}}</td><td><input name="m2_eth_mask" value="{{.Mode2.LAN.Mask}}"></td></tr>
+      <tr><td>DHCP start</td><td><input name="m2_eth_start" value="{{.Mode2.LAN.Start}}"></td></tr>
+      <tr><td>DHCP end</td><td><input name="m2_eth_end" value="{{.Mode2.LAN.End}}"></td></tr>
+      <tr><td>{{index .T "net.serve"}}</td><td><input type="checkbox" name="m2_serve" {{if .Mode2.Serve}}checked{{end}}></td></tr>
+    </tbody></table>
+  </div>
+</form>
+
+<div id="scanmodal" class="modal" hidden>
+  <div class="modal-box">
+    <div class="modal-head"><b>{{index .T "net.scan"}}</b><button type="button" id="scanclose">✕</button></div>
+    <div id="scanlist" class="scanlist">{{index .T "info.loading"}}</div>
+  </div>
+</div>
+
+<script>window.I18N = {{json .T}};</script>
+<script src="{{asset "network.js"}}"></script>
+{{end}}

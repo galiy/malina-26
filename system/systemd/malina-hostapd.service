@@ -1,0 +1,9 @@
+[Unit]
+Description=Malina hostapd (Wi-Fi AP)
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/hostapd /run/malina-net/hostapd.conf
+Restart=on-failure
+RestartSec=3
+

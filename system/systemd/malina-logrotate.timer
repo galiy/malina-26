@@ -1,0 +1,8 @@
+[Unit]
+Description=Rotate malina tmpfs logs (frequent)
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+AccuracySec=1min
+[Install]
+WantedBy=timers.target

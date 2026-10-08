@@ -1,0 +1,6 @@
+[Unit]
+Description=Malina network fallback tick
+
+[Service]
+Type=oneshot
+ExecStart=/malina/usr/local/sbin/malina-netd fallback-tick

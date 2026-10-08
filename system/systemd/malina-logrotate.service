@@ -1,0 +1,5 @@
+[Unit]
+Description=Rotate malina tmpfs logs
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/logrotate -s /run/malina-net/logrotate.status /etc/logrotate.d/malina-logs

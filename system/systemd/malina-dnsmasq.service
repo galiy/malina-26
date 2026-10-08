@@ -1,0 +1,9 @@
+[Unit]
+Description=Malina dnsmasq (DHCP/DNS for AP/LAN)
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/dnsmasq -k --conf-file=/run/malina-net/dnsmasq.conf
+Restart=on-failure
+RestartSec=3
+

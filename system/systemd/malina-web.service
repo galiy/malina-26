@@ -1,0 +1,13 @@
+[Unit]
+Description=Malina web UI (admin)
+Wants=network.target
+After=network.target dhclient-eth0.service
+
+[Service]
+Type=simple
+ExecStart=/malina/usr/local/bin/malina-web -listen :80 -user malina -assets /malina/usr/local/share/malina/web
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

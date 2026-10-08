@@ -1,0 +1,35 @@
+{{define "login"}}
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{index .T "login.title"}} — {{index .T "app.title"}}</title>
+  <link rel="stylesheet" href="{{asset "app.css"}}">
+</head>
+<body class="login-body">
+  <img class="corner-logo" src="{{asset "img/ma_logo.png"}}" alt="Malina">
+  <form class="lang lang-login" method="get" action="/lang">
+    <input type="hidden" name="next" value="{{.Path}}">
+    <select name="set" onchange="this.form.submit()">
+      {{range .Langs}}
+      <option value="{{.}}" {{if eq . $.Lang}}selected{{end}}>{{index $.LangNames .}}</option>
+      {{end}}
+    </select>
+  </form>
+  <div class="login-card">
+    <table class="login-table"><tbody><tr>
+      <td><img src="{{asset "img/titanator.jpg"}}" alt="Титанатор MAP SIN"></td>
+      <td><img src="{{asset "img/dominator.webp"}}" alt="Доминатор MAP SIN"></td>
+    </tr></tbody></table>
+    <h1>{{index .T "login.title"}}</h1>
+    {{if .Error}}<div class="error">{{index .T "login.error"}}</div>{{end}}
+    <form method="post" action="/login">
+      <label for="password">{{index .T "login.password"}}</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" autofocus>
+      <button type="submit">{{index .T "login.submit"}}</button>
+    </form>
+  </div>
+</body>
+</html>
+{{end}}

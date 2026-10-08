@@ -1,0 +1,8 @@
+[Unit]
+Description=Malina DHCP conflict monitor (mode2)
+
+[Service]
+Type=simple
+ExecStart=/malina/usr/local/sbin/malina-netd monitor
+Restart=on-failure
+RestartSec=5

@@ -1,0 +1,20 @@
+#!/bin/sh
+# Apply remote syslog target for rsyslog.
+# Usage: malina-remote-syslog "<space separated hosts>"   (empty = local only)
+# Writes /run/malina-net/rsyslog-remote/remote.conf and reloads rsyslog, only on change.
+RS_STATE=/run/malina-net/dhcp-option7-applied
+RS_DIR=/run/malina-net/rsyslog-remote
+
+val="$(echo $1)"
+cur=""
+[ -f "$RS_STATE" ] && cur="$(cat "$RS_STATE")"
+[ "$val" = "$cur" ] && exit 0
+
+mkdir -p "$RS_DIR"
+: > "$RS_DIR/remote.conf"
+for ip in $val; do
+	printf '*.* action(type="omfwd" target="%s" port="514" protocol="udp" template="RSYSLOG_SyslogProtocol23Format")\n' "$ip" >> "$RS_DIR/remote.conf"
+done
+printf '%s' "$val" > "$RS_STATE"
+systemctl reload-or-restart rsyslog 2>/dev/null || true
+logger -t malina-remote-syslog "applied: '${val:-none}'"

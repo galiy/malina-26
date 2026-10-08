@@ -1,0 +1,7 @@
+[Unit]
+Description=Malina Wi-Fi scan (one-shot)
+
+[Service]
+Type=oneshot
+TimeoutStartSec=25
+ExecStart=/malina/usr/local/sbin/malina-netd scan

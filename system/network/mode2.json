@@ -1,0 +1,5 @@
+{
+  "sta": { "ssid": "", "passphrase": "", "security": "wpa2", "ip_mode": "dhcp", "ip": "", "mask": "", "gateway": "", "dns": [] },
+  "eth": { "server_ip": "10.10.100.254", "mask": "255.255.255.0", "dhcp_start": "10.10.100.1", "dhcp_end": "10.10.100.200" },
+  "serve": true
+}

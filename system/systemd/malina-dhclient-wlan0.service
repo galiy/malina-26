@@ -1,0 +1,11 @@
+[Unit]
+Description=Malina DHCP client for wlan0 (STA)
+After=malina-wpa.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/dhclient -4 -d -pf /run/malina-net/dhclient.wlan0.pid -lf /var/lib/dhcp/dhclient.wlan0.leases wlan0
+ExecStop=/sbin/dhclient -4 -pf /run/malina-net/dhclient.wlan0.pid -lf /var/lib/dhcp/dhclient.wlan0.leases -r wlan0
+Restart=on-failure
+RestartSec=3
+

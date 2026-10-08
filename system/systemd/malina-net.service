@@ -1,0 +1,15 @@
+[Unit]
+Description=Malina network configuration (early)
+DefaultDependencies=no
+After=local-fs.target
+Wants=network-pre.target
+Before=network-pre.target network.target multi-user.target
+RequiresMountsFor=/malina
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/malina/usr/local/sbin/malina-netd apply
+
+[Install]
+WantedBy=multi-user.target

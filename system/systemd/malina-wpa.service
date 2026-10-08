@@ -1,0 +1,9 @@
+[Unit]
+Description=Malina wpa_supplicant (Wi-Fi STA)
+
+[Service]
+Type=simple
+ExecStart=/sbin/wpa_supplicant -c /run/malina-net/wpa_supplicant.conf -i wlan0
+Restart=on-failure
+RestartSec=3
+

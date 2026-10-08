@@ -1,0 +1,39 @@
+{{define "content"}}
+<h1>{{index .T "sys.title"}}</h1>
+
+{{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
+{{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
+
+<div class="sysforms">
+  <section class="card">
+    <h2>{{index .T "sys.hostname"}}</h2>
+    <form method="post" action="/system/hostname">
+      <label for="hostname">{{index .T "sys.hostname"}}</label>
+      <input id="hostname" name="hostname" type="text" value="{{.Hostname}}" autocomplete="off">
+      <p class="muted">{{index .T "sys.hostname_hint"}}</p>
+      <button type="submit">{{index .T "sys.save"}}</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>{{index .T "sys.logging"}}</h2>
+    <form method="post" action="/system/logging">
+      <label for="host">{{index .T "sys.logging_host"}}</label>
+      <input id="host" name="host" type="text" value="{{.RemoteSyslog}}" autocomplete="off" placeholder="syslog.example.lan">
+      <p class="muted">{{index .T "sys.logging_hint"}}</p>
+      <button type="submit">{{index .T "sys.save"}}</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>{{index .T "sys.password"}}</h2>
+    <form method="post" action="/system/password">
+      <label for="password_new">{{index .T "sys.password_new"}}</label>
+      <input id="password_new" name="password_new" type="password" autocomplete="new-password">
+      <label for="password_confirm">{{index .T "sys.password_confirm"}}</label>
+      <input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password">
+      <button type="submit">{{index .T "sys.password_submit"}}</button>
+    </form>
+  </section>
+</div>
+{{end}}

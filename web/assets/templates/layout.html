@@ -1,0 +1,40 @@
+{{define "layout"}}
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{index .T "app.title"}}</title>
+  <link rel="stylesheet" href="{{asset "app.css"}}">
+</head>
+<body class="app-body">
+  <header class="topbar">
+    <div class="brand"><img src="{{asset "img/malina_small.gif"}}" alt="Malina"> {{index .T "app.title"}}</div>
+    <nav class="mainnav">
+      <div class="navitem dropdown {{if or (eq .Active "info") (eq .Active "system")}}active{{end}}">
+        <span class="navlink">{{index .T "menu.system"}} <span class="caret">▾</span></span>
+        <div class="dropdown-menu">
+          <a href="/" class="{{if eq .Active "info"}}active{{end}}">{{index .T "menu.info"}}</a>
+          <a href="/system" class="{{if eq .Active "system"}}active{{end}}">{{index .T "menu.params"}}</a>
+          <a href="/network" class="{{if eq .Active "network"}}active{{end}}">{{index .T "menu.network"}}</a>
+        </div>
+      </div>
+      <form method="post" action="/logout" class="navform">
+        <button class="navlink" type="submit">{{index .T "menu.logout"}}</button>
+      </form>
+    </nav>
+    <form class="lang" method="get" action="/lang">
+      <input type="hidden" name="next" value="{{.Path}}">
+      <select name="set" onchange="this.form.submit()">
+        {{range .Langs}}
+        <option value="{{.}}" {{if eq . $.Lang}}selected{{end}}>{{index $.LangNames .}}</option>
+        {{end}}
+      </select>
+    </form>
+  </header>
+  <main class="content">
+    {{template "content" .}}
+  </main>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,16 @@
+{{define "content"}}
+<h1>{{index .T "logs.title"}}</h1>
+<div class="logs-bar">
+  <label for="logfile">{{index .T "logs.file"}}</label>
+  <select id="logfile">
+    {{$cur := .File}}
+    {{range .Files}}
+    <option value="{{.}}" {{if eq . $cur}}selected{{end}}>{{.}}</option>
+    {{end}}
+  </select>
+  <span class="muted" id="logstatus"></span>
+</div>
+<pre id="logview" class="logview">{{index .T "info.loading"}}</pre>
+<script>window.MALINA_LOG_FILE = "{{.File}}";</script>
+<script src="{{asset "logs.js"}}"></script>
+{{end}}

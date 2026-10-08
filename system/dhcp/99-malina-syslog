@@ -1,0 +1,38 @@
+#!/bin/sh
+# malina: remote syslog via DHCP option 7, overridden by a custom host
+# (/malina/etc/malina/remote-syslog) if set.
+# Installed as /etc/dhcp/dhclient-enter-hooks.d/99-malina-syslog
+RS_RAW=/run/malina-net/dhcp-option7
+LEASE=/var/lib/dhcp/dhclient.eth0.leases
+APPLY=/malina/usr/local/libexec/malina-remote-syslog
+CUSTOM_FILE=/malina/etc/malina/remote-syslog
+
+logservers() {
+	if [ -n "$new_log_servers" ]; then echo "$new_log_servers"; return; fi
+	[ -f "$LEASE" ] || { echo ""; return; }
+	awk '
+	  /^[ \t]*option[ \t]+(log-servers|log-server|option-7)[ \t]/ {
+	    sub(/;.*/,""); gsub(/^[ \t]+/,""); n=split($0,a,/[ \t]+/);
+	    for(i=3;i<=n;i++) printf "%s ", a[i];
+	  }' "$LEASE"
+}
+
+custom="$(cat "$CUSTOM_FILE" 2>/dev/null)"
+
+case "$reason" in
+	BOUND|RENEW|REBIND|REBOOT)
+		raw="$(echo $(logservers))"
+		printf '%s' "$raw" > "$RS_RAW"
+		if [ -n "$custom" ]; then eff="$custom"; else eff="$raw"; fi
+		[ -x "$APPLY" ] && "$APPLY" "$eff"
+		;;
+	STOP|RELEASE|EXPIRE|FAIL|TIMEOUT)
+		printf '%s' "" > "$RS_RAW"
+		[ -x "$APPLY" ] && "$APPLY" "${custom:-}"
+		;;
+	*) : ;;
+esac
+
+case "$reason" in
+	BOUND|REBOOT) systemctl try-restart --no-block systemd-timesyncd 2>/dev/null || true ;;
+esac

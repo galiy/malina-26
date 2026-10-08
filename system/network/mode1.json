@@ -1,0 +1,7 @@
+{
+  "ap": { "ssid": "Malina", "passphrase": "malina123", "country": "US", "channel": 11 },
+  "lan": { "server_ip": "10.10.100.254", "mask": "255.255.255.0", "dhcp_start": "10.10.100.1", "dhcp_end": "10.10.100.200" },
+  "eth": { "mode": "dhcp", "ip": "", "mask": "", "gateway": "", "dns": [] },
+  "nat": true,
+  "portal": true
+}

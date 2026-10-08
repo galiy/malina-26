@@ -1,0 +1,4 @@
+# PAM service for the Malina web login (Linux account password check).
+# Install as /etc/pam.d/malina-web
+auth       include      common-auth
+account    include      common-account

@@ -1,0 +1,21 @@
+{{define "content"}}
+<div class="page-head">
+  <h1>{{index .T "info.title"}}</h1>
+  <div id="powerbar" class="powerbar" style="display:none"></div>
+</div>
+<script>window.I18N = {{json .T}};</script>
+<div id="sysinfo" class="sysinfo">
+  <p class="muted">{{index .T "info.loading"}}</p>
+</div>
+
+<section class="card logs-card">
+  <h2>{{index .T "info.logs"}}</h2>
+  <div class="log-buttons">
+    {{range .LogFiles}}
+    <a class="logbtn" href="/logs?file={{.}}">{{.}}</a>
+    {{end}}
+  </div>
+</section>
+
+<script src="{{asset "system.js"}}"></script>
+{{end}}
