@@ -437,3 +437,33 @@ h1, h2, h3 { font-family: "Open Sans Condensed", "Open Sans", "Noto Sans", "Noto
 .navlink, button, .card form button, .login-card button, .svc-actions button, .btn-danger, .svc-table th {
   font-family: "Open Sans Condensed", "Open Sans", "Noto Sans", "Noto Sans SC", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
 }
+
+/* === Мобильная адаптация === */
+@media (max-width: 820px) {
+  .topbar { flex-wrap: wrap; padding: 8px 12px; gap: 6px; }
+  .brand { width: 100%; }
+  .mainnav { flex-wrap: wrap; width: 100%; }
+  .topbar .lang { margin-left: auto; }
+  .content { padding: 12px; }
+  .sysforms { grid-template-columns: 1fr; }
+  .login-card { width: 92vw; max-width: 360px; }
+  .logs-bar { flex-wrap: wrap; }
+  /* широкие таблицы — горизонтальная прокрутка вместо поломки вёрстки */
+  .svc-table, .nettable { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .svc-table th, .svc-table td { white-space: nowrap; }
+  .svc-note, .svc-note-col { white-space: normal; min-width: 200px; }
+  .nettable input, .nettable select { width: 100%; max-width: 340px; }
+  .svc-actions-col, .svc-actions { white-space: nowrap; }
+}
+@media (max-width: 520px) {
+  .content { padding: 8px; }
+  .content h1 { font-size: 19px; }
+  .svc-table th, .svc-table td { padding: 7px 8px; font-size: 13px; }
+  .svc-actions button { padding: 5px 9px; font-size: 12px; }
+  .logview { height: 60vh; font-size: 11px; }
+}
+
+@media (max-width: 820px) {
+  .page-head { flex-wrap: wrap; }
+  .powerbar { flex-wrap: wrap; white-space: normal; width: 100%; }
+}

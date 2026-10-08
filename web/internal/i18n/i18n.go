@@ -39,9 +39,6 @@ func (b *Bundle) Has(lang string) bool {
 	return ok
 }
 
-// Default возвращает базовый (исходный) язык.
-func (b *Bundle) Default() string { return b.def }
-
 // Translations возвращает строки базового языка, перекрытые выбранным.
 func (b *Bundle) Translations(lang string) map[string]string {
 	out := make(map[string]string, len(b.langs[b.def]))

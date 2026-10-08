@@ -2,7 +2,8 @@
 # Установка артефактов проекта на устройство (запускать с ноутбука).
 # Использование:
 #   deploy/install.sh [--build] [user@host]
-# Пароль SSH: переменная MALINA_PASS (по умолчанию "malina").
+# Пароль SSH: переменная MALINA_PASS или строка MALINA_PASS=... в .kilo/secrets
+# (файл не коммитится — см. правила проекта).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,7 +16,14 @@ for a in "$@"; do
   esac
 done
 HOST="${HOSTARG:-${HOST:-malina@192.168.13.60}}"
-PASS="${MALINA_PASS:-malina}"
+PASS="${MALINA_PASS:-}"
+if [ -z "$PASS" ] && [ -f "$ROOT/.kilo/secrets" ]; then
+  PASS="$(sed -n 's/^MALINA_PASS=//p' "$ROOT/.kilo/secrets" | head -1)"
+fi
+if [ -z "$PASS" ]; then
+  echo "не задан SSH-пароль: MALINA_PASS (env) или MALINA_PASS=... в .kilo/secrets" >&2
+  exit 1
+fi
 
 SSH=(sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 SCP=(sshpass -p "$PASS" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)

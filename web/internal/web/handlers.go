@@ -339,14 +339,13 @@ func (s *Server) handleAPILog(w http.ResponseWriter, r *http.Request) {
 			offset = x
 		}
 	}
-	lines, total, ok := logtail.Window(file, offset, n)
+	lines, older, ok := logtail.Window(file, offset, n)
 	if lines == nil {
 		lines = []string{}
 	}
-	hasMore := ok && (offset+len(lines)) < total
 	resp := map[string]any{
 		"file": file, "lines": lines, "offset": offset,
-		"total": total, "has_more": hasMore, "missing": !ok,
+		"total": offset + len(lines), "has_more": older, "missing": !ok,
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

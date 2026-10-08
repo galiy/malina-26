@@ -168,6 +168,3 @@ func LoadFallback() Fallback {
 	}
 	return f
 }
-
-// SaveFallback сохраняет пороги.
-func SaveFallback(f Fallback) error { return save("fallback.json", f) }

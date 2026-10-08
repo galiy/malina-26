@@ -33,19 +33,55 @@ func Allowed(name string) bool {
 	return false
 }
 
-// Window возвращает до `lines` строк, заканчивающихся на `offset` строк от конца
-// (offset=0 -> самый свежий блок), плюс общее число строк.
-func Window(name string, offset, lines int) ([]string, int, bool) {
-	b, err := os.ReadFile(Dir + "/" + name)
+// Window возвращает до `lines` строк, заканчивающихся `offset` строк от конца
+// (offset=0 -> самый свежий блок), признак наличия более старых строк и ok.
+// Читает файл «с конца» ограниченными блоками, не загружая его целиком.
+func Window(name string, offset, lines int) ([]string, bool, bool) {
+	f, err := os.Open(Dir + "/" + name)
 	if err != nil {
-		return nil, 0, false
+		return nil, false, false
 	}
-	all := strings.Split(string(b), "\n")
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, false, false
+	}
+
+	need := offset + lines
+	const chunk = 64 * 1024
+	const maxBytes = 4 << 20 // предохранительный лимит чтения
+	var buf []byte
+	pos := st.Size()
+	for pos > 0 && len(buf) < maxBytes {
+		rs := int64(chunk)
+		if pos < rs {
+			rs = pos
+		}
+		pos -= rs
+		b := make([]byte, rs)
+		if _, err := f.ReadAt(b, pos); err != nil && err != io.EOF {
+			return nil, false, false
+		}
+		buf = append(b, buf...)
+		if bytes.Count(buf, []byte("\n")) > need {
+			break
+		}
+	}
+	reachedStart := pos == 0
+
+	s := string(buf)
+	if !reachedStart {
+		// Первая строка может быть обрезана границей блока — отбрасываем её.
+		if i := strings.IndexByte(s, '\n'); i >= 0 {
+			s = s[i+1:]
+		}
+	}
+	all := strings.Split(s, "\n")
 	for len(all) > 0 && all[len(all)-1] == "" {
 		all = all[:len(all)-1]
 	}
-	total := len(all)
-	end := total - offset
+
+	end := len(all) - offset
 	if end < 0 {
 		end = 0
 	}
@@ -56,51 +92,6 @@ func Window(name string, offset, lines int) ([]string, int, bool) {
 	if start > end {
 		start = end
 	}
-	return all[start:end], total, true
-}
-
-// Tail возвращает последние n строк /var/log/<name>; ok=false если недоступно.
-func Tail(name string, n int) ([]string, bool) {
-	f, err := os.Open(Dir + "/" + name)
-	if err != nil {
-		return nil, false
-	}
-	defer f.Close()
-	lines, err := tailFile(f, n)
-	if err != nil {
-		return nil, false
-	}
-	return lines, true
-}
-
-func tailFile(f *os.File, n int) ([]string, error) {
-	const chunk = 8192
-	const cap = 1 << 20 // предохранительный лимит 1 МиБ
-	st, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	size := st.Size()
-	var buf []byte
-	pos := size
-	for pos > 0 && bytes.Count(buf, []byte("\n")) <= n && len(buf) < cap {
-		readSize := int64(chunk)
-		if pos < readSize {
-			readSize = pos
-		}
-		pos -= readSize
-		b := make([]byte, readSize)
-		if _, err := f.ReadAt(b, pos); err != nil && err != io.EOF {
-			return nil, err
-		}
-		buf = append(b, buf...)
-	}
-	lines := strings.Split(string(buf), "\n")
-	for len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return lines, nil
+	older := !reachedStart || start > 0
+	return all[start:end], older, true
 }

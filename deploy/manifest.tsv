@@ -20,6 +20,7 @@ system/logrotate/malina-logs	/etc/logrotate.d/malina-logs	0644	always
 system/tmpfiles/malina.conf	/etc/tmpfiles.d/malina.conf	0644	always
 system/tmpfiles/malina-rsyslog.conf	/etc/tmpfiles.d/malina-rsyslog.conf	0644	always
 system/journald/90-malina.conf	/etc/systemd/journald.conf.d/90-malina.conf	0644	always
+system/systemd/watchdog.conf	/etc/systemd/system.conf.d/watchdog.conf	0644	always
 system/timesyncd/malina.conf	/etc/systemd/timesyncd.conf.d/malina.conf	0644	always
 system/bin/malina-rw	/malina/usr/local/sbin/malina-rw	0755	always
 system/bin/malina-remote-syslog	/malina/usr/local/libexec/malina-remote-syslog	0755	always
