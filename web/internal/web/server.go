@@ -123,6 +123,9 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/logout", s.handleLogout)
 	mux.HandleFunc("/lang", s.handleLang)
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/static/img/malina_small.gif", http.StatusFound)
+	})
 	mux.HandleFunc("/api/system", s.handleAPISystem)
 	mux.HandleFunc("/api/processes", s.handleAPIProcesses)
 	mux.HandleFunc("/api/log", s.handleAPILog)

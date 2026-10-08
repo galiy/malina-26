@@ -189,5 +189,13 @@
   "si.thr.throttled_occ": "троттлинг (было)",
   "si.thr.soft_temp_occ": "софт-лимит по температуре (было)",
   "si.errors": "Ошибки внешних команд",
-  "si.refresh": "Обновить"
+  "si.refresh": "Обновить",
+  "menu.monitoring": "Мониторинг",
+  "menu.stats": "Статистика",
+  "menu.map": "МАП",
+  "menu.kes": "КЭС",
+  "menu.charts": "Графики",
+  "menu.agg": "Агрегаты",
+  "app.tab_title": "Микроарт-Малина",
+  "net.choose_mode": "Выберите режим"
 }

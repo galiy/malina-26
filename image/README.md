@@ -15,7 +15,7 @@
 - Сеть: NetworkManager, `eth0` по DHCP из коробки; WiFi не поднимается.
 - Из Lite удалены `avahi-daemon`, `triggerhappy`, `dphys-swapfile`.
 - Добавлен `mc`.
-- Пакеты ролей (nginx/php/snmpd/watchdog) — не входят, доставляются позже.
+- Пакеты ролей (`snmpd`, `watchdog`) — не входят, доставляются позже.
 
 ## Файлы
 

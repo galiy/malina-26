@@ -189,5 +189,13 @@
   "si.thr.throttled_occ": "降频（曾发生）",
   "si.thr.soft_temp_occ": "温度软限制（曾发生）",
   "si.errors": "外部命令错误",
-  "si.refresh": "刷新"
+  "si.refresh": "刷新",
+  "menu.monitoring": "监控",
+  "menu.stats": "统计",
+  "menu.map": "MAP",
+  "menu.kes": "KES",
+  "menu.charts": "图表",
+  "menu.agg": "聚合",
+  "app.tab_title": "Microart-Malina",
+  "net.choose_mode": "选择模式"
 }

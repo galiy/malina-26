@@ -592,3 +592,21 @@ h1, h2, h3 { font-family: "Open Sans Condensed", "Open Sans", "Noto Sans", "Noto
 /* Заголовок карточки — флекс: заголовок слева, управление справа, по центру */
 .card h2 { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .card h2 .procctl { float: none; margin-left: auto; display: inline-flex; align-items: center; gap: 12px; }
+
+/* Меню: Мониторинг/Статистика по центру, Система/Выход/язык — справа */
+.topbar { display: flex; align-items: center; gap: 16px; }
+.mainnav { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.topbar-right { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.topbar-right .dropdown-menu { left: auto; right: 0; }
+.topbar-right .lang { margin-left: 6px; }
+@media (max-width: 820px) {
+  .mainnav { flex: 1 1 100%; justify-content: flex-start; }
+  .topbar-right { margin-left: 0; }
+}
+
+/* Выбор режима: подпись и индикаторы вкладок (✓ активна / ⛔ неактивна) */
+.msel { margin: 4px 0 8px; color: var(--muted); font-weight: 600; }
+.tabs .tab::after { margin-left: 8px; font-size: 18px; vertical-align: middle; line-height: 1; }
+.tabs .tab { content: ""; }
+.tabs .tab::after { content: "⛔"; }
+.tabs .tab:has(input:checked)::after { content: "✓"; color: #2e7d32; font-weight: 700; font-size: 24px; }

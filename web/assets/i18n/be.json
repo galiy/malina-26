@@ -189,5 +189,13 @@
   "si.thr.throttled_occ": "тротлінг (было)",
   "si.thr.soft_temp_occ": "софт-ліміт па тэмпературы (было)",
   "si.errors": "Памылкі знешніх каманд",
-  "si.refresh": "Абнавіць"
+  "si.refresh": "Абнавіць",
+  "menu.monitoring": "Маніторынг",
+  "menu.stats": "Статыстыка",
+  "menu.map": "МАП",
+  "menu.kes": "КЭС",
+  "menu.charts": "Графікі",
+  "menu.agg": "Агрэгаты",
+  "app.tab_title": "Мікраарт-Маліна",
+  "net.choose_mode": "Выберыце рэжым"
 }

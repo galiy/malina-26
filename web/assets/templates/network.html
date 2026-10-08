@@ -11,6 +11,7 @@
     </div>
   </div>
 
+  <div class="msel">{{index .T "net.choose_mode"}}</div>
   <div class="tabs">
     <label class="tab"><input type="radio" name="mode" value="mode1" {{if eq .Mode "mode1"}}checked{{end}}> {{index .T "net.mode1"}}</label>
     <label class="tab"><input type="radio" name="mode" value="mode2" {{if eq .Mode "mode2"}}checked{{end}}> {{index .T "net.mode2"}}</label>

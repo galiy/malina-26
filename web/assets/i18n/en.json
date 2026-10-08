@@ -189,5 +189,13 @@
   "si.thr.throttled_occ": "throttled (occurred)",
   "si.thr.soft_temp_occ": "soft temp limit (occurred)",
   "si.errors": "External command errors",
-  "si.refresh": "Refresh"
+  "si.refresh": "Refresh",
+  "menu.monitoring": "Monitoring",
+  "menu.stats": "Statistics",
+  "menu.map": "MAP",
+  "menu.kes": "KES",
+  "menu.charts": "Charts",
+  "menu.agg": "Aggregates",
+  "app.tab_title": "Microart-Malina",
+  "net.choose_mode": "Choose mode"
 }
