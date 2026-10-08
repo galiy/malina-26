@@ -11,11 +11,18 @@
 - Hostname `malina`; локаль `ru_RU.UTF-8`, клавиатура `ru`, TZ `Europe/Moscow`.
 - Разделы: boot 512 МБ (FAT, `/boot/firmware`), root 8 ГБ (ext4).
 - Корень **read-only**, логи/временные данные — в tmpfs (см. `stage-malina`).
+- Раздел `/malina` (rw) — создаётся при провижининге (`deploy/provision.sh`),
+  туда переносятся `/root`, `/home`, cron, `wpa_supplicant`.
+- Пользователь по умолчанию `malina`/`malina`; **на рабочем устройстве пароли
+  `malina` и `root` изменены на `malina26`** (образ пересобирать не требуется).
 - journald `Storage=volatile` (журнал в `/run`, на диск не пишется).
 - Сеть: NetworkManager, `eth0` по DHCP из коробки; WiFi не поднимается.
+  (На устройстве NetworkManager **удаляется провижинингом**, сетью управляет `malina-netd`.)
 - Из Lite удалены `avahi-daemon`, `triggerhappy`, `dphys-swapfile`.
 - Добавлен `mc`.
-- Пакеты ролей (`snmpd`, `watchdog`) — не входят, доставляются позже.
+- **watchdog**: аппаратный сторож `bcm2835_wdt` включается через systemd
+  (`RuntimeWatchdogSec=15s`, файл `system/systemd/watchdog.conf`); отдельный пакет
+  `watchdog` не нужен. Пакет `snmpd` — не входит, доставляется позже.
 
 ## Файлы
 

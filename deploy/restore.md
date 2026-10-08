@@ -35,19 +35,25 @@
 - `web/` — исходники сервиса (web+netd) и `pamcheck.c`.
 - `deploy/manifest.tsv`, `deploy/install.sh`.
 
-## Пробелы (ещё нужно закрыть для правила)
-- В `image/stage-malina` **ещё не запекаются** новые `system/*` артефакты
-  (rsyslog/logrotate/tmpfiles/timesyncd/dhclient-хук/helpers/hostname/units/PAM,
-  netd/ранее web — бинарники ставятся отдельно).
-- `fstab`/`cmdline.txt`/маскирование/пакеты сейчас применены вручную →
-  нужно перенести в `stage-malina` (или в `deploy/provision.sh`).
-- **Создание раздела `/malina`** (p3, размер под «16 ГБ») и его монтирование —
-  оформить как `deploy/provision.sh`.
-- Симлинки `/root`,`/home`→`/malina`, `/etc/wpa_supplicant`→`/malina`,
-  `/etc/resolv.conf`→`/run/malina` — оформить в provision.
-- Удаление `NetworkManager` и его остатков — оформить в provision.
-- `machine-id` (фиксированный) — запечь/провижинить.
-- Пакет `nftables`, `hostapd`, `dnsmasq` — добавить в список образa/provision.
+## Статус
+Реализовано в `deploy/provision.sh` + `deploy/manifest.tsv`:
+- **создание раздела `/malina` (p3)** и монтирование (форматирование — только для
+  нового/пустого раздела, чтобы не затереть данные);
+- применение `system/*` по `deploy/manifest.tsv` (юниты, PAM, dhclient-хук, rsyslog/
+  logrotate/tmpfiles/journald/timesyncd, helpers, watchdog.conf);
+- симлинки `/root`,`/home`→`/malina`, `/etc/wpa_supplicant`→`/malina`,
+  `/etc/resolv.conf`→`/run/malina`;
+- удаление `NetworkManager` и остатков; установка пакетов (`nftables`, `hostapd`,
+  `dnsmasq`, `isc-dhcp-client`, `rsyslog`, `gcc` и др.);
+- фиксированный `machine-id`, seed-конфиги сети, установка бинарников
+  `malina-web`/`malina-netd`/`malina-pamcheck` и **веб-ассетов**
+  (`web/assets` → `/malina/usr/local/share/malina/web`).
+
+Осталось (вне рамок текущей задачи): «запекание» всех этих шагов в `image/stage-malina`
+(сейчас применяется `deploy/provision.sh` после прошивки), тираж образов.
+
+### Прочее
+- `deploy/install.sh` требует `MALINA_PASS` (env) или `MALINA_PASS=…` в `.kilo/secrets`.
 
 ## Порядок восстановления (целевой)
 1. Прошить стартовый образ.
