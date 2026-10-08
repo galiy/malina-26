@@ -30,9 +30,9 @@
 
   // Градусник: полукруглая шкала, цвет по порогу.
   function gcolor(p) {
-    if (p >= 85) return "#d9534f";
-    if (p >= 60) return "#f0ad4e";
-    return "#5cb85c";
+    if (p >= 85) return "#b23b3b";
+    if (p >= 60) return "#e0a53a";
+    return "#0d5637";
   }
   function gauge(percent, label, text) {
     var p = clamp(percent);
@@ -41,7 +41,7 @@
     var col = gcolor(p);
     return '<div class="gauge">' +
       '<svg width="120" height="70" viewBox="0 0 120 70">' +
-        '<path d="M12 60 A48 48 0 0 1 108 60" fill="none" stroke="#ececec" ' +
+        '<path d="M12 60 A48 48 0 0 1 108 60" fill="none" stroke="#e2e8e4" ' +
           'stroke-width="10" stroke-linecap="round"/>' +
         '<path d="M12 60 A48 48 0 0 1 108 60" fill="none" stroke="' + col + '" ' +
           'stroke-width="10" stroke-linecap="round" stroke-dasharray="' + len.toFixed(2) +
