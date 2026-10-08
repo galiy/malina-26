@@ -85,10 +85,12 @@ func New(o Options) (*Server, error) {
 
 	sets := map[string]*template.Template{}
 	for name, page := range map[string]string{
-		"info":    "info.html",
-		"system":  "system.html",
-		"logs":    "logs.html",
-		"network": "network.html",
+		"info":     "info.html",
+		"system":   "system.html",
+		"logs":     "logs.html",
+		"network":  "network.html",
+		"services": "services.html",
+		"reboot":   "reboot.html",
 	} {
 		t, err := template.New("").Funcs(funcs).
 			ParseFiles(layout, filepath.Join(tplDir, page))
@@ -127,6 +129,10 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/system/hostname", s.handleSystemHostname)
 	mux.HandleFunc("/system/logging", s.handleSystemLogging)
 	mux.HandleFunc("/system/password", s.handleSystemPassword)
+	mux.HandleFunc("/services", s.handleServices)
+	mux.HandleFunc("/api/services", s.handleAPIServices)
+	mux.HandleFunc("/services/action", s.handleServiceAction)
+	mux.HandleFunc("/system/reboot", s.handleSystemReboot)
 	mux.HandleFunc("/logs", s.handleLogs)
 	mux.HandleFunc("/api/scan", s.handleAPIScan)
 	mux.HandleFunc("/network", s.handleNetwork)

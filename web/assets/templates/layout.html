@@ -11,12 +11,13 @@
   <header class="topbar">
     <div class="brand"><img src="{{asset "img/malina_small.gif"}}" alt="Malina"> {{index .T "app.title"}}</div>
     <nav class="mainnav">
-      <div class="navitem dropdown {{if or (eq .Active "info") (eq .Active "system")}}active{{end}}">
+      <div class="navitem dropdown {{if or (eq .Active "info") (eq .Active "system") (eq .Active "services")}}active{{end}}">
         <span class="navlink">{{index .T "menu.system"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
           <a href="/" class="{{if eq .Active "info"}}active{{end}}">{{index .T "menu.info"}}</a>
           <a href="/system" class="{{if eq .Active "system"}}active{{end}}">{{index .T "menu.params"}}</a>
           <a href="/network" class="{{if eq .Active "network"}}active{{end}}">{{index .T "menu.network"}}</a>
+          <a href="/services" class="{{if eq .Active "services"}}active{{end}}">{{index .T "menu.services"}}</a>
         </div>
       </div>
       <form method="post" action="/logout" class="navform">

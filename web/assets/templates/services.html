@@ -1,0 +1,29 @@
+{{define "content"}}
+<h1>{{index .T "svc.title"}}</h1>
+
+{{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
+{{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
+
+<div class="svc-top">
+  <form method="post" action="/system/reboot" id="rebootForm">
+    <button type="submit" class="btn-danger">{{index .T "svc.reboot"}}</button>
+  </form>
+  <span class="muted">{{index .T "svc.reboot_hint"}}</span>
+</div>
+
+<table class="svc-table">
+  <thead>
+    <tr>
+      <th>{{index .T "svc.col.service"}}</th>
+      <th>{{index .T "svc.col.description"}}</th>
+      <th>{{index .T "svc.col.state"}}</th>
+      <th class="svc-actions-col">{{index .T "svc.col.actions"}}</th>
+      <th class="svc-note-col">{{index .T "svc.col.comment"}}</th>
+    </tr>
+  </thead>
+  <tbody id="svcBody"></tbody>
+</table>
+
+<script>window.I18N = {{json .T}}; window.SERVICES = {{json .Services}};</script>
+<script src="{{asset "services.js"}}"></script>
+{{end}}

@@ -1,0 +1,25 @@
+{{define "reboot"}}
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{index .T "reboot.page_title"}}</title>
+  <link rel="stylesheet" href="{{asset "app.css"}}">
+</head>
+<body class="app-body">
+  <main class="content">
+    <section class="card reboot-card">
+      <div class="reboot-logo"><img src="{{asset "img/malina_small.gif"}}" alt="Malina"></div>
+      <h1 class="reboot-title" id="rbtTitle">{{index .T "reboot.waiting"}}</h1>
+      <div class="rebar"><div class="rebar-fill" id="rebFill"></div></div>
+      <div class="rebar-pct" id="rebPct">0%</div>
+      <p class="muted" id="rebHint">{{index .T "svc.reboot_hint"}}</p>
+      <p class="err reboot-err" id="rebErr" hidden>{{index .T "reboot.error"}}</p>
+    </section>
+  </main>
+  <script>window.I18N = {{json .T}}; window.REBOOT = { total: 120, interval: 5, next: "/" };</script>
+  <script src="{{asset "reboot.js"}}"></script>
+</body>
+</html>
+{{end}}

@@ -36,6 +36,9 @@ func (s *Server) render(w http.ResponseWriter, status int, name string, data map
 	if set.Lookup("layout") == nil {
 		root = "login"
 	}
+	if set.Lookup("reboot") != nil {
+		root = "reboot"
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
