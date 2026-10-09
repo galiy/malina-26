@@ -13,10 +13,15 @@
     <div class="brand"><img src="{{asset "img/malina_small.gif"}}" alt="Malina"> {{index .T "app.title"}}</div>
 
     <nav class="mainnav">
-      <div class="navitem dropdown">
+      <div class="navitem dropdown {{if eq .Active "map"}}active{{end}}">
         <span class="navlink">{{index .T "menu.monitoring"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
-          <a href="#">{{index .T "menu.map"}}</a>
+          <div id="mapMenuWrap" {{if not .Maps}}hidden{{end}}>
+            <span class="dropdown-label">{{index .T "menu.map"}}</span>
+            <div id="mapMenuItems">
+              {{range .Maps}}<a class="dropdown-sub" href="/map?id={{.ID}}">{{.MenuLabel}}</a>{{end}}
+            </div>
+          </div>
           <a href="#">{{index .T "menu.kes"}}</a>
         </div>
       </div>
@@ -33,7 +38,7 @@
       <div class="navitem dropdown {{if or (eq .Active "info") (eq .Active "system") (eq .Active "network") (eq .Active "services")}}active{{end}}">
         <span class="navlink">{{index .T "menu.system"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
-          <a href="/" class="{{if eq .Active "info"}}active{{end}}">{{index .T "menu.info"}}</a>
+          <a href="/info" class="{{if eq .Active "info"}}active{{end}}">{{index .T "menu.info"}}</a>
           <a href="/system" class="{{if eq .Active "system"}}active{{end}}">{{index .T "menu.params"}}</a>
           <a href="/network" class="{{if eq .Active "network"}}active{{end}}">{{index .T "menu.network"}}</a>
           <a href="/services" class="{{if eq .Active "services"}}active{{end}}">{{index .T "menu.services"}}</a>
@@ -55,6 +60,7 @@
   <main class="content">
     {{template "content" .}}
   </main>
+  <script src="{{asset "nav.js"}}" defer></script>
 </body>
 </html>
 {{end}}

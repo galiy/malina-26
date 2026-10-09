@@ -55,6 +55,7 @@ func (s *Server) baseData(r *http.Request) map[string]any {
 		"Langs":     s.opts.Langs,
 		"LangNames": langNames,
 		"Path":      r.URL.Path,
+		"Maps":      loadMapList().Maps,
 	}
 }
 
@@ -102,6 +103,23 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
+	// При входе на сайт всегда открываем страницу первого МАП (верхний пункт меню).
+	if ml := loadMapList(); len(ml.Maps) > 0 {
+		http.Redirect(w, r, "/map?id="+strconv.Itoa(ml.Maps[0].ID), http.StatusSeeOther)
+		return
+	}
+	s.renderInfo(w, r)
+}
+
+// handleInfo — явная страница «Информация» (/info), доступна из меню.
+func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAuth(w, r); !ok {
+		return
+	}
+	s.renderInfo(w, r)
+}
+
+func (s *Server) renderInfo(w http.ResponseWriter, r *http.Request) {
 	data := s.baseData(r)
 	data["Active"] = "info"
 	data["LogFiles"] = logtail.Whitelist

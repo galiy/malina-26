@@ -197,5 +197,8 @@
   "menu.charts": "Charts",
   "menu.agg": "Aggregates",
   "app.tab_title": "Microart-Malina",
-  "net.choose_mode": "Choose mode"
+  "net.choose_mode": "Choose mode",
+  "map.disable_update": "Disable update",
+  "map.gone": "MAP is gone",
+  "map.connection_lost": "Connection lost"
 }

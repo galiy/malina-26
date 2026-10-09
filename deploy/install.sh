@@ -42,7 +42,7 @@ trap 'rm -rf "$STAGE"' EXIT
 cp "$BIN_WEB" "$STAGE/malina-web"
 cp "$BIN_NETD" "$STAGE/malina-netd"
 cp "$ROOT/web/pamcheck/pamcheck.c" "$STAGE/pamcheck.c"
-tar -C "$ROOT" -cf "$STAGE/pkg.tar" system deploy/manifest.tsv web/assets
+tar -C "$ROOT" -cf "$STAGE/pkg.tar" system daemons deploy/manifest.tsv web/assets
 
 "${SSH[@]}" "$HOST" 'rm -rf /tmp/malina-install && mkdir -p /tmp/malina-install'
 "${SCP[@]}" "$STAGE/pkg.tar" "$STAGE/malina-web" "$STAGE/malina-netd" "$STAGE/pamcheck.c" "$HOST:/tmp/malina-install/"

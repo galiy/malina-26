@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/galiy/malina-26/web/internal/auth"
@@ -35,6 +36,7 @@ type Server struct {
 	tmpl    map[string]*template.Template
 	sampler *sysinfo.Sampler
 	initial string
+	legacy  *legacyService
 }
 
 // langNames — нативные названия языков для селектора.
@@ -90,6 +92,7 @@ func New(o Options) (*Server, error) {
 		"logs":     "logs.html",
 		"network":  "network.html",
 		"services": "services.html",
+		"map":      "map.html",
 		"reboot":   "reboot.html",
 	} {
 		t, err := template.New("").Funcs(funcs).
@@ -114,6 +117,7 @@ func New(o Options) (*Server, error) {
 		tmpl:    sets,
 		sampler: sysinfo.New(),
 		initial: o.DefaultLang,
+		legacy:  newLegacyService(),
 	}, nil
 }
 
@@ -130,6 +134,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/api/processes", s.handleAPIProcesses)
 	mux.HandleFunc("/api/log", s.handleAPILog)
 	mux.HandleFunc("/system", s.handleSystem)
+	mux.HandleFunc("/info", s.handleInfo)
 	mux.HandleFunc("/system/hostname", s.handleSystemHostname)
 	mux.HandleFunc("/system/logging", s.handleSystemLogging)
 	mux.HandleFunc("/system/password", s.handleSystemPassword)
@@ -142,7 +147,15 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/network", s.handleNetwork)
 	mux.HandleFunc("/network/save", s.handleNetworkSave)
 	mux.HandleFunc("/network/scan", s.handleNetworkScan)
+	mux.HandleFunc("/map", s.handleMapPage)
+	mux.HandleFunc("/api/devices", s.handleAPIDevices)
+	mux.HandleFunc("/api/map/raw", s.handleAPIMapRaw)
+	mux.HandleFunc("/read_json.php", s.handleReadJSON)
+	mux.HandleFunc("/read_memory.php", s.handleReadMemory)
+	mux.HandleFunc("/check_daemons.php", s.handleCheckDaemons)
 	mux.HandleFunc("/", s.handleIndex)
+
+	go s.legacy.run()
 
 	staticDir := filepath.Join(s.opts.AssetsDir, "static")
 	staticFS := http.FileServer(http.Dir(staticDir))
@@ -150,17 +163,38 @@ func (s *Server) Run() error {
 
 	srv := &http.Server{
 		Addr:              s.opts.Addr,
-		Handler:           mux,
+		Handler:           cleanSlashes(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	return srv.ListenAndServe()
 }
 
+// cleanSlashes устраняет дублирующиеся слэши в пути запроса. Legacy
+// request_node.php формирует строку как "GET /"+dev, где dev уже начинается
+// со "/", т.е. приходит "//read_json.php?device=map" и "//check_daemons.php".
+// http.ServeMux считает такой путь «грязным» и отвечает 302-редиректом, из-за
+// чего совместимые потребители получают тело редиректа вместо JSON.
+func cleanSlashes(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "//") {
+			for strings.Contains(r.URL.Path, "//") {
+				r.URL.Path = strings.ReplaceAll(r.URL.Path, "//", "/")
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // cacheStatic разрешает обычное кэширование статики (URL версионируется
 // через ?v=<mtime>, поэтому обновления подтягиваются при смене версии).
+// Неверсионированные файлы (legacy-панель) не кэшируем — иначе правки не видны.
 func cacheStatic(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=86400")
+		if r.URL.Query().Get("v") != "" {
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+		} else {
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		h.ServeHTTP(w, r)
 	})
 }

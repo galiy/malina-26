@@ -197,5 +197,8 @@
   "menu.charts": "图表",
   "menu.agg": "聚合",
   "app.tab_title": "Microart-Malina",
-  "net.choose_mode": "选择模式"
+  "net.choose_mode": "选择模式",
+  "map.disable_update": "停用更新",
+  "map.gone": "MAP 不可用",
+  "map.connection_lost": "连接丢失"
 }

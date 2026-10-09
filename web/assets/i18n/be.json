@@ -197,5 +197,8 @@
   "menu.charts": "Графікі",
   "menu.agg": "Агрэгаты",
   "app.tab_title": "Мікраарт-Маліна",
-  "net.choose_mode": "Выберыце рэжым"
+  "net.choose_mode": "Выберыце рэжым",
+  "map.disable_update": "Адключыць абнаўленне",
+  "map.gone": "МАП недаступны",
+  "map.connection_lost": "Няма сувязі"
 }

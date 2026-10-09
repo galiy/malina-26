@@ -197,5 +197,8 @@
   "menu.charts": "Графики",
   "menu.agg": "Агрегаты",
   "app.tab_title": "Микроарт-Малина",
-  "net.choose_mode": "Выберите режим"
+  "net.choose_mode": "Выберите режим",
+  "map.disable_update": "Отключить обновление",
+  "map.gone": "МАП недоступен",
+  "map.connection_lost": "Нет связи"
 }
