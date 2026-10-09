@@ -43,6 +43,20 @@ if ! findmnt -n /malina >/dev/null 2>&1; then
 fi
 grep -q 'LABEL=malina' /etc/fstab || echo 'LABEL=malina  /malina  ext4  defaults,noatime  0  2' >> /etc/fstab
 
+echo "== 1b. UART для МАП (PL011 на GPIO14/15, BT на mini-UART) =="
+BOOT=/boot/firmware
+if [ -d "$BOOT" ]; then
+	mount -o remount,rw "$BOOT" 2>/dev/null || true
+	if [ -f "$BOOT/config.txt" ]; then
+		sed -i '/^enable_uart=/d; /^dtoverlay=miniuart-bt/d; /^dtoverlay=pi3-miniuart-bt/d' "$BOOT/config.txt"
+		printf '\n[all]\nenable_uart=1\ndtoverlay=miniuart-bt\n' >> "$BOOT/config.txt"
+	fi
+	[ -f "$BOOT/cmdline.txt" ] && sed -i 's/console=serial0,[0-9]* //' "$BOOT/cmdline.txt"
+	sync
+	mount -o remount,ro "$BOOT" 2>/dev/null || true
+fi
+systemctl mask serial-getty@ttyAMA0.service serial-getty@ttyS0.service >/dev/null 2>&1 || true
+
 echo "== 2. Пакеты =="
 apt-get update -qq || true
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
@@ -65,6 +79,8 @@ while IFS="	" read -r src dest mode pol; do
 	fi
 	install -D -m "$mode" "$REPO/$src" "$dest"
 done < "$REPO/deploy/manifest.tsv"
+# Перечитать udev-правила (latency_timer для USB-serial и пр.)
+command -v udevadm >/dev/null 2>&1 && udevadm control --reload-rules 2>/dev/null || true
 
 echo "== 4b. Веб-ассеты =="
 mkdir -p /malina/usr/local/share/malina/web
@@ -74,6 +90,7 @@ cp -a "$REPO/web/assets/templates" "$REPO/web/assets/static" "$REPO/web/assets/i
 echo "== 5. Бинарники и PAM-хелпер =="
 [ -f "$REPO/web/dist/malina-web-armv7" ] && install -D -m0755 "$REPO/web/dist/malina-web-armv7" /malina/usr/local/bin/malina-web
 [ -f "$REPO/web/dist/malina-netd-armv7" ] && install -D -m0755 "$REPO/web/dist/malina-netd-armv7" /malina/usr/local/sbin/malina-netd
+[ -f "$REPO/daemons/map-reader/dist/map-reader-armv7" ] && install -D -m0755 "$REPO/daemons/map-reader/dist/map-reader-armv7" /malina/usr/local/sbin/map-reader
 if command -v gcc >/dev/null 2>&1 && [ -f "$REPO/web/pamcheck/pamcheck.c" ]; then
 	gcc -O2 -o /tmp/malina-pamcheck "$REPO/web/pamcheck/pamcheck.c" -ldl
 	install -D -m0755 /tmp/malina-pamcheck /malina/usr/local/libexec/malina-pamcheck
@@ -97,7 +114,7 @@ mkdir -p /malina/etc /malina/home /malina/root
 echo "== 7. tmpfiles, daemon-reload, enable =="
 systemd-tmpfiles --create /etc/tmpfiles.d/malina.conf /etc/tmpfiles.d/malina-rsyslog.conf >/dev/null 2>&1 || true
 systemctl daemon-reload
-for u in dhclient-eth0 malina-hostname malina-web malina-net malina-net-fallback.timer malina-logrotate.timer; do
+for u in dhclient-eth0 malina-hostname malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader; do
 	systemctl enable "$u" >/dev/null 2>&1 || true
 done
 

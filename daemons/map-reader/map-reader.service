@@ -1,0 +1,15 @@
+[Unit]
+Description=Malina MAP reader (Микроарт poll daemon)
+After=local-fs.target rsyslog.service network.target
+Wants=rsyslog.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/malina/usr/local/sbin/map-reader
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

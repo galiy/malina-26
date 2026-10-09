@@ -29,9 +29,15 @@
 - `system/rsyslog/`, `system/logrotate/`, `system/tmpfiles/`, `system/journald/`,
   `system/timesyncd/` — конфиги.
 - `system/bin/` — `malina-rw`, `malina-remote-syslog`.
+- `system/udev/` — udev-правила (`60-usb-serial-latency.rules`: `latency_timer=1`
+  для USB-serial — эхо-протокол МАП, см. `docs/map.md`).
 - `system/network/` — дефолты `mode1.json`, `mode2.json`, `active`.
 - `system/provision/` — снимок состояния: `fstab`, `cmdline.txt`, `config.txt`,
   `packages.txt` (apt-mark showmanual), `masked.txt`, `disabled.txt`.
+- `image/stage-malina/05-map-uart/` — UART для МАП: `enable_uart=1` +
+  `dtoverlay=miniuart-bt`, без serial-консоли (PL011 на GPIO14/15 — МАП, BT на
+  mini-UART). Дублируется шагом 1b в `deploy/provision.sh`. Описание —
+  `docs/map.md`.
 - `web/` — исходники сервиса (web+netd) и `pamcheck.c`.
 - `deploy/manifest.tsv`, `deploy/install.sh`.
 
@@ -61,12 +67,12 @@
    machine-id, установка `system/*` и бинарников.
 3. Ребут → система поднимается в режиме 1 (AP).
 
-## Временное (на период работ; удалить в конце)
-- **Зеркало логов в `/malina/var/log` без ротации** — включено на **весь период
-  работы над проектом** (облегчает отладку). Файл растёт.
-  Файлы: `system/rsyslog/20-malina-copy.conf`, строка каталога в
-  `system/tmpfiles/malina-rsyslog.conf`. **Удалить оба + запись из
-  `deploy/manifest.tsv` по завершении проекта.**
+## Логи
+- Зеркалирование логов в `/malina/var/log` **отключено** (ОС стабильна, флэшку не
+  изнашиваем; логи смотрим на `.253`). Ранее зеркало включалось на период отладки;
+  конфиг `system/rsyslog/20-malina-copy.conf` и строка `/malina/var/log` в
+  `system/tmpfiles/malina-rsyslog.conf` удалены, запись из `deploy/manifest.tsv`
+  убрана.
 
 ## Состояние и хранилище (конвенция)
 
@@ -79,7 +85,6 @@
   `/run/rsyslog-remote/remote.conf`, `/run/malina/resolv.conf`,
   `/run/logrotate.status`.
 - **Persistent — на rw `/malina`:** `/malina/etc/malina/network/{active,mode1.json,mode2.json}`,
-  `/malina/etc/malina/remote-syslog`, `/malina/etc/hostname`,
-  `/malina/var/log/malina.log` (временно).
+  `/malina/etc/malina/remote-syslog`, `/malina/etc/hostname`.
 - **Правило:** таймстампы/флаги/счётчики — в `/run` (переживать ребут не должны);
   на `/malina` — только явные настройки. Никакого состояния в репозитории.

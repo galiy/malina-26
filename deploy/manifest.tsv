@@ -15,13 +15,13 @@ system/systemd/malina-logrotate.timer	/etc/systemd/system/malina-logrotate.timer
 system/pam/malina-web	/etc/pam.d/malina-web	0644	always
 system/dhcp/99-malina-syslog	/etc/dhcp/dhclient-enter-hooks.d/99-malina-syslog	0755	always
 system/rsyslog/00-malina.conf	/etc/rsyslog.d/00-malina.conf	0644	always
-system/rsyslog/20-malina-copy.conf	/etc/rsyslog.d/20-malina-copy.conf	0644	always
 system/logrotate/malina-logs	/etc/logrotate.d/malina-logs	0644	always
 system/tmpfiles/malina.conf	/etc/tmpfiles.d/malina.conf	0644	always
 system/tmpfiles/malina-rsyslog.conf	/etc/tmpfiles.d/malina-rsyslog.conf	0644	always
 system/journald/90-malina.conf	/etc/systemd/journald.conf.d/90-malina.conf	0644	always
 system/systemd/watchdog.conf	/etc/systemd/system.conf.d/watchdog.conf	0644	always
 system/timesyncd/malina.conf	/etc/systemd/timesyncd.conf.d/malina.conf	0644	always
+system/udev/60-usb-serial-latency.rules	/etc/udev/rules.d/60-usb-serial-latency.rules	0644	always
 system/bin/malina-rw	/malina/usr/local/sbin/malina-rw	0755	always
 system/bin/malina-remote-syslog	/malina/usr/local/libexec/malina-remote-syslog	0755	always
 system/network/mode1.json	/malina/etc/malina/network/mode1.json	0600	if_absent
@@ -29,3 +29,4 @@ system/network/mode2.json	/malina/etc/malina/network/mode2.json	0600	if_absent
 system/network/active	/malina/etc/malina/network/active	0644	if_absent
 system/systemd/malina-net-fallback.service	/etc/systemd/system/malina-net-fallback.service	0644	always
 system/systemd/malina-net-fallback.timer	/etc/systemd/system/malina-net-fallback.timer	0644	always
+daemons/map-reader/map-reader.service	/etc/systemd/system/map-reader.service	0644	always

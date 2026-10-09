@@ -6,16 +6,17 @@
 
 ## Документация
 
-**Пользовательская** (для эксплуатации устройства) — в [docs/](docs/):
-- [docs/README.md](docs/README.md) — быстрое начало, доступы по умолчанию;
-- [docs/ui.md](docs/ui.md) — интерфейс: вход, доступы, SSH, точка доступа, меню и индекс страниц;
-- [docs/pages/](docs/pages/) — страницы по отдельности: info, system, network, services, logs.
+**Пользовательская** (для эксплуатации устройства) — в [manuals/](manuals/):
+- [manuals/README.md](manuals/README.md) — быстрое начало, доступы по умолчанию;
+- [manuals/ui.md](manuals/ui.md) — интерфейс: вход, доступы, SSH, точка доступа, меню и индекс страниц;
+- [manuals/pages/](manuals/pages/) — страницы по отдельности: info, system, network, services, logs.
 
 **Проектная** (разработка и сопровождение):
 - [requirements.md](requirements.md) — требования и статус реализации;
 - [deploy/restore.md](deploy/restore.md) — восстановление из образа + репо;
 - [image/README.md](image/README.md) — сборка образа (pi-gen);
-- [web/README.md](web/README.md) — веб-сервисы (`malina-web`, `malina-netd`).
+- [web/README.md](web/README.md) — веб-сервисы (`malina-web`, `malina-netd`);
+- [docs/](docs/) — техническая документация (МАП, карта памяти и т.п.).
 
 ## Структура репозитория
 
@@ -27,7 +28,8 @@
 - `web/` — Go-сервисы (`cmd/malina-web`, `cmd/malina-netd`, `internal/*`),
   статика/шаблоны/i18n, PAM-хелпер.
 - `tests/` — автотесты (UI smoke на Playwright).
-- `docs/` — пользовательская документация.
+- `manuals/` — пользовательская документация.
+- `docs/` — техническая документация (МАП, карта памяти и т.п.).
 
 ## Что реализовано (кратко)
 
@@ -62,7 +64,7 @@ deploy/provision.sh
 - Веб/SSH: пользователь `malina`, пароль `malina26`; root (SSH) — `malina26`.
 - Точка доступа Wi-Fi: SSID `Malina`, пароль `malina123`.
 
-Подробности — в [docs/README.md](docs/README.md).
+Подробности — в [manuals/README.md](manuals/README.md).
 
 ## Примечания
 

@@ -32,7 +32,9 @@
   - `01-remove` — удаление лишних пакетов;
   - `02-auth` — пароль root и настройки SSH;
   - `03-immutable` — fstab/tmpfs, `ro`, journald, NetworkManager;
-  - `04-hostkeys` — предгенерация SSH host keys.
+  - `04-hostkeys` — предгенерация SSH host keys;
+  - `05-map-uart` — UART для МАП (`enable_uart=1`, `dtoverlay=miniuart-bt`,
+    без serial-консоли; BT остаётся живым).
 - `setup.sh` — раскладывает конфиг и стейдж в pi-gen, патчит `export-image`
   (root 8 ГБ, `resolv.conf` как симлинк в `/run`).
 - `build.sh` — `setup.sh` + сборка через `sudo`.
@@ -70,3 +72,21 @@ Root-раздел уже 8 ГБ; авторасширение (`resize2fs_once`)
   чтобы включённые службы не писали в ro-корень.
 - `systemd-random-seed` и `systemd-machine-id-commit` замаскированы,
   `machine-id` — транзиентный (`/run`).
+
+## UART для МАП (стадия `05-map-uart`)
+
+МАП «Титанатор» подключён к аппаратному UART на пинах **GPIO14/15** («порт
+консоли»). Образ отдаёт этот UART МАПу, сохраняя Bluetooth:
+
+- `config.txt` (`[all]`): `enable_uart=1`, `dtoverlay=miniuart-bt`;
+- `cmdline.txt`: убран `console=serial0,115200` (остаётся `console=tty1`);
+- getty на UART замаскирован (`serial-getty@ttyAMA0`, `serial-getty@ttyS0`).
+
+Итог: `/dev/serial0` → **`ttyAMA0`** (PL011, GPIO14/15) — МАП; Bluetooth уходит
+на mini-UART (`ttyS0`) и **остаётся живым**.
+
+Старый образ был иначе (`dtoverlay=pi3-disable-bt`, BT выключен, МАП на
+`ttyAMA0`). Вариант с `miniuart-bt` выбран, чтобы не терять BT. Откат:
+`dtoverlay=pi3-disable-bt` + `enable_uart=1` (тогда BT отключён).
+
+Подробности по подключению и проверке — `docs/map.md`.
