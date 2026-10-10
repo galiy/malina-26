@@ -47,6 +47,10 @@ func main() {
 		if err := monitor(); err != nil {
 			log.Fatalf("monitor: %v", err)
 		}
+	case "wifi-watch":
+		if err := wifiWatch(); err != nil {
+			log.Fatalf("wifi-watch: %v", err)
+		}
 	case "probe":
 		m := netcfg.LoadMode2()
 		f := probeForeignDHCP("eth0", m.LAN.ServerIP, 15*time.Second)
@@ -214,6 +218,18 @@ rsn_pairwise=CCMP
 		_ = sysctl("net.ipv4.ip_forward", "0")
 		_ = run("nft", "delete", "table", "ip", "malina")
 	}
+
+	// Опция «Выключить Wi‑Fi при подключённом Ethernet» (mode1-only):
+	// AP уже поднят выше → помечаем состояние «on», затем, если флаг включён,
+	// сразу применяем нужное состояние и запускаем сторожевой цикл.
+	_ = writeFile(wifiStateFile, "on", 0o644)
+	if m.WifiOffOnEth {
+		wifiApApply(wifiApDesired(m), m)
+		_ = run("systemctl", "start", "malina-net-wifi.service")
+	} else {
+		_ = run("systemctl", "stop", "malina-net-wifi.service")
+		_ = os.Remove(wifiStateFile)
+	}
 	return nil
 }
 
@@ -225,8 +241,18 @@ func applyMode2() error {
 	_ = run("/usr/sbin/rfkill", "unblock", "wifi")
 	_ = run("/usr/sbin/iw", "reg", "set", "US")
 
-	// Гасим AP.
+	// Гасим AP и наш DHCP на wlan0, снимаем адрес AP с интерфейса и чистим
+	// конфиги AP: в STA wlan0 уходит в чужую сеть, раздача 10.10.100.x туда
+	// недопустима (чужой DHCP/конфликт подсетей).
 	_ = run("systemctl", "stop", "--no-block", "malina-hostapd.service")
+	_ = run("systemctl", "stop", "--no-block", "malina-dnsmasq.service")
+	_ = run("ip", "addr", "flush", "dev", "wlan0")
+	_ = os.Remove(filepath.Join(runDir, "dnsmasq.conf"))
+	_ = os.Remove(filepath.Join(runDir, "dnsmasq.leases"))
+	_ = os.Remove(filepath.Join(runDir, "hostapd.conf"))
+	// Опция «Выключать Wi‑Fi при Ethernet» — только для mode1.
+	_ = run("systemctl", "stop", "malina-net-wifi.service")
+	_ = os.Remove(wifiStateFile)
 
 	// STA (wpa_supplicant).
 	wpa := fmt.Sprintf(`ctrl_interface=/run/wpa_supplicant
@@ -274,6 +300,83 @@ network={
 		return applyMode1()
 	}
 	return applyEthMode2(m)
+}
+
+// wifiStateFile — текущее состояние AP в mode1 при опции «Выключить Wi‑Fi»:
+// "on" (AP работает) | "off" (AP погашен, есть Ethernet).
+const wifiStateFile = runDir + "/wifi.state"
+
+// wifiApDesired: должен ли AP быть включён с учётом флага WifiOffOnEth.
+func wifiApDesired(m netcfg.Mode1) bool {
+	if !m.WifiOffOnEth {
+		return true
+	}
+	return carrier("eth0") != "1"
+}
+
+func wifiApState() string {
+	b, err := os.ReadFile(wifiStateFile)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// wifiApApply идемпотентно включает/выключает AP (hostapd+dnsmasq+радио).
+func wifiApApply(on bool, m netcfg.Mode1) {
+	want := "off"
+	if on {
+		want = "on"
+	}
+	if wifiApState() == want {
+		return
+	}
+	if on {
+		_ = run("/usr/sbin/rfkill", "unblock", "wifi")
+		_ = run("ip", "link", "set", "wlan0", "up")
+		_ = run("systemctl", "restart", "malina-hostapd.service")
+		_ = run("ip", "addr", "flush", "dev", "wlan0")
+		_ = run("ip", "addr", "add", fmt.Sprintf("%s/%d", m.LAN.ServerIP, maskToPrefix(m.LAN.Mask)), "dev", "wlan0")
+		_ = run("/usr/sbin/iw", "dev", "wlan0", "set", "power_save", "off")
+		_ = run("systemctl", "restart", "malina-dnsmasq.service")
+		_ = writeFile(wifiStateFile, "on", 0o644)
+		log.Printf("wifi: AP поднят (Ethernet не подключён)")
+	} else {
+		_ = run("systemctl", "stop", "malina-dnsmasq.service")
+		_ = run("systemctl", "stop", "malina-hostapd.service")
+		_ = run("ip", "addr", "flush", "dev", "wlan0")
+		_ = run("ip", "link", "set", "wlan0", "down")
+		_ = run("/usr/sbin/rfkill", "block", "wifi")
+		_ = writeFile(wifiStateFile, "off", 0o644)
+		log.Printf("wifi: AP погашен (подключён Ethernet)")
+	}
+}
+
+// wifiWatch — сторожевой цикл: держит AP в соответствии с carrier(eth0).
+// Debounce: смена состояния только после 3 подряд одинаковых замеров.
+func wifiWatch() error {
+	last, stable := wifiApState() == "on", 0
+	for {
+		m := netcfg.LoadMode1()
+		if !m.WifiOffOnEth {
+			log.Printf("wifi-watch: флаг выключен — выход")
+			return nil
+		}
+		desired := wifiApDesired(m)
+		if desired == (wifiApState() == "on") {
+			stable = 0
+			last = desired
+		} else if desired == last {
+			stable++
+			if stable >= 3 {
+				wifiApApply(desired, m)
+				stable = 0
+			}
+		} else {
+			last, stable = desired, 1
+		}
+		time.Sleep(4 * time.Second)
+	}
 }
 
 func waitSTA(timeout time.Duration) bool {
@@ -635,6 +738,13 @@ func scan() error {
 // (brcmfmac без этого деградирует в AP-режиме). Вызывается по таймеру (1 мин).
 func apWatchdog() {
 	if activeMode() != "mode1" {
+		return
+	}
+	// Wi-Fi намеренно погашен (опция «Выключить Wi-Fi» + Ethernet): не поднимаем
+	// AP и не крутим hostapd/dnsmasq — иначе получаем цикл ошибок hostapd.
+	if wifiApState() == "off" {
+		_ = run("systemctl", "stop", "--no-block", "malina-hostapd.service")
+		_ = run("systemctl", "stop", "--no-block", "malina-dnsmasq.service")
 		return
 	}
 	m := netcfg.LoadMode1()

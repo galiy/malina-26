@@ -1018,5 +1018,8 @@
   "sys.err.timezone": "无效的时区",
   "sys.host": "主机",
   "sys.host_hint": "主机名和时区立即生效，并保存在 /etc（通过短暂的 rw 窗口）。",
-  "sys.msg.host_ok": "主机设置已保存"
+  "sys.msg.host_ok": "主机设置已保存",
+  "ui.show_password": "显示/隐藏密码",
+  "net.wifi_off_on_eth": "关闭 Wi-Fi",
+  "net.wifi_off_on_eth_hint": "网线连接时关闭 Wi-Fi（拔出后恢复）"
 }

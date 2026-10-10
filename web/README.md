@@ -38,6 +38,16 @@
 ## Подсистема `malina-netd`
 
 - Режимы: `mode1` (AP+NAT+portal), `mode2` (STA+NAT, раздача на `eth0`).
+  Опция `mode1.wifi_off_on_eth` («Выключить Wi-Fi»): при `carrier(eth0)=1` гасит
+  AP/радио (`hostapd`+`dnsmasq`+`rfkill block wifi`), при пропаже линка —
+  поднимает. Сторожевой цикл — `malina-netd wifi-watch` (юнит
+  `malina-net-wifi.service`, стартует/останавливается из `applyMode1`).
+  При погашенном Wi‑Fi watchdog и idle‑перезапуск hostapd пропускаются (иначе
+  hostapd падал бы в цикл из-за `Restart=on-failure` при выключенном радио).
+  В `mode2` `wlan0` уходит в чужую сеть как STA: AP и наш DHCP (`dnsmasq`)
+  **останавливаются**, с `wlan0` снимается адрес AP (10.10.100.254), чистятся
+  `dnsmasq.conf`/`hostapd.conf` — чтобы не раздавать `10.10.100.x` в аплинк.
+  Раздача (если включена) — только на `eth0`, с защитой от чужого DHCP.
 - Команды: `status`, `apply`, `fallback-tick` (монитор/фолбэк по таймеру).
 - Конфиги: `/malina/etc/malina/network/{active,mode1.json,mode2.json,fallback.json}`.
 - Рабочие (tmpfs): `/run/malina-net/{hostapd.conf,dnsmasq.conf,mode,monitor.state,dnsmasq.leases}`.

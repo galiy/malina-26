@@ -27,10 +27,21 @@
     {{if .Error}}<div class="error">{{index .T "login.error"}}</div>{{end}}
     <form method="post" action="/login">
       <label for="password">{{index .T "login.password"}}</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" autofocus>
+      <span class="pw">
+        <input id="password" name="password" type="password" autocomplete="current-password" autofocus>
+        <button type="button" class="eye" title="{{index .T "ui.show_password"}}" aria-label="{{index .T "ui.show_password"}}">👁</button>
+      </span>
       <button type="submit">{{index .T "login.submit"}}</button>
     </form>
   </div>
+  <script>
+    document.querySelectorAll(".pw .eye").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var i = b.parentNode.querySelector("input");
+        i.type = (i.type === "password") ? "text" : "password";
+      });
+    });
+  </script>
 </body>
 </html>
 {{end}}

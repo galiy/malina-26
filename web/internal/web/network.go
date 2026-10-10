@@ -137,8 +137,9 @@ func (s *Server) handleNetworkSave(w http.ResponseWriter, r *http.Request) {
 			Gateway: f("m1_eth_gw", ""),
 			DNS:     splitList(r.FormValue("m1_eth_dns")),
 		},
-		NAT:    r.FormValue("m1_nat") != "",
-		Portal: r.FormValue("m1_portal") != "",
+		NAT:          r.FormValue("m1_nat") != "",
+		Portal:       r.FormValue("m1_portal") != "",
+		WifiOffOnEth: r.FormValue("m1_wifi_off_on_eth") != "",
 	}
 	m2 := netcfg.Mode2{
 		STA: netcfg.STA{

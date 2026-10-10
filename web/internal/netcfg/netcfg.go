@@ -54,6 +54,9 @@ type Mode1 struct {
 	Eth    Eth  `json:"eth"`
 	NAT    bool `json:"nat"`
 	Portal bool `json:"portal"`
+	// WifiOffOnEth — если Ethernet (carrier) подключён, гасить Wi-Fi/AP;
+	// при отсутствии Ethernet — снова поднимать AP (mode1-only).
+	WifiOffOnEth bool `json:"wifi_off_on_eth"`
 }
 
 // Mode2 — «Wi-Fi клиент».
@@ -130,7 +133,7 @@ func SaveMode2(m Mode2) error { return save("mode2.json", m) }
 // DefaultMode1 — значения по умолчанию режима 1.
 func DefaultMode1() Mode1 {
 	return Mode1{
-		AP:     AP{SSID: "Malina", Passphrase: "", Country: "US", Channel: 0},
+		AP:     AP{SSID: "Malina", Passphrase: "malina-26", Country: "US", Channel: 0},
 		LAN:    DHCP{ServerIP: "10.10.100.254", Mask: "255.255.255.0", Start: "10.10.100.1", End: "10.10.100.200"},
 		Eth:    Eth{Mode: "dhcp"},
 		NAT:    true,

@@ -4,6 +4,7 @@ system/systemd/malina-net.service	/etc/systemd/system/malina-net.service	0644	al
 system/systemd/malina-hostapd.service	/etc/systemd/system/malina-hostapd.service	0644	always
 system/systemd/malina-dnsmasq.service	/etc/systemd/system/malina-dnsmasq.service	0644	always
 system/systemd/malina-wpa.service	/etc/systemd/system/malina-wpa.service	0644	always
+system/systemd/malina-net-wifi.service	/etc/systemd/system/malina-net-wifi.service	0644	always
 system/systemd/malina-dhclient-wlan0.service	/etc/systemd/system/malina-dhclient-wlan0.service	0644	always
 system/systemd/malina-net-monitor.service	/etc/systemd/system/malina-net-monitor.service	0644	always
 system/systemd/malina-net-scan.service	/etc/systemd/system/malina-net-scan.service	0644	always

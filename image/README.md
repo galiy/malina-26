@@ -6,7 +6,7 @@
 ## Что зафиксировано
 
 - ОС: Raspberry Pi OS Lite, Debian 12 (bookworm), armhf (32-bit).
-- Пользователь `malina`/`malina`; root разблокирован, пароль `malina`.
+- Пользователь `malina` и `root` — пароль **`malina-26`**.
 - SSH: вход по паролю и по root разрешён.
 - Hostname `malina`; локаль `ru_RU.UTF-8`, клавиатура `ru`, TZ `Europe/Moscow`.
 - Разделы: boot 512 МБ (FAT, `/boot/firmware`), root 8 ГБ (ext4).
@@ -14,8 +14,8 @@
 - Раздел `/malina` (rw) — создаётся при деплое артефактов (локально —
   `deploy/local/stage2.sh`), туда переносятся `/root`, `/home`, cron,
   `wpa_supplicant`.
-- Пользователь по умолчанию `malina`/`malina`; **на рабочем устройстве пароли
-  `malina` и `root` изменены на `malina26`** (образ пересобирать не требуется).
+- Пароль по умолчанию (в образе) для `malina` и `root`, а также WPA-пароль точки
+  доступа — **`malina-26`**.
 - journald `Storage=volatile` (журнал в `/run`, на диск не пишется).
 - Сеть: `eth0` по DHCP; сетью управляет `malina-netd`. NetworkManager и
   `raspberrypi-net-mods` **не устанавливаются** — исключены из базовой установки

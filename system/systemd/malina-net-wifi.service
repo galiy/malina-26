@@ -1,0 +1,13 @@
+[Unit]
+Description=Malina Wi-Fi on/off by Ethernet presence (mode1 option)
+After=local-fs.target
+ConditionPathIsMountPoint=/malina
+
+[Service]
+Type=simple
+ExecStart=/malina/usr/local/sbin/malina-netd wifi-watch
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

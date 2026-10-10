@@ -1,4 +1,4 @@
-echo 'root:malina' | chpasswd
+echo 'root:malina-26' | chpasswd
 passwd -u root >/dev/null 2>&1 || true
 
 install -d -m 0755 /etc/ssh/sshd_config.d

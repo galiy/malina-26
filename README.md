@@ -66,8 +66,8 @@ MALINA_PASS=<пароль> deploy/install.sh <user@host>
 
 ## Доступы по умолчанию
 
-- Веб/SSH: пользователь `malina`, пароль `malina26`; root (SSH) — `malina26`.
-- Точка доступа Wi-Fi: SSID `Malina`, пароль `malina123`.
+- Веб/SSH: пользователь `malina`, пароль `malina-26`; root (SSH) — `malina-26`.
+- Точка доступа Wi-Fi: SSID `Malina`, пароль `malina-26`.
 
 Подробности — в [manuals/README.md](manuals/README.md).
 

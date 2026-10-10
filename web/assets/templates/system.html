@@ -34,11 +34,26 @@
     <h2>{{index .T "sys.password"}}</h2>
     <form method="post" action="/system/password">
       <label for="password_new">{{index .T "sys.password_new"}}</label>
-      <input id="password_new" name="password_new" type="password" autocomplete="new-password">
+      <span class="pw">
+        <input id="password_new" name="password_new" type="password" autocomplete="new-password">
+        <button type="button" class="eye" title="{{index .T "ui.show_password"}}" aria-label="{{index .T "ui.show_password"}}">👁</button>
+      </span>
       <label for="password_confirm">{{index .T "sys.password_confirm"}}</label>
-      <input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password">
+      <span class="pw">
+        <input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password">
+        <button type="button" class="eye" title="{{index .T "ui.show_password"}}" aria-label="{{index .T "ui.show_password"}}">👁</button>
+      </span>
       <button type="submit">{{index .T "sys.password_submit"}}</button>
     </form>
   </section>
 </div>
+
+<script>
+  document.querySelectorAll(".pw .eye").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var i = b.parentNode.querySelector("input");
+      i.type = (i.type === "password") ? "text" : "password";
+    });
+  });
+</script>
 {{end}}

@@ -21,7 +21,7 @@
     <table class="nettable"><tbody>
       <tr class="group"><td colspan="2">{{index .T "net.mode1"}}</td></tr>
       <tr><td>SSID</td><td><input name="m1_ap_ssid" value="{{.Mode1.AP.SSID}}"></td></tr>
-      <tr><td>{{index .T "login.password"}}</td><td><span class="pw"><input type="password" name="m1_ap_pass" value="{{.Mode1.AP.Passphrase}}"><button type="button" class="eye" title="show">👁</button></span></td></tr>
+      <tr><td>{{index .T "login.password"}}</td><td><span class="pw"><input type="password" name="m1_ap_pass" value="{{.Mode1.AP.Passphrase}}"><button type="button" class="eye" title="{{index .T "ui.show_password"}}">👁</button></span></td></tr>
       <tr><td>{{index .T "net.channel"}}</td><td>
         <select name="m1_ap_channel">
           <option value="0" {{if eq .Mode1.AP.Channel 0}}selected{{end}}>auto</option>
@@ -43,6 +43,9 @@
           <option value="{{$c}}" {{if eq $c $.Mode1.AP.Country}}selected{{end}}>{{$c}}</option>
           {{end}}
         </select></td></tr>
+      <tr><td colspan="2" class="muted">{{index .T "net.wifi_off_on_eth_hint"}}</td></tr>
+      <tr><td>{{index .T "net.wifi_off_on_eth"}}</td><td>
+        <label><input type="checkbox" name="m1_wifi_off_on_eth" {{if .Mode1.WifiOffOnEth}}checked{{end}}></label></td></tr>
       <tr class="group"><td colspan="2">{{index .T "net.ip_dhcp"}}</td></tr>
       <tr><td>{{index .T "net.ip_address"}}</td><td><input name="m1_lan_server" value="{{.Mode1.LAN.ServerIP}}"></td></tr>
       <tr><td>{{index .T "net.mask"}}</td><td><input name="m1_lan_mask" value="{{.Mode1.LAN.Mask}}"></td></tr>
@@ -68,7 +71,7 @@
     <table class="nettable"><tbody>
       <tr class="group"><td colspan="2">{{index .T "net.mode2"}}</td></tr>
       <tr><td>SSID</td><td><span class="val-inline"><input name="m2_sta_ssid" value="{{.Mode2.STA.SSID}}"><button type="button" id="scanbtn">{{index .T "net.scan_btn"}}</button></span></td></tr>
-      <tr><td>{{index .T "login.password"}}</td><td><span class="pw"><input type="password" name="m2_sta_pass" value="{{.Mode2.STA.Passphrase}}"><button type="button" class="eye" title="show">👁</button></span></td></tr>
+      <tr><td>{{index .T "login.password"}}</td><td><span class="pw"><input type="password" name="m2_sta_pass" value="{{.Mode2.STA.Passphrase}}"><button type="button" class="eye" title="{{index .T "ui.show_password"}}">👁</button></span></td></tr>
       <tr><td>{{index .T "net.sta_ipmode"}}</td><td>
         <select name="m2_sta_ipmode">
           <option value="dhcp" {{if eq .Mode2.STA.IPMode "dhcp"}}selected{{end}}>DHCP</option>

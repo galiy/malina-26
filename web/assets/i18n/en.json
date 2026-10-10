@@ -1018,5 +1018,8 @@
   "sys.err.timezone": "Invalid time zone",
   "sys.host": "Host",
   "sys.host_hint": "Host name and time zone are applied immediately and stored in /etc (via a short rw window).",
-  "sys.msg.host_ok": "Host settings saved"
+  "sys.msg.host_ok": "Host settings saved",
+  "ui.show_password": "Show/hide password",
+  "net.wifi_off_on_eth": "Disable Wi-Fi",
+  "net.wifi_off_on_eth_hint": "Turn off Wi-Fi while Ethernet is connected (restore when unplugged)"
 }
