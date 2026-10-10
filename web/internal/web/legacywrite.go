@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -16,8 +15,22 @@ func writeText(w http.ResponseWriter, status int, body string) {
 	_, _ = w.Write([]byte(body))
 }
 
+// parseIntNum — целое из json.Number (принимает и "438", и "438.0" — как старый PHP).
+func parseIntNum(n json.Number) (int, bool) {
+	f, err := n.Float64()
+	if err != nil {
+		return 0, false
+	}
+	i := int64(f)
+	if float64(i) != f {
+		return 0, false
+	}
+	return int(i), true
+}
+
 // buildEEPROMOps переводит legacy-формат `[[addr,val],…]` (десятичные) в ops
-// контракта записи: addr==0 — команда МАП, иначе запись байта. false — мусор.
+// контракта записи: addr==0 — команда МАП, иначе запись байта. false — мусор или
+// выход за диапазон (addr 0..0x7FF, val 0..255).
 func buildEEPROMOps(raw string) ([]map[string]any, bool) {
 	var pairs [][]json.Number
 	if err := json.Unmarshal([]byte(raw), &pairs); err != nil {
@@ -28,9 +41,9 @@ func buildEEPROMOps(raw string) ([]map[string]any, bool) {
 		if len(pr) < 2 {
 			return nil, false
 		}
-		a, err1 := strconv.Atoi(pr[0].String())
-		v, err2 := strconv.Atoi(pr[1].String())
-		if err1 != nil || err2 != nil {
+		a, ok1 := parseIntNum(pr[0])
+		v, ok2 := parseIntNum(pr[1])
+		if !ok1 || !ok2 || a < 0 || a > 0x7FF || v < 0 || v > 255 {
 			return nil, false
 		}
 		if a == 0 {

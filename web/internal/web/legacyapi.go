@@ -21,6 +21,8 @@ type legacyService struct {
 	acc      legacyAcc
 	cmds     chan *legacyWriteJob
 	sock     string
+	stop     chan struct{}
+	stopOnce sync.Once
 
 	// доступность map-модуля для check_daemons
 	active    bool // МАП найден в текущем цикле
@@ -39,7 +41,7 @@ type legacyWriteJob struct {
 }
 
 func newLegacyService(sock string) *legacyService {
-	ls := &legacyService{cmds: make(chan *legacyWriteJob, 8), sock: sock}
+	ls := &legacyService{cmds: make(chan *legacyWriteJob, 8), sock: sock, stop: make(chan struct{})}
 	zero := &legacyFields{
 		val:  make([]uint32, len(mapFieldNames)),
 		pres: make([]bool, len(mapFieldNames)),
@@ -54,12 +56,19 @@ func (ls *legacyService) run() {
 	defer t.Stop()
 	for {
 		select {
+		case <-ls.stop:
+			return
 		case job := <-ls.cmds:
 			ls.doWrite(job) // запись + немедленное перечитывание
 		case <-t.C:
 			ls.tick()
 		}
 	}
+}
+
+// stopLoop останавливает основной цикл (для тестов/останова).
+func (ls *legacyService) stopLoop() {
+	ls.stopOnce.Do(func() { close(ls.stop) })
 }
 
 // doWrite исполняет команду записи через map-reader и сразу перечитывает МАП,
@@ -91,15 +100,23 @@ func (ls *legacyService) doWrite(job *legacyWriteJob) {
 	job.resp <- all
 }
 
-// groupOps разбивает ops на однородные запросы: команды — по одному, идущие
-// подряд регистровые записи — одним запросом.
+// maxWriteOps — лимит операций на одну заявку в map-reader (синхронно с
+// daemons/map-reader/write.go:maxOps).
+const maxWriteOps = 64
+
+// groupOps разбивает ops на однородные запросы: команды — по одной, идущие
+// подряд регистровые записи — одним запросом (не длиннее maxWriteOps).
 func groupOps(ops []map[string]any) [][]map[string]any {
 	var reqs [][]map[string]any
 	var regs []map[string]any
 	flush := func() {
-		if len(regs) > 0 {
-			reqs = append(reqs, regs)
-			regs = nil
+		for len(regs) > 0 {
+			n := len(regs)
+			if n > maxWriteOps {
+				n = maxWriteOps
+			}
+			reqs = append(reqs, regs[:n])
+			regs = regs[n:]
 		}
 	}
 	for _, op := range ops {

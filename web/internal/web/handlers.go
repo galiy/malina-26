@@ -232,8 +232,9 @@ func (s *Server) handleSystemPassword(w http.ResponseWriter, r *http.Request) {
 		s.redirectSystem(w, r, "err=password")
 		return
 	}
-	// Смена пароля — инвалидируем все сессии и токены.
+	// Смена пароля — инвалидируем все сессии, токены и кэш Basic-проверок.
 	s.store.PurgeAll()
+	s.basic.Invalidate()
 	s.redirectSystem(w, r, "ok=password")
 }
 

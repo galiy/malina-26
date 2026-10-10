@@ -7,20 +7,12 @@ import (
 	"strconv"
 )
 
-// mapModelFull — полное имя модели (заголовок страницы, не локализуется).
+// mapModelFull — имя модели для заголовка (единый источник с меню — modelNames).
 func mapModelFull(code string) string {
-	switch code {
-	case "P":
-		return "Pro"
-	case "H":
-		return "Hibryd"
-	case "D":
-		return "Dominator"
-	case "T":
-		return "Titanator"
-	default:
-		return code
+	if n := modelNames[code]; n != "" {
+		return n
 	}
+	return code
 }
 
 func (s *Server) handleMapPage(w http.ResponseWriter, r *http.Request) {

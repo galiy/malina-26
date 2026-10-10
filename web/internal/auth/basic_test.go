@@ -9,11 +9,12 @@ import (
 type fakeAuth struct {
 	calls      int
 	user, pass string
+	acceptAll  bool
 }
 
 func (f *fakeAuth) Authenticate(u, p string) error {
 	f.calls++
-	if u == f.user && p == f.pass {
+	if f.acceptAll || (u == f.user && p == f.pass) {
 		return nil
 	}
 	return errors.New("invalid")
@@ -50,14 +51,40 @@ func TestBasicCacheHitsAndMisses(t *testing.T) {
 }
 
 func TestBasicCacheEviction(t *testing.T) {
-	fa := &fakeAuth{user: "malina", pass: "pw"}
-	// max=1: после второго успеха первый вытесняется.
+	fa := &fakeAuth{acceptAll: true}
 	c := NewBasicCache(fa, "malina", time.Minute, 1)
-	if !c.Check("malina", "pw") {
-		t.Fatal("первый")
+	if !c.Check("malina", "a") || fa.calls != 1 {
+		t.Fatalf("a: calls=%d", fa.calls)
 	}
-	// Тот же пароль — снова из кэша.
+	if !c.Check("malina", "b") || fa.calls != 2 {
+		t.Fatalf("b: calls=%d", fa.calls)
+	}
+	// max=1: ключ "a" вытеснен → снова PAM.
+	if !c.Check("malina", "a") || fa.calls != 3 {
+		t.Fatalf("a после вытеснения должен снова идти в PAM: calls=%d", fa.calls)
+	}
+}
+
+func TestBasicCacheTTL(t *testing.T) {
+	fa := &fakeAuth{user: "malina", pass: "pw"}
+	c := NewBasicCache(fa, "malina", 20*time.Millisecond, 8)
 	if !c.Check("malina", "pw") || fa.calls != 1 {
-		t.Fatalf("до вытеснения: calls=%d", fa.calls)
+		t.Fatalf("первый: calls=%d", fa.calls)
+	}
+	time.Sleep(40 * time.Millisecond)
+	if !c.Check("malina", "pw") || fa.calls != 2 {
+		t.Fatalf("после TTL снова PAM: calls=%d", fa.calls)
+	}
+}
+
+func TestBasicCacheInvalidate(t *testing.T) {
+	fa := &fakeAuth{user: "malina", pass: "pw"}
+	c := NewBasicCache(fa, "malina", time.Minute, 8)
+	if !c.Check("malina", "pw") || fa.calls != 1 {
+		t.Fatalf("первый: calls=%d", fa.calls)
+	}
+	c.Invalidate()
+	if !c.Check("malina", "pw") || fa.calls != 2 {
+		t.Fatalf("после Invalidate снова PAM: calls=%d", fa.calls)
 	}
 }

@@ -34,6 +34,14 @@ func NewBasicCache(a Authenticator, user string, ttl time.Duration, max int) *Ba
 	return &BasicCache{auth: a, user: user, ttl: ttl, max: max, ll: list.New(), items: make(map[[32]byte]*list.Element)}
 }
 
+// Invalidate очищает кэш (напр. при смене пароля).
+func (c *BasicCache) Invalidate() {
+	c.mu.Lock()
+	c.ll.Init()
+	c.items = make(map[[32]byte]*list.Element)
+	c.mu.Unlock()
+}
+
 // Check возвращает true, если пара валидна. Успех кэшируется на ttl.
 func (c *BasicCache) Check(user, pass string) bool {
 	if user != c.user {
