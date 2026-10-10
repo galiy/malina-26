@@ -39,6 +39,20 @@ def esc(b):
     return bytes([b])
 
 
+def unescape(bs):
+    out = bytearray()
+    i = 0
+    while i < len(bs):
+        if bs[i] == 0xDB and i + 1 < len(bs):
+            nxt = bs[i + 1]
+            out.append(0x0A if nxt == 0xDC else 0xDB if nxt == 0xDD else nxt)
+            i += 2
+        else:
+            out.append(bs[i])
+            i += 1
+    return out
+
+
 def response(addr, length):
     data = MEM[addr:addr + length]
     out = bytearray(b'o')
@@ -82,10 +96,17 @@ def main():
             continue
         os.write(master, b)  # эхо
         req += b
-        if req and req[0] == ord('r') and req[-1] == 0x0A:
-            page = req[1]
-            addr = (req[2] << 8) | req[3]
-            resp = response(addr, page + 1)
+        if req and req[-1] == 0x0A and req[0] in (ord('r'), ord('w')):
+            if req[0] == ord('r'):
+                page = req[1]
+                addr = (req[2] << 8) | req[3]
+                resp = response(addr, page + 1)
+            else:  # 'w' — запись страницы
+                seq = unescape(req[1:len(req) - 1])  # [P,A1,A0,D...,S]
+                addr = (seq[1] << 8) | seq[2]
+                data = seq[3:len(seq) - 1]
+                MEM[addr:addr + len(data)] = data
+                resp = bytes([ord('o'), (0x100 - 0x6F) & 0xFF, 0x0A])
             os.write(master, resp)
             req = bytearray()
             # вычитать ровно эхо ответа (демон возвращает каждый байт),

@@ -36,6 +36,9 @@ const (
 	defMaxMaps       = 9
 	defProbeResp     = 200 * time.Millisecond
 	defProbeEcho     = 50 * time.Millisecond
+
+	defWriteRetries = 5                      // попыток записи на одну операцию
+	defWritePause   = 500 * time.Millisecond // пауза между попытками записи
 )
 
 // config — параметры демона.
@@ -57,6 +60,9 @@ type config struct {
 
 	probeResponse time.Duration // ожидание ответа МАП в одной пробе
 	probeEcho     time.Duration // ожидание эха одного байта
+
+	writeRetries int           // попыток записи на операцию
+	writePause   time.Duration // пауза между попытками записи
 
 	debug bool // подробный лог (попытки проб, пропуски портов)
 }
@@ -82,6 +88,8 @@ func newConfig(debug bool) *config {
 		maxMaps:       defMaxMaps,
 		probeResponse: defProbeResp,
 		probeEcho:     defProbeEcho,
+		writeRetries:  defWriteRetries,
+		writePause:    defWritePause,
 		debug:         debug,
 	}
 }

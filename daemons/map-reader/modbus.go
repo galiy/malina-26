@@ -92,3 +92,67 @@ func probeModbus(p *Port, unit int, respTO time.Duration) (*mapInfo, error) {
 	}
 	return parseCells(data, "modbus", p.baud)
 }
+
+// modbusWriteExchange отправляет кадр записи и проверяет эхо-ответ.
+// Успешный ответ: тот же fc/адрес; исключение (старший бит fc) — modbusError.
+func modbusWriteExchange(p *Port, req []byte, want int, respTO time.Duration) error {
+	p.flush()
+	time.Sleep(interFrameGap(p.baud))
+	if err := p.writeAll(req); err != nil {
+		return err
+	}
+	unit := req[0]
+	deadline := time.Now().Add(respTO)
+	buf := make([]byte, 0, 16)
+	for len(buf) < 260 && time.Now().Before(deadline) {
+		b, ok := p.readByte(deadline)
+		if !ok {
+			break
+		}
+		buf = append(buf, b)
+		if len(buf) >= 2 && buf[1]&0x80 != 0 && len(buf) >= 5 {
+			break // кадр исключения — 5 байт
+		}
+		if len(buf) >= want {
+			break
+		}
+	}
+	if len(buf) < 5 || buf[0] != unit {
+		return errNoMap
+	}
+	if got := uint16(buf[len(buf)-2]) | uint16(buf[len(buf)-1])<<8; crc16(buf[:len(buf)-2]) != got {
+		return errNoMap
+	}
+	if buf[1]&0x80 != 0 {
+		return &modbusError{code: int(buf[2])}
+	}
+	if len(buf) != want {
+		return errNoMap
+	}
+	return nil
+}
+
+// modbusWriteSingle — запись одного слова (fc 0x06). Для байта-команды значение
+// кладётся в младший байт (старший = 0).
+func modbusWriteSingle(p *Port, unit int, addr, val uint16, respTO time.Duration) error {
+	req := []byte{byte(unit), 0x06, byte(addr >> 8), byte(addr), byte(val >> 8), byte(val)}
+	c := crc16(req)
+	req = append(req, byte(c), byte(c>>8))
+	return modbusWriteExchange(p, req, 8, respTO)
+}
+
+// modbusWriteBlock — запись блока (fc 0x10). Только чётный адрес и чётная длина
+// (ограничение до выяснения байтового порядка — docs/map-write.md §6).
+// Байты пакуются в слова: чётный адрес — старший байт слова.
+func modbusWriteBlock(p *Port, unit int, addr uint16, data []byte, respTO time.Duration) error {
+	if addr%2 != 0 || len(data)%2 != 0 {
+		return errUnsupported
+	}
+	n := len(data)
+	words := n / 2
+	req := []byte{byte(unit), 0x10, byte(addr >> 8), byte(addr), byte(words >> 8), byte(words), byte(n)}
+	req = append(req, data...) // data[0] — старший байт первого слова
+	c := crc16(req)
+	req = append(req, byte(c), byte(c>>8))
+	return modbusWriteExchange(p, req, 8, respTO)
+}

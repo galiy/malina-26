@@ -17,6 +17,7 @@ type MapEntry struct {
 	slotIdx  int
 	gen      uint64
 	slot     *Slot
+	cmd      chan *writeJob // очередь команд записи к пулеру этого порта
 	lastSeen time.Time
 }
 
@@ -109,6 +110,18 @@ func (r *Registry) Count() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.m)
+}
+
+// Find возвращает запись по (id слота, gen) — для маршрутизации команды записи.
+func (r *Registry) Find(id int, gen uint64) (*MapEntry, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, e := range r.m {
+		if e.slotIdx == id && e.gen == gen {
+			return e, true
+		}
+	}
+	return nil, false
 }
 
 func (r *Registry) Has(port string) bool {

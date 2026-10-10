@@ -12,7 +12,11 @@ const pollRetries = 3
 // Период — 1 раз в секунду; потеря МАП — maxMiss неудачных ЦИКЛОВ подряд.
 // Цикл считается неудачным, только если провалились все pollRetries попытки;
 // успех любой попытки сбрасывает счётчик. Так короткий сбой обмена не роняет МАП.
-func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, proto string, baud int, entries []*MapEntry) {
+//
+// cmds — очередь команд записи к этому порту: пока она непуста, пулер исполняет
+// команду (порт занят только этой горутиной, поэтому обмен сериализован), затем
+// возвращается к опросу.
+func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, proto string, baud int, entries []*MapEntry, cmds chan *writeJob) {
 	defer p.close()
 
 	t := time.NewTicker(cfg.pollInterval)
@@ -26,6 +30,11 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 				reg.Remove(e)
 			}
 			return
+		case job := <-cmds:
+			// Прерываем пулинг, исполняем команду (внутри — полный цикл чтения
+			// и публикация в shm), отвечаем и возвращаемся к опросу.
+			job.resp <- executeWrite(cfg, reg, p, proto, entries, job.req)
+			continue
 		case <-t.C:
 		}
 
@@ -39,7 +48,6 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 				return
 			default:
 			}
-			regions := regionsFor(reg.Model(e))
 			var (
 				mem      memMap
 				err      error
@@ -47,11 +55,7 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 			)
 			t0 := time.Now()
 			for attempt := 0; attempt < pollRetries; attempt++ {
-				if proto == "modbus" {
-					mem, err = readRegionsModbus(p, e.unit, regions, cfg.probeResponse)
-				} else {
-					mem, err = readRegionsNative(p, regions, cfg.probeEcho, cfg.probeResponse)
-				}
+				mem, err = readEntry(cfg, p, proto, e)
 				if err == nil {
 					if attempt > 0 {
 						cfg.debugf("poll %s unit=%d: OK с попытки %d за %s (первая: %v)", port, e.unit, attempt+1, time.Since(t0), firstErr)
@@ -87,4 +91,13 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 			return
 		}
 	}
+}
+
+// readEntry читает все документированные области одного МАП по его протоколу.
+func readEntry(cfg *config, p *Port, proto string, e *MapEntry) (memMap, error) {
+	regions := regionsFor(e.info.Model)
+	if proto == "modbus" {
+		return readRegionsModbus(p, e.unit, regions, cfg.probeResponse)
+	}
+	return readRegionsNative(p, regions, cfg.probeEcho, cfg.probeResponse)
 }

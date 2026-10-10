@@ -185,3 +185,59 @@ func probeMicroart(p *Port, baud int, echoTO, respTO time.Duration) (*mapInfo, e
 	}
 	return parseCells(data, "microart", baud)
 }
+
+// buildWriteRequest собирает посылку записи страницы: 'w' P A1 A0 D0..Dp S [\n].
+func buildWriteRequest(addr uint16, data []byte) []byte {
+	var sum byte
+	page := byte(len(data) - 1)
+	seq := make([]byte, 0, len(data)+8)
+	for _, b := range []byte{'w', page, byte(addr >> 8), byte(addr)} {
+		seq = append(seq, escByte(b, &sum)...)
+	}
+	for _, d := range data {
+		seq = append(seq, escByte(d, &sum)...)
+	}
+	ck := byte(0 - sum)
+	seq = append(seq, ck)
+	if ck != 0x0A {
+		seq = append(seq, 0x0A)
+	}
+	return seq
+}
+
+// parseWriteReply разбирает ответ на запись: 'o' S [\n] (успех) или 'e' D S [\n].
+func parseWriteReply(raw []byte) error {
+	if len(raw) == 0 {
+		return errNoMap
+	}
+	switch raw[0] {
+	case 'o':
+		return nil
+	case 'e':
+		if len(raw) >= 2 {
+			return &mapError{code: int(raw[1])}
+		}
+		return errNoMap
+	}
+	return errNoMap
+}
+
+// microartWrite выполняет запись страницы по нативному протоколу с побайтовым эхо.
+func microartWrite(p *Port, addr uint16, data []byte, echoTO, respTO time.Duration) error {
+	p.flush()
+	req := buildWriteRequest(addr, data)
+	for _, b := range req {
+		if err := p.writeAll([]byte{b}); err != nil {
+			return err
+		}
+		e, ok := p.readByte(time.Now().Add(echoTO))
+		if !ok || e != b {
+			return errNoMap
+		}
+	}
+	raw, ok := p.readUntilNL(time.Now().Add(respTO), 16, true)
+	if !ok || len(raw) == 0 {
+		return errNoMap
+	}
+	return parseWriteReply(raw)
+}

@@ -18,7 +18,11 @@ type control struct {
 }
 
 type ctlRequest struct {
-	Cmd string `json:"cmd"`
+	Cmd     string    `json:"cmd"`
+	ID      int       `json:"id"`
+	Gen     uint64    `json:"gen"`
+	NoFrame bool      `json:"no_frame"`
+	Ops     []writeOp `json:"ops"`
 }
 
 type ctlResponse struct {
@@ -80,20 +84,50 @@ func (c *control) handle(conn net.Conn) {
 	if err != nil && len(line) == 0 {
 		return
 	}
-	_ = conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
 	var req ctlRequest
 	if err := json.Unmarshal(line, &req); err != nil {
 		writeJSON(conn, ctlResponse{OK: false, Error: "bad request"})
 		return
 	}
+	var resp any
 	switch req.Cmd {
 	case "ping":
-		writeJSON(conn, ctlResponse{OK: true})
+		resp = ctlResponse{OK: true}
 	case "list":
 		d := c.reg.doc()
-		writeJSON(conn, ctlResponse{OK: true, State: &d})
+		resp = ctlResponse{OK: true, State: &d}
+	case "write":
+		resp = c.dispatchWrite(writeRequest{Cmd: "write", ID: req.ID, Gen: req.Gen, NoFrame: req.NoFrame, Ops: req.Ops})
 	default:
-		writeJSON(conn, ctlResponse{OK: false, Error: "unknown command"})
+		resp = ctlResponse{OK: false, Error: "unknown command"}
+	}
+	// Дедлайн на запись ответа ставим после обработки: команда записи в МАП
+	// может выполняться заметно дольше 3 с (несколько операций × попытки).
+	_ = conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+	writeJSON(conn, resp)
+}
+
+// dispatchWrite находит устройство по (id, gen) и передаёт команду пулеру порта,
+// ожидая результат.
+func (c *control) dispatchWrite(wr writeRequest) writeResponse {
+	if _, err := validateWrite(wr); err != nil {
+		return fail("bad_request", err.Error())
+	}
+	e, ok := c.reg.Find(wr.ID, wr.Gen)
+	if !ok {
+		return fail("no_device", "устройство не найдено (несовпадение id/gen)")
+	}
+	job := &writeJob{req: wr, resp: make(chan writeResponse, 1)}
+	select {
+	case e.cmd <- job:
+	case <-time.After(2 * time.Second):
+		return fail("internal", "очередь записи занята")
+	}
+	select {
+	case r := <-job.resp:
+		return r
+	case <-time.After(120 * time.Second):
+		return fail("internal", "таймаут выполнения записи")
 	}
 }
 

@@ -94,11 +94,13 @@ func (s *scanner) cycle() bool {
 			continue
 		}
 		var entries []*MapEntry
+		cmds := make(chan *writeJob, 8)
 		for _, d := range dets {
 			e, ok := s.reg.Add(path, d.unit, proto, baud, d.info)
 			if !ok {
 				break // нет свободных слотов
 			}
+			e.cmd = cmds
 			entries = append(entries, e)
 		}
 		if len(entries) == 0 {
@@ -116,7 +118,7 @@ func (s *scanner) cycle() bool {
 		go func(rdev uint64) {
 			defer s.wg.Done()
 			defer s.setActive(rdev, false)
-			pollPort(s.cfg, s.reg, s.stop, p, path, proto, baud, entries)
+			pollPort(s.cfg, s.reg, s.stop, p, path, proto, baud, entries, cmds)
 		}(rdev)
 	}
 	return true
