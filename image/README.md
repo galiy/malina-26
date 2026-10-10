@@ -28,7 +28,12 @@
 
 - `config` — конфиг pi-gen.
 - `stage-malina/` — кастомный стейдж:
-  - `00-packages` — дополнительные пакеты (`mc`);
+  - `00-packages` — пакеты проекта из репозиториев (`mc`, `rsyslog`, `iw`,
+    `rfkill`, `hostapd`, `dnsmasq`, `nftables`, `isc-dhcp-client`, `gcc`) и
+    `01-run-chroot.sh` — `apt update && apt upgrade` до текущего состояния
+    публичных репо. **Кастомные артефакты проекта (бинарники/юниты/ассеты
+    `malina-*`) в образ НЕ добавляются** — они восстанавливаются из репозитория
+    после загрузки (см. `deploy/restore.md`);
   - `01-remove` — удаление лишних пакетов;
   - `02-auth` — пароль root и настройки SSH;
   - `03-immutable` — fstab/tmpfs, `ro`, journald, NetworkManager;

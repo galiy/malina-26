@@ -92,8 +92,16 @@ if command -v gcc >/dev/null 2>&1; then
 fi
 
 sudo systemd-tmpfiles --create /etc/tmpfiles.d/malina.conf /etc/tmpfiles.d/malina-rsyslog.conf >/dev/null 2>&1 || true
+# Устаревшие юниты: hostname/sysconfig больше не нужны (значения в /etc через rw-окно).
+for u in malina-hostname.service malina-sysconfig.service; do
+	sudo systemctl disable "$u" >/dev/null 2>&1 || true
+	sudo rm -f "/etc/systemd/system/$u"
+done
+sudo rm -f /malina/usr/local/libexec/malina-sysconfig
+# hostname/timezone больше не хранятся на /malina.
+sudo rm -f /malina/etc/hostname /malina/etc/timezone
 sudo systemctl daemon-reload
-for u in dhclient-eth0 malina-hostname malina-web malina-net malina-net-fallback.timer malina-logrotate.timer; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer; do
 	sudo systemctl enable "$u" >/dev/null 2>&1 || true
 done
 sudo systemctl restart malina-web

@@ -99,7 +99,7 @@ fi
 
 echo "== 6. machine-id, hostname, симлинки =="
 [ -s "$PROV/machine-id" ] && install -m0444 "$PROV/machine-id" /etc/machine-id
-[ -s "$PROV/hostname" ] && { mkdir -p /malina/etc; install -m0644 "$PROV/hostname" /malina/etc/hostname; }
+[ -s "$PROV/hostname" ] && install -m0644 "$PROV/hostname" /etc/hostname
 mkdir -p /var/lib/dbus
 ln -sf /etc/machine-id /var/lib/dbus/machine-id
 mkdir -p /run/malina-net
@@ -113,8 +113,14 @@ mkdir -p /malina/etc /malina/home /malina/root
 
 echo "== 7. tmpfiles, daemon-reload, enable =="
 systemd-tmpfiles --create /etc/tmpfiles.d/malina.conf /etc/tmpfiles.d/malina-rsyslog.conf >/dev/null 2>&1 || true
+for u in malina-hostname.service malina-sysconfig.service; do
+	systemctl disable "$u" >/dev/null 2>&1 || true
+	rm -f "/etc/systemd/system/$u"
+done
+rm -f /malina/usr/local/libexec/malina-sysconfig
+rm -f /malina/etc/hostname /malina/etc/timezone
 systemctl daemon-reload
-for u in dhclient-eth0 malina-hostname malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader; do
 	systemctl enable "$u" >/dev/null 2>&1 || true
 done
 

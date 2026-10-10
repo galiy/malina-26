@@ -24,7 +24,7 @@
    - сетевые конфиги режимов, стартовый `active=mode1`.
 
 ## Что уже в репозитории
-- `system/systemd/*` — юниты (web, hostname, dhclient, logrotate, net, hostapd, dnsmasq).
+- `system/systemd/*` — юниты (web, dhclient, logrotate, net, hostapd, dnsmasq).
 - `system/pam/malina-web`, `system/dhcp/99-malina-syslog`.
 - `system/rsyslog/`, `system/logrotate/`, `system/tmpfiles/`, `system/journald/`,
   `system/timesyncd/` — конфиги.
@@ -55,17 +55,81 @@
   `malina-web`/`malina-netd`/`malina-pamcheck` и **веб-ассетов**
   (`web/assets` → `/malina/usr/local/share/malina/web`).
 
-Осталось (вне рамок текущей задачи): «запекание» всех этих шагов в `image/stage-malina`
-(сейчас применяется `deploy/provision.sh` после прошивки), тираж образов.
+Пакеты проекта из репозиториев запекаются в образ (`image/stage-malina/00-packages`
++ `apt update/upgrade`); **кастомные артефакты (бинарники/юниты/ассеты) в образ не
+запекаются** — устанавливаются из репозитория (`deploy/provision.sh` / `install.sh`)
+после загрузки. Тиражирование образов — вне рамок текущей задачи.
 
 ### Прочее
 - `deploy/install.sh` требует `MALINA_PASS` (env) или `MALINA_PASS=…` в `.kilo/secrets`.
 
-## Порядок восстановления (целевой)
-1. Прошить стартовый образ.
-2. `deploy/provision.sh` — разделы `/malina`, fstab, симлинки, пакеты, маски,
-   machine-id, установка `system/*` и бинарников.
-3. Ребут → система поднимается в режиме 1 (AP).
+## Порядок восстановления (после загрузки образа, по SSH)
+
+Восстанавливаем **после загрузки свежего образа, через SSH**, из существующих
+гранулированных средств (не единым «мегаскриптом»): сначала готовим артефакты на
+ноутбуке, затем копируем репозиторий и запускаем `deploy/provision.sh`, потом
+проверяем и при необходимости докатываем `deploy/install.sh`.
+
+**0. Предусловия.** Образ загружен (`image/build.sh`), SSH включён
+(`malina/malina`, root разрешён). Пароли на свежем образе — дефолтные.
+
+**1. На ноутбуке — собрать артефакты под armhf** (бинарники в репо не коммитятся,
+каталоги `*/dist/` в `.gitignore`):
+```
+make -C web arm                 # web/dist/malina-web-armv7, malina-netd-armv7
+make -C daemons/map-reader arm  # daemons/map-reader/dist/map-reader-armv7
+```
+
+**2. Скопировать репозиторий (вместе с `dist/`) на устройство** в `/opt/malina-repo`:
+```
+rsync -a --delete --exclude .git ./ malina@<ip>:/opt/malina-repo/
+```
+(альтернатива — `git clone`, но тогда `dist/` нужно собрать/скопировать отдельно).
+
+**3. SSH на устройство**, далее команды от root (например `sudo -i`):
+```
+ssh malina@<ip>
+sudo -i
+```
+
+**4. Провижининг (основной шаг).** Ремоунтит `/` rw, создаёт раздел `/malina` (p3)
+и ФС, применяет `deploy/manifest.tsv`, ставит бинарники, веб-ассеты, PAM-хелпер,
+machine-id, симлинки, tmpfiles, включает юниты:
+```
+REPO=/opt/malina-repo /opt/malina-repo/deploy/provision.sh
+```
+(пакеты уже в образе — `apt-get install` в provision проходит как no-op).
+
+**5. Пароли.** Сменить дефолтные на рабочие (как принято на устройстве):
+```
+passwd root ; passwd malina        # или задать согласованный пароль
+```
+(пароль SSH для `deploy/install.sh` — `MALINA_PASS` / `.kilo/secrets`, не коммитится).
+
+**6. Идентификация роли: имя хоста и часовой пояс.** Хранятся в `/etc`
+(`/etc/hostname`, `/etc/timezone`, симлинк `/etc/localtime`). Стартовые значения
+кладёт провижининг (`system/provision/hostname`); далее правятся в UI —
+«Система → Хост» (применяется через короткое rw-окно `malina-rw`).
+
+**7. Перезагрузка.** Система поднимается в режиме 1 (AP+portal), поднимаются
+`malina-web`, `map-reader`, сеть (`malina-netd`).
+
+**8. Проверка после восстановления:**
+```
+systemctl is-active malina-web malina-netd map-reader rsyslog ssh cron
+ip -br a                                  # режим AP/STA
+curl -sI http://127.0.0.1/login | head -1 # web :80
+ls -l /dev/shm/malina-map-state           # shm map-reader
+findmnt /malina                           # rw-раздел
+```
+При необходимости — докат обновлений из репо с ноутбука: `deploy/install.sh <user@host>`
+(ставит бинарники/ассеты/manifest и перезапускает web); `deploy/install.sh --build`
+пересобирает arm-бинарники перед выкладкой.
+
+**9. Пакеты.** Набор из репозиториев, который нужен проекту, уже запечён в образ
+(`image/stage-malina/00-packages`): `mc`, `rsyslog`, `iw`, `rfkill`, `hostapd`,
+`dnsmasq`, `nftables`, `isc-dhcp-client`, `gcc`. Провижининг их не переустанавливает
+(только при отсутствии).
 
 ## Логи
 - Зеркалирование логов в `/malina/var/log` **отключено** (ОС стабильна, флэшку не
@@ -85,6 +149,10 @@
   `/run/rsyslog-remote/remote.conf`, `/run/malina/resolv.conf`,
   `/run/logrotate.status`.
 - **Persistent — на rw `/malina`:** `/malina/etc/malina/network/{active,mode1.json,mode2.json}`,
-  `/malina/etc/malina/remote-syslog`, `/malina/etc/hostname`.
+  `/malina/etc/malina/remote-syslog`.
+  Имя хоста и часовой пояс хранятся **в `/etc`** (`/etc/hostname`, `/etc/timezone`,
+  симлинк `/etc/localtime`), а не на `/malina`: применяются из UI через короткое
+  rw-окно (`malina-rw run`: запись `/etc` → remount ro). В устойчивом состоянии
+  записи в ro-корень нет.
 - **Правило:** таймстампы/флаги/счётчики — в `/run` (переживать ребут не должны);
   на `/malina` — только явные настройки. Никакого состояния в репозитории.

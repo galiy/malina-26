@@ -1011,5 +1011,12 @@
   "mi.u.бод": "波特",
   "mi.u.дн.": "天",
   "mi.u.сек": "秒",
-  "map.hide_debug": "隐藏调试面板"
+  "map.hide_debug": "隐藏调试面板",
+  "sys.timezone": "时区",
+  "sys.timezone_hint": "系统时区。立即通过短暂的 rw 窗口应用（写入 /etc）。",
+  "sys.msg.timezone_ok": "时区已保存",
+  "sys.err.timezone": "无效的时区",
+  "sys.host": "主机",
+  "sys.host_hint": "主机名和时区立即生效，并保存在 /etc（通过短暂的 rw 窗口）。",
+  "sys.msg.host_ok": "主机设置已保存"
 }

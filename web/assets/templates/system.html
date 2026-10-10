@@ -6,11 +6,16 @@
 
 <div class="sysforms">
   <section class="card">
-    <h2>{{index .T "sys.hostname"}}</h2>
-    <form method="post" action="/system/hostname">
+    <h2>{{index .T "sys.host"}}</h2>
+    <form method="post" action="/system/host">
       <label for="hostname">{{index .T "sys.hostname"}}</label>
       <input id="hostname" name="hostname" type="text" value="{{.Hostname}}" autocomplete="off">
-      <p class="muted">{{index .T "sys.hostname_hint"}}</p>
+      <label for="timezone">{{index .T "sys.timezone"}}</label>
+      <select id="timezone" name="timezone">
+        {{$cur := .Timezone}}
+        {{range .Timezones}}<option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{.}}</option>{{end}}
+      </select>
+      <p class="muted">{{index .T "sys.host_hint"}}</p>
       <button type="submit">{{index .T "sys.save"}}</button>
     </form>
   </section>

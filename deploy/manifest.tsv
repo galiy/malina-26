@@ -8,7 +8,6 @@ system/systemd/malina-dhclient-wlan0.service	/etc/systemd/system/malina-dhclient
 system/systemd/malina-net-monitor.service	/etc/systemd/system/malina-net-monitor.service	0644	always
 system/systemd/malina-net-scan.service	/etc/systemd/system/malina-net-scan.service	0644	always
 system/systemd/malina-web.service	/etc/systemd/system/malina-web.service	0644	always
-system/systemd/malina-hostname.service	/etc/systemd/system/malina-hostname.service	0644	always
 system/systemd/dhclient-eth0.service	/etc/systemd/system/dhclient-eth0.service	0644	always
 system/systemd/malina-logrotate.service	/etc/systemd/system/malina-logrotate.service	0644	always
 system/systemd/malina-logrotate.timer	/etc/systemd/system/malina-logrotate.timer	0644	always

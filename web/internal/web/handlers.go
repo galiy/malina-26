@@ -132,8 +132,13 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	}
 	data := s.baseData(r)
 	data["Active"] = "system"
-	data["Hostname"] = sysctl.CurrentHostname()
-	data["HostnameSetting"] = sysctl.HostnameSetting()
+	hn := sysctl.HostnameSetting()
+	if hn == "" {
+		hn = sysctl.CurrentHostname()
+	}
+	data["Hostname"] = hn
+	data["Timezone"] = sysctl.CurrentTimezone()
+	data["Timezones"] = sysctl.ListTimezones()
 	data["RemoteSyslog"] = sysctl.RemoteSyslogSetting()
 	lang := s.lang(r)
 	if ok := r.URL.Query().Get("ok"); ok != "" {
@@ -149,7 +154,9 @@ func (s *Server) redirectSystem(w http.ResponseWriter, r *http.Request, key stri
 	http.Redirect(w, r, "/system?"+key, http.StatusSeeOther)
 }
 
-func (s *Server) handleSystemHostname(w http.ResponseWriter, r *http.Request) {
+// handleSystemHost — общая «хост»-настройка: имя хоста + часовой пояс.
+// Применяются сразу через короткое rw-окно корневой ФС (запись в /etc).
+func (s *Server) handleSystemHost(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
@@ -159,15 +166,20 @@ func (s *Server) handleSystemHostname(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = r.ParseForm()
 	name := strings.TrimSpace(r.FormValue("hostname"))
+	tz := strings.TrimSpace(r.FormValue("timezone"))
 	if !sysctl.ValidHostname(name) {
 		s.redirectSystem(w, r, "err=hostname")
 		return
 	}
-	if err := sysctl.SetHostname(name); err != nil {
+	if !sysctl.ValidTimezone(tz) {
+		s.redirectSystem(w, r, "err=timezone")
+		return
+	}
+	if err := sysctl.SetHost(name, tz); err != nil {
 		s.redirectSystem(w, r, "err=generic")
 		return
 	}
-	s.redirectSystem(w, r, "ok=hostname")
+	s.redirectSystem(w, r, "ok=host")
 }
 
 func (s *Server) handleSystemLogging(w http.ResponseWriter, r *http.Request) {

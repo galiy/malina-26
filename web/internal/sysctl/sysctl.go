@@ -8,12 +8,14 @@ import (
 )
 
 const (
-	// ХостnameFile хранит желаемое имя хоста (на rw /malina).
-	HostnameFile = "/malina/etc/hostname"
+	// ХостnameFile — системное имя хоста (меняется через rw-окно).
+	HostnameFile = "/etc/hostname"
 	// RemoteFile хранит свой syslog-хост (пусто/нет -> использовать DHCP-опцию 7).
 	RemoteFile = "/malina/etc/malina/remote-syslog"
 	// RemoteApply — общий хелпер: пишет remote-конфиг rsyslog и перезагружает его.
 	RemoteApply = "/malina/usr/local/libexec/malina-remote-syslog"
+	// RWHelper — хелпер короткого rw-окна корневой ФС (remount rw → run → ro).
+	RWHelper = "/malina/usr/local/sbin/malina-rw"
 	// DHCPOption7 хранит сырое значение из DHCP (пишет хук dhclient).
 	DHCPOption7 = "/run/malina-net/dhcp-option7"
 )
@@ -48,18 +50,65 @@ func HostnameSetting() string {
 	return strings.TrimSpace(string(b))
 }
 
-// SetHostname сохраняет имя хоста и применяет его транзиентно.
-func SetHostname(name string) error {
-	if err := os.MkdirAll("/malina/etc", 0o755); err != nil {
+// SetHost применяет имя хоста и часовой пояс прямо в /etc (ro-корень) через
+// короткое rw-окно (malina-rw): /etc/hostname, симлинк /etc/localtime, /etc/timezone.
+// Значения персистентны на rootfs; на /malina ничего не хранится.
+func SetHost(hostname, tz string) error {
+	zone := "/usr/share/zoneinfo/" + tz
+	script := "printf '%s\\n' '" + hostname + "' > /etc/hostname" +
+		" && hostname '" + hostname + "'" +
+		" && ln -sfn '" + zone + "' /etc/localtime" +
+		" && printf '%s\\n' '" + tz + "' > /etc/timezone"
+	if err := exec.Command(RWHelper, "run", "sh", "-c", script).Run(); err != nil {
 		return err
 	}
-	if err := os.WriteFile(HostnameFile, []byte(name+"\n"), 0o644); err != nil {
-		return err
-	}
-	if err := exec.Command("hostnamectl", "set-hostname", "--transient", name).Run(); err == nil {
+	// systemd-timedated кэширует зону — заставить перечитать /etc/localtime.
+	_ = exec.Command("systemctl", "restart", "systemd-timedated").Run()
+	return nil
+}
+
+// ListTimezones возвращает доступные часовые пояса (отсортировано).
+func ListTimezones() []string {
+	out, err := exec.Command("timedatectl", "list-timezones").Output()
+	if err != nil {
 		return nil
 	}
-	return exec.Command("hostname", name).Run()
+	var list []string
+	for _, ln := range strings.Split(string(out), "\n") {
+		if s := strings.TrimSpace(ln); s != "" {
+			list = append(list, s)
+		}
+	}
+	return list
+}
+
+// CurrentTimezone возвращает текущий часовой пояс: из /etc/timezone,
+// иначе из симлинка /etc/localtime.
+func CurrentTimezone() string {
+	if b, err := os.ReadFile("/etc/timezone"); err == nil {
+		if s := strings.TrimSpace(string(b)); s != "" {
+			return s
+		}
+	}
+	if l, err := os.Readlink("/etc/localtime"); err == nil {
+		const p = "/usr/share/zoneinfo/"
+		if strings.HasPrefix(l, p) {
+			return l[len(p):]
+		}
+	}
+	return ""
+}
+
+// ValidTimezone проверяет имя зоны по базе /usr/share/zoneinfo.
+func ValidTimezone(tz string) bool {
+	if tz == "" || len(tz) > 64 {
+		return false
+	}
+	if strings.ContainsAny(tz, "\n\r\t ") || strings.Contains(tz, "..") || strings.HasPrefix(tz, "/") {
+		return false
+	}
+	_, err := os.Stat("/usr/share/zoneinfo/" + tz)
+	return err == nil
 }
 
 // RemoteSyslogSetting возвращает свой syslog-хост (может быть пустым).

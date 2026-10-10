@@ -1,1 +1,9 @@
 mc
+rsyslog
+iw
+rfkill
+hostapd
+dnsmasq
+nftables
+isc-dhcp-client
+gcc

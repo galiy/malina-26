@@ -1011,5 +1011,12 @@
   "mi.u.бод": "baud",
   "mi.u.дн.": "days",
   "mi.u.сек": "s",
-  "map.hide_debug": "Hide debug panels"
+  "map.hide_debug": "Hide debug panels",
+  "sys.timezone": "Time zone",
+  "sys.timezone_hint": "System time zone. Applied immediately via a short rw window (written to /etc).",
+  "sys.msg.timezone_ok": "Time zone saved",
+  "sys.err.timezone": "Invalid time zone",
+  "sys.host": "Host",
+  "sys.host_hint": "Host name and time zone are applied immediately and stored in /etc (via a short rw window).",
+  "sys.msg.host_ok": "Host settings saved"
 }

@@ -26,7 +26,6 @@ var managedUnits = []string{
 	"malina-net-scan.service",
 	"malina-net-fallback.timer",
 	"malina-logrotate.timer",
-	"malina-hostname.service",
 	"malina-web.service",
 	"dhclient-eth0.service",
 	"malina-dhclient-wlan0.service",
@@ -68,7 +67,6 @@ var svcNotes = map[string]string{
 	"malina-wpa.service":            "svc.note.autostart",
 	"malina-net-monitor.service":    "svc.note.autostart",
 	"malina-net-scan.service":       "svc.note.autostart",
-	"malina-hostname.service":       "svc.note.autostart",
 	"dhclient-eth0.service":         "svc.note.autostart",
 	"malina-dhclient-wlan0.service": "svc.note.autostart",
 }
