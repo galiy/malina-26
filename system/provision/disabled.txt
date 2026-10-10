@@ -6,3 +6,8 @@ fstrim.timer
 logrotate.timer
 man-db.timer
 regenerate_ssh_host_keys.service
+dnsmasq.service
+hostapd.service
+wpa_supplicant.service
+ModemManager.service
+udisks2.service

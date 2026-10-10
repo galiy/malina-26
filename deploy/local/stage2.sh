@@ -78,6 +78,9 @@ $SUDO mount "$(PART 2)" "$ROOTM"
 $SUDO mount "$P3" "$MALM"
 [ -d "$ROOTM/etc" ] || die "p2 не похож на rootfs"
 
+# --- 2.3a точка монтирования /malina в rootfs (иначе malina.mount падает) ---
+$SUDO mkdir -p "$ROOTM/malina" && $SUDO chmod 0755 "$ROOTM/malina"
+
 # --- 2.3 fstab ---
 if ! grep -q 'LABEL=malina' "$ROOTM/etc/fstab"; then
 	log "fstab: + LABEL=malina"
@@ -115,23 +118,30 @@ $SUDO ln -sfn /etc/machine-id "$ROOTM/var/lib/dbus/machine-id"
 
 # --- 2.6 machine-id, hostname ---
 log "machine-id / hostname"
-[ -s "$PROV/machine-id" ] && $SUDO install -m0444 "$PROV/machine-id" "$ROOTM/etc/machine-id"
-[ -s "$PROV/hostname" ]   && $SUDO install -m0644 "$PROV/hostname"   "$ROOTM/etc/hostname"
+# Пересоздаём (rm + install) — свежий inode, чтобы не унаследовать потенциально
+# повреждённый inode из образа (см. «Повреждённый inode» в deploy/local-deploy.md).
+[ -s "$PROV/machine-id" ] && { $SUDO rm -f "$ROOTM/etc/machine-id"; $SUDO install -m0444 "$PROV/machine-id" "$ROOTM/etc/machine-id"; }
+[ -s "$PROV/hostname" ]   && { $SUDO rm -f "$ROOTM/etc/hostname";   $SUDO install -m0644 "$PROV/hostname"   "$ROOTM/etc/hostname"; }
 
 # --- 2.7 артефакты system/* по manifest ---
 log "manifest -> rootfs"
 while IFS=$'\t' read -r src dst mode pol; do
 	[ -z "${src:-}" ] && continue
 	case "$src" in \#*) continue ;; esac
-	if [ "$pol" = "if_absent" ] && [ -e "$ROOTM$dst" ]; then continue; fi
-	$SUDO install -D -o root -g root -m "$mode" "$SRC/$src" "$ROOTM$dst"
+	# назначения под /malina кладём на p3 (rw), остальное — в rootfs (ro):
+	case "$dst" in
+		/malina/*) tgt="$MALM${dst#/malina}" ;;
+		*)         tgt="$ROOTM$dst" ;;
+	esac
+	if [ "$pol" = "if_absent" ] && [ -e "$tgt" ]; then continue; fi
+	$SUDO install -D -o root -g root -m "$mode" "$SRC/$src" "$tgt"
 done < "$SRC/deploy/manifest.tsv"
 
-# --- 2.8 бинарники ---
+# --- 2.8 бинарники (на /malina — так их ждут юниты) ---
 log "бинарники"
-$SUDO install -D -o root -g root -m0755 "$SRC/web/dist/malina-web-armv7" "$ROOTM/usr/local/bin/malina-web"
-$SUDO install -D -o root -g root -m0755 "$SRC/web/dist/malina-netd-armv7" "$ROOTM/usr/local/sbin/malina-netd"
-$SUDO install -D -o root -g root -m0755 "$SRC/daemons/map-reader/dist/map-reader-armv7" "$ROOTM/usr/local/sbin/map-reader"
+$SUDO install -D -o root -g root -m0755 "$SRC/web/dist/malina-web-armv7" "$MALM/usr/local/bin/malina-web"
+$SUDO install -D -o root -g root -m0755 "$SRC/web/dist/malina-netd-armv7" "$MALM/usr/local/sbin/malina-netd"
+$SUDO install -D -o root -g root -m0755 "$SRC/daemons/map-reader/dist/map-reader-armv7" "$MALM/usr/local/sbin/map-reader"
 
 # --- 2.9 веб-ассеты (на /malina) ---
 log "веб-ассеты"
@@ -181,6 +191,19 @@ $SUDO cp /usr/bin/qemu-arm-static "$ROOTM/usr/bin/" 2>/dev/null || true
 $SUDO chroot "$ROOTM" /bin/sh -c 'DEBIAN_FRONTEND=noninteractive apt-get -y purge network-manager network-manager-* >/dev/null 2>&1 || true'
 $SUDO rm -f "$ROOTM/usr/bin/qemu-arm-static"
 $SUDO umount "$ROOTM/dev" "$ROOTM/proc" 2>/dev/null || true
+
+# Образ держит fstab-tmpfs '/var/lib/NetworkManager'; purge удаляет каталог, и mount
+# падает → local-fs.target → emergency. Убираем строку и подстраховываем остальные
+# tmpfs-точки (если точки нет — создаём), чтобы загрузка не блокировалась.
+log "fstab: убираю tmpfs /var/lib/NetworkManager; обеспечиваю /var/lib/dhcp; проверяю tmpfs-точки"
+$SUDO sed -i '\#/var/lib/NetworkManager#d' "$ROOTM/etc/fstab"
+# /var/lib/dhcp — аренды dhclient (иначе запись на ro-корень падает)
+grep -q '/var/lib/dhcp' "$ROOTM/etc/fstab" || echo 'tmpfs   /var/lib/dhcp           tmpfs   defaults,noatime,nosuid,nodev,mode=0755,size=4m    0 0' | $SUDO tee -a "$ROOTM/etc/fstab" >/dev/null
+awk '$3=="tmpfs"{print $2}' "$ROOTM/etc/fstab" | while read -r mp; do
+	[ -n "$mp" ] && $SUDO mkdir -p "$ROOTM$mp"
+done
+# остатки конфигов NetworkManager (создавались образом) — убрать после purge
+$SUDO rm -rf "$ROOTM/etc/NetworkManager"
 
 # --- 2.14 tmpfiles (best-effort) ---
 $SUDO systemd-tmpfiles --root="$ROOTM" --create /etc/tmpfiles.d/malina.conf /etc/tmpfiles.d/malina-rsyslog.conf >/dev/null 2>&1 || true

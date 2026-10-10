@@ -14,6 +14,11 @@ git -C "$PIGEN" reset --hard -q origin/bookworm
 
 cp "$SRC/config" "$PIGEN/config"
 
+# Не ставить лишнее: NetworkManager тянется только raspberrypi-net-mods (зависимых
+# у неё нет) — исключаем их из базовой установки pi-gen (а не «ставим и чистим»).
+sed -i '/^raspberrypi-net-mods$/d; /^network-manager$/d' \
+	"$PIGEN/stage2/02-net-tweaks/00-packages"
+
 rm -rf "$PIGEN/stage-malina"
 cp -a "$SRC/stage-malina" "$PIGEN/stage-malina"
 find "$PIGEN/stage-malina" -name '*-run.sh' -exec chmod +x {} +

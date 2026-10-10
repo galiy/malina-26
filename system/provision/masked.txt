@@ -9,4 +9,3 @@ rcS.service
 sudo.service
 systemd-machine-id-commit.service
 systemd-random-seed.service
-x11-common.service

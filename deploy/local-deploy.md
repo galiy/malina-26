@@ -24,20 +24,53 @@
    `qemu-arm-static` + binfmt (есть), интернет к `raspbian.raspberrypi.com`
    (по **http**), `archive.raspberrypi.com`, `deb.debian.org`, sudo-пароль из
    связки, ~15 ГБ места.
-2. Сборка: `image/build.sh` (setup.sh копирует `config` + `stage-malina` в pi-gen,
-   патчит export-image) → результат в `/opt/raspberry_tmp/pi-gen/deploy/`.
-3. В образ входят только **пакеты из репозиториев** (`image/stage-malina/00-packages`
-   + `apt update/upgrade`). **Наши бинарники/юниты/ассеты — НЕ входят.**
-4. Проверка образа (loop-mount ro): нет `/usr/local/bin|sbin` с нашими файлами и
-   юнитов `malina-*`; пакеты на месте; hostname/TZ заданы.
-5. Запись на SD:
+2. **Чистка кэша pi-gen** (обязательно при повторной сборке после изменений):
+   pi-gen переиспользует `work/` по маркерам стадий и пропустит изменённые стадии
+   → правки не попадут в образ.
+   ```
+   sudo rm -rf /opt/raspberry_tmp/pi-gen/work
+   ```
+3. Сборка: `image/build.sh` (`setup.sh` копирует `config` + `stage-malina` в pi-gen,
+   патчит `export-image`; `build.sh` → полная сборка) → результат в
+   `/opt/raspberry_tmp/pi-gen/deploy/`.
+4. **Состав образа (решено):**
+   - входят **только пакеты из репозиториев** (`stage-malina/00-packages` +
+     `apt update/upgrade`): mc, rsyslog, iw, rfkill, hostapd, dnsmasq, nftables,
+     isc-dhcp-client, gcc;
+   - **не устанавливаются**: `network-manager` и `raspberrypi-net-mods` (исключены
+     из `stage2/02-net-tweaks/00-packages` в `image/setup.sh`; зависимых у
+     `raspberrypi-net-mods` нет);
+   - `01-remove`: `avahi-daemon`, `triggerhappy`, `dphys-swapfile`;
+   - `alsa-utils` **остаётся** (жёсткая зависимость `raspi-config`) и маскируется;
+     `x11-common` в образе отсутствует; `nfs-common` оставлен;
+   - fstab (`03-immutable`): `ro`-корень, boot `ro`, tmpfs `/tmp,/var/log,/var/tmp,
+     /var/spool,/var/lib/dhcp,/var/lib/bluetooth,/var/lib/systemd`, `/etc/mtab`
+     symlink; строки NM-tmpfs нет;
+   - **наши бинарники/юниты/ассеты — НЕ входят**.
+5. Проверка образа (loop-mount ro): нет `/usr/local/bin|sbin` с нашими файлами и
+   юнитов `malina-*`; нет `network-manager`/`raspberrypi-net-mods`/`x11-common`;
+   есть `alsa-utils`, пакеты проекта; fstab с `/var/lib/dhcp`; hostname/TZ заданы.
+6. Запись на SD:
    ```
    sudo dd if=<img> of=/dev/sdX bs=4M conv=fsync status=progress
    # или: sudo bmaptool copy <img> /dev/sdX
    ```
    Образ ставит только p1 (boot) и p2 (root). **p3 (/malina) создаёт Этап 2.**
 
-**Статус:** образ `2026-10-10-malina-lite.img` собран и проверен (см. журнал).
+**Правки образа, потребовавшиеся при обкатке (Этап 1, не относящиеся к артефактам
+Этапа 2):**
+- не было `tmpfs /var/lib/dhcp` → на ro-корне dhclient не мог писать аренды
+  (`Read-only file system`) → добавлено в fstab образа;
+- не создавался симлинк `/etc/mtab` → `systemd-tmpfiles … Read-only file system`
+  → добавлен в образ (`03-immutable`);
+- `network-manager` и `raspberrypi-net-mods` исключены из установки pi-gen
+  (`image/setup.sh`); из образа убраны `tmpfs /var/lib/NetworkManager` и конфиги
+  `/etc/NetworkManager`;
+- pi-gen переиспользует `work/` по маркерам стадий (см. п.2) — без чистки правки
+  в образ не попадают.
+
+**Статус:** образ `2026-10-10-malina-lite.img` пересобран начисто (без NM) и
+проверяется (см. журнал).
 
 ---
 
@@ -203,6 +236,60 @@ grep malina $ROOT/etc/fstab
 - **Нельзя** `chown -R root:root` по всему rootfs `/etc` — это ломает системные
   группы (`/etc/shadow`→`shadow`, `gshadow`, `sudoers`). Артефакты ставить
   `install -o root -g root`; точечные `chown` только для добавленного.
+- **Дистрибутивные конфликты:** образ держит включёнными `dnsmasq.service`,
+  `hostapd.service`, `wpa_supplicant.service`, `ModemManager.service`. Сеть проекта
+  управляется `malina-netd` через свои обёртки `malina-{hostapd,dnsmasq,wpa}.service`
+  → дистрибутивные нужно **disable** (иначе `dnsmasq` держит `:53`/`10.10.100.254`
+  и наш `malina-dnsmasq` падает). Внесены в `system/provision/disabled.txt`.
+- **`/` ro:** `systemctl disable/mask` на живой системе не сработает (симлинки в
+  `/etc`); делать через rw-окно (`/malina/usr/local/sbin/malina-rw run systemctl …`)
+  либо офлайн в `stage2.sh` (там rootfs ещё rw).
+- **Повреждённый inode:** наблюдался случай, когда ошибка стабильно указывала на
+  **один inode** (`/etc/hostname`): `EXT4-fs error … inode #N: corrupted inode
+  contents` при записи, при этом `e2fsck -fn` считает ФС чистой. Лечение —
+  **пересоздать файл** (`rm` + заново создать), т.е. заменить inode, затем `sync` и
+  `e2fsck -fn`. `sync` в `malina-rw` сам по себе это не устраняет. Подтверждено:
+  после пересоздания inode `/etc/hostname` смена «Хост» работает, `ext4 errors=0`.
+  Артефакт ужесточён — `SetHost` пишет `/etc/hostname`/`/etc/timezone` через
+  временный файл + `mv` (новый inode, существующий не перезаписывается).
+- **rw-окно и `commit=60`:** `malina-rw` делает `sync` перед `remount,ro`
+  (иначе при `commit=60` остаётся unprocessed orphan inode list → следующий
+  `remount,rw` падает, а запись даёт `EXT4-fs error … corrupted inode contents`).
+  Добавлено `sync` в `malina-rw run/off`. При сбое ФС восстанавливается журналом
+  (монтирование rw/`e2fsck -fn` даёт clean), т.е. это не смерть носителя.
+- **Пути артефактов:** ВСЕ исполняемые/данные проекта живут на `/malina`
+  (`/malina/usr/local/{bin,sbin,libexec,share/...}`) — так их ждут юниты
+  (`ExecStart=/malina/usr/local/...`). В rootfs (`/etc/...`) — только юниты/конфиги.
+  Назначения манифеста и бинарники с префиксом `/malina/` класть на **p3**, не в
+  rootfs (иначе сервисы падают с `203/EXEC` и AP не поднимается).
+- **fstab-tmpfs:** образ содержит `tmpfs /var/lib/NetworkManager` (нужен, пока есть NM).
+  Этап 2 удаляет NM (и каталог) → `mount` tmpfs падает → `local-fs.target` →
+  **emergency mode**, `malina-net` не стартует. Поэтому `stage2.sh` после purge
+  удаляет эту строку из fstab и на всякий случай создаёт все tmpfs-точки из fstab.
+- **Аппаратное (SD/питание) — Этап 3:** на двух разных картах **первая же запись в
+  rw-окно** (например, смена «Хост») даёт `EXT4-fs error … corrupted inode
+  contents` → `EFSCORRUPTED`, после чего `remount,rw /` блокируется
+  («unprocessed orphan inode list»). Это уровень ФС/носителя, не наш код. Перед
+  деплоем проверять носитель (`f3`/`h2testw` на ПК, `e2fsck -f`) и питание
+  (`vcgencmd get_throttled`, отсутствие `Under voltage`); при сомнении — менять
+  карту/БП. В эксплуатации rw-записи минимизировать.
+- **Точка монтирования `/malina`:** в rootfs **должен существовать каталог
+  `/malina`** (его нет в базовом образе). Без него `malina.mount` падает →
+  `local-fs.target` → **emergency**. `stage2.sh` создаёт `$ROOTM/malina` (0755);
+  на старой карте лечится в аварийной консоли: `mount -o remount,rw /; mkdir -p
+  /malina; mount -o remount,ro /; systemctl default`.
+- **`/var/lib/dhcp`:** если в fstab образа строки нет — `stage2.sh` добавляет её и
+  создаёт точку (иначе dhclient-аренды пишутся на ro-корень).
+- **udisks2:** включён в образе и пишет `/var/lib/udisks2` на ro → ошибки + шум
+  mdraid; добавлен в `disabled.txt`.
+- **Остатки NM:** `apt purge` не удаляет `/etc/NetworkManager` (создавал образ) →
+  `stage2.sh` делает `rm -rf /etc/NetworkManager`.
+- **rsyslog (UDP-пересылка):** до появления маршрута сыпет `Network is unreachable`;
+  в `system/bin/malina-remote-syslog` добавлены `action.resumeRetryCount="-1"` и
+  `queue.type="linkedList"` (буферизация, отправка после поднятия сети).
+- **Имя хоста и часовой пояс:** хранятся в `/etc` (`/etc/hostname`, `/etc/timezone`,
+  симлинк `/etc/localtime`) и меняются из UI через короткое rw-окно `malina-rw`
+  (**не** на `/malina`).
 - Проверено на dry-run (loop-копия образа): p3=остаток места; симлинки
   `/root`,`/home`,`/etc/wpa_supplicant`,`/etc/resolv.conf`; fstab `ro`+`LABEL=malina`;
   юниты (`.service`→multi-user, `.timer`→timers) включены; `pamcheck` собрался как

@@ -13,7 +13,7 @@ cur=""
 mkdir -p "$RS_DIR"
 : > "$RS_DIR/remote.conf"
 for ip in $val; do
-	printf '*.* action(type="omfwd" target="%s" port="514" protocol="udp" template="RSYSLOG_SyslogProtocol23Format")\n' "$ip" >> "$RS_DIR/remote.conf"
+	printf '*.* action(type="omfwd" target="%s" port="514" protocol="udp" template="RSYSLOG_SyslogProtocol23Format" action.resumeRetryCount="-1" queue.type="linkedList" queue.saveOnShutdown="on")\n' "$ip" >> "$RS_DIR/remote.conf"
 done
 printf '%s' "$val" > "$RS_STATE"
 systemctl reload-or-restart rsyslog 2>/dev/null || true

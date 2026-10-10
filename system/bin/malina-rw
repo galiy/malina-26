@@ -23,6 +23,7 @@ case "$1" in
 		mount -o remount,rw /
 		;;
 	off)
+		sync
 		mount -o remount,ro /
 		;;
 	run)
@@ -31,6 +32,9 @@ case "$1" in
 		mount -o remount,rw / || true
 		"$@"
 		rc=$?
+		# Сбросить журнал/грязные данные ДО remount ro: при commit=60 без этого
+		# остаётся unprocessed orphan inode list, и следующий remount rw падает.
+		sync
 		mount -o remount,ro / || true
 		exit $rc
 		;;

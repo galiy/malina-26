@@ -54,11 +54,15 @@ func HostnameSetting() string {
 // короткое rw-окно (malina-rw): /etc/hostname, симлинк /etc/localtime, /etc/timezone.
 // Значения персистентны на rootfs; на /malina ничего не хранится.
 func SetHost(hostname, tz string) error {
+	// Пишем через временный файл + mv: заменяем inode, не переписывая существующий
+	// «на месте» (защита от случая повреждённого inode /etc/hostname|timezone).
 	zone := "/usr/share/zoneinfo/" + tz
-	script := "printf '%s\\n' '" + hostname + "' > /etc/hostname" +
+	script := "printf '%s\\n' '" + hostname + "' > /etc/hostname.malina.tmp" +
+		" && mv -f /etc/hostname.malina.tmp /etc/hostname" +
 		" && hostname '" + hostname + "'" +
 		" && ln -sfn '" + zone + "' /etc/localtime" +
-		" && printf '%s\\n' '" + tz + "' > /etc/timezone"
+		" && printf '%s\\n' '" + tz + "' > /etc/timezone.malina.tmp" +
+		" && mv -f /etc/timezone.malina.tmp /etc/timezone"
 	if err := exec.Command(RWHelper, "run", "sh", "-c", script).Run(); err != nil {
 		return err
 	}

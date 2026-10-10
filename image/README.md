@@ -17,8 +17,11 @@
 - Пользователь по умолчанию `malina`/`malina`; **на рабочем устройстве пароли
   `malina` и `root` изменены на `malina26`** (образ пересобирать не требуется).
 - journald `Storage=volatile` (журнал в `/run`, на диск не пишется).
-- Сеть: NetworkManager, `eth0` по DHCP из коробки; WiFi не поднимается.
-  (На устройстве NetworkManager **удаляется провижинингом**, сетью управляет `malina-netd`.)
+- Сеть: `eth0` по DHCP; сетью управляет `malina-netd`. NetworkManager и
+  `raspberrypi-net-mods` **не устанавливаются** — исключены из базовой установки
+  pi-gen в `setup.sh` (зависимых у `raspberrypi-net-mods` нет). `alsa-utils`
+  остаётся (жёсткая зависимость `raspi-config`) и маскируется; `x11-common` в
+  образе нет; `nfs-common` оставлен.
 - Из Lite удалены `avahi-daemon`, `triggerhappy`, `dphys-swapfile`.
 - Добавлен `mc`.
 - **watchdog**: аппаратный сторож `bcm2835_wdt` включается через systemd
@@ -37,7 +40,7 @@
     после загрузки (см. `deploy/restore.md`);
   - `01-remove` — удаление лишних пакетов;
   - `02-auth` — пароль root и настройки SSH;
-  - `03-immutable` — fstab/tmpfs, `ro`, journald, NetworkManager;
+  - `03-immutable` — fstab/tmpfs, `ro`, journald, `/etc/mtab`;
   - `04-hostkeys` — предгенерация SSH host keys;
   - `05-map-uart` — UART для МАП (`enable_uart=1`, `dtoverlay=miniuart-bt`,
     без serial-консоли; BT остаётся живым).
@@ -49,6 +52,13 @@
 
 ```
 image/build.sh
+```
+
+**Важно (кэш pi-gen).** pi-gen переиспользует `work/` со стадиями по маркерам: при
+изменении стейджа/списков пакетов стадии **пропускаются**, и правки не попадут в
+образ. Перед пересборкой после любых изменений очищать кэш:
+```
+sudo rm -rf /opt/raspberry_tmp/pi-gen/work
 ```
 
 Требуется: `sudo` (пароль из связки `service=sudo username=sasha`),
@@ -74,7 +84,7 @@ Root-раздел уже 8 ГБ; авторасширение (`resize2fs_once`)
 - Токен `init=/usr/lib/raspberrypi-sys-mods/firstboot` убран из `cmdline.txt`,
   поэтому нет первого ребута и rw-remount корня (rename/resize отключены,
   host keys уже есть).
-- `/var/lib/bluetooth`, `/var/lib/systemd`, `/var/lib/NetworkManager` — tmpfs,
+- `/var/lib/bluetooth`, `/var/lib/systemd`, `/var/lib/dhcp` — tmpfs,
   чтобы включённые службы не писали в ro-корень.
 - `systemd-random-seed` и `systemd-machine-id-commit` замаскированы,
   `machine-id` — транзиентный (`/run`).
