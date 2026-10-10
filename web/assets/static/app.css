@@ -881,3 +881,26 @@ a.dropdown-sub { padding-left: 22px; }
   .p1-gauge svg { width: 92px; }
   .p1-inf td { flex: 1 1 50%; }
 }
+
+/* Мобильные уточнения: гейджи страницы «Информация» и переносы в таблицах настроек */
+@media (max-width: 640px) {
+  .gauges { flex-wrap: wrap; justify-content: center; gap: 6px; }
+  .gauge { flex: 1 1 40%; min-width: 0; }
+  .gauge svg { width: 100%; height: auto; max-width: 140px; }
+  .nettable td, .nettable td.muted, .nettable td[colspan] { white-space: normal; overflow-wrap: anywhere; }
+}
+
+/* Чекбоксы в таблицах настроек — не растягивать (иначе шире ячейки) */
+.nettable input[type="checkbox"] { width: auto; max-width: none; }
+
+/* Мобильное меню: выпадающие списки не выходят за пределы экрана */
+@media (max-width: 820px) {
+  .topbar { position: relative; }
+  .dropdown { position: static; }
+  .dropdown-menu,
+  .topbar-right .dropdown-menu {
+    position: absolute; left: 8px; right: 8px; top: auto;
+    width: auto; min-width: 0; max-width: none;
+  }
+  .dropdown-menu a { white-space: normal; }
+}
