@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
@@ -80,12 +81,15 @@ func TestWriteRoundtripNative(t *testing.T) {
 	}
 }
 
-// TestFakeMapWriteAck — прямой тест разбора ответа на запись.
+// TestParseWriteReply — прямой тест разбора ответа на запись.
 func TestParseWriteReply(t *testing.T) {
 	if err := parseWriteReply([]byte{'o', 0x91, 0x0A}); err != nil {
 		t.Fatalf("успех не распознан: %v", err)
 	}
-	err := parseWriteReply([]byte{'e', 0x10, 0xEF})
+	if err := parseWriteReply([]byte{'o', 0x00}); err == nil {
+		t.Fatal("битая сумма 'o' должна отвергаться")
+	}
+	err := parseWriteReply([]byte{'e', 0x10, 0x8B}) // сумма 'e'+0x10+0x8B == 0
 	var me *mapError
 	if err == nil {
 		t.Fatal("ошибка не распознана")
@@ -147,6 +151,10 @@ func TestBuildSequence(t *testing.T) {
 }
 
 func TestValidateWrite(t *testing.T) {
+	many := make([]writeOp, maxOps+1)
+	for i := range many {
+		many[i] = writeOp{Op: "reg", Addr: "1B3", Data: "01"}
+	}
 	cases := []struct {
 		name string
 		req  writeRequest
@@ -159,6 +167,8 @@ func TestValidateWrite(t *testing.T) {
 		{"eeprom+ram вместе", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B6", Data: "60"}, {Op: "reg", Addr: "44B", Data: "00"}}}, kindReg, false},
 		{"mix reg+cmd", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B3", Data: "01"}, {Op: "cmd", Code: "07"}}}, 0, true},
 		{"two cmd", writeRequest{Ops: []writeOp{{Op: "cmd", Code: "07"}, {Op: "cmd", Code: "02"}}}, 0, true},
+		{"cmd вне 1..9", writeRequest{Ops: []writeOp{{Op: "cmd", Code: "00"}}}, 0, true},
+		{"слишком много ops", writeRequest{Ops: many}, 0, true},
 		{"empty", writeRequest{}, 0, true},
 		{"big block", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "000", Data: strings.Repeat("00", 257)}}}, 0, true},
 		{"нечётный hex", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B3", Data: "0"}}}, 0, true},
@@ -180,5 +190,77 @@ func TestValidateWrite(t *testing.T) {
 		if got != c.want {
 			t.Errorf("%s: kind=%v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+// startFakeMap поднимает эмулятор МАП на PTY и возвращает порт. Cleanup — через t.
+func startFakeMap(t *testing.T) *Port {
+	t.Helper()
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("нет python3")
+	}
+	link := "/tmp/kilo/fakemap"
+	os.Remove(link)
+	cmd := exec.Command("python3", "test/fakemap.py")
+	if err := cmd.Start(); err != nil {
+		t.Skipf("fakemap не стартовал: %v", err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	for i := 0; i < 100; i++ {
+		if _, err := os.Lstat(link); err == nil {
+			p, err := openPort(link)
+			if err != nil {
+				t.Fatalf("openPort: %v", err)
+			}
+			return p
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("ссылка %s не появилась", link)
+	return nil
+}
+
+// TestExecuteSequenceNative — интеграционный тест: последовательность из
+// buildSequence (обрамление pre3…post7) исполняется через execElement, данные
+// долетают; ошибка МАП (ErrRS_NoEEWR) не ретраится и возвращается как mapError.
+func TestExecuteSequenceNative(t *testing.T) {
+	p := startFakeMap(t)
+	defer p.close()
+	cfg := &config{probeEcho: 300 * time.Millisecond, probeResponse: 800 * time.Millisecond,
+		writeRetries: 5, writePause: 50 * time.Millisecond}
+
+	// EEPROM-блок с обрамлением.
+	wr := writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B0", Data: "11223344"}}}
+	k, _ := validateWrite(wr)
+	for _, el := range buildSequence(wr, k) {
+		if err := execElement(cfg, p, "microart", 0, el); err != nil {
+			t.Fatalf("execElement: %v", err)
+		}
+		time.Sleep(150 * time.Millisecond) // эмулятору — дососать эхо
+	}
+	got, err := microartRead(p, 0x1B0, 3, 300*time.Millisecond, 800*time.Millisecond)
+	if err != nil {
+		t.Fatalf("read-back: %v", err)
+	}
+	want := []byte{0x11, 0x22, 0x33, 0x44}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("read-back: got %v, want %v", got, want)
+		}
+	}
+
+	// Явная ошибка МАП на read-only 0x004 — mapError 0x10 без ретраев.
+	wr2 := writeRequest{Ops: []writeOp{{Op: "reg", Addr: "004", Data: "01"}}}
+	k2, _ := validateWrite(wr2)
+	var sawErr error
+	for _, el := range buildSequence(wr2, k2) {
+		if err := execElement(cfg, p, "microart", 0, el); err != nil {
+			sawErr = err
+			break
+		}
+	}
+	var me *mapError
+	if !errors.As(sawErr, &me) || me.code != 0x10 {
+		t.Fatalf("ожидали mapError 0x10, получили %v", sawErr)
 	}
 }

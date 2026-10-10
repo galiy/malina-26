@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// control — синхронные команды через Unix domain socket (запрос → ответ).
-// Пока: ping, list. Запись в МАП появится позже (по явному разрешению).
+// control — синхронные команды через Unix domain socket (запрос → ответ):
+// ping, list, write (запись в МАП).
 type control struct {
 	cfg  *config
 	reg  *Registry
@@ -27,6 +27,7 @@ type ctlRequest struct {
 
 type ctlResponse struct {
 	OK    bool      `json:"ok"`
+	Code  string    `json:"code,omitempty"`
 	Error string    `json:"error,omitempty"`
 	State *StateDoc `json:"state,omitempty"`
 }
@@ -86,7 +87,7 @@ func (c *control) handle(conn net.Conn) {
 	}
 	var req ctlRequest
 	if err := json.Unmarshal(line, &req); err != nil {
-		writeJSON(conn, ctlResponse{OK: false, Error: "bad request"})
+		writeJSON(conn, ctlResponse{OK: false, Code: "bad_request", Error: "bad request"})
 		return
 	}
 	var resp any
@@ -99,7 +100,7 @@ func (c *control) handle(conn net.Conn) {
 	case "write":
 		resp = c.dispatchWrite(writeRequest{Cmd: "write", ID: req.ID, Gen: req.Gen, NoFrame: req.NoFrame, Ops: req.Ops})
 	default:
-		resp = ctlResponse{OK: false, Error: "unknown command"}
+		resp = ctlResponse{OK: false, Code: "bad_request", Error: "unknown command"}
 	}
 	// Дедлайн на запись ответа ставим после обработки: команда записи в МАП
 	// может выполняться заметно дольше 3 с (несколько операций × попытки).

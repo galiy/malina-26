@@ -36,13 +36,16 @@ func newRegistry(alloc *slotAlloc, shm *Shm) *Registry {
 func keyOf(port string, unit int) string { return fmt.Sprintf("%s#%d", port, unit) }
 
 // Add занимает слот и регистрирует МАП. false — если слотов нет.
-func (r *Registry) Add(port string, unit int, proto string, baud int, info *mapInfo) (*MapEntry, bool) {
+// cmd — канал команд пулера порта; присваивается до публикации записи в реестре,
+// чтобы команда записи не увидела запись с nil-каналом.
+func (r *Registry) Add(port string, unit int, proto string, baud int, info *mapInfo, cmd chan *writeJob) (*MapEntry, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	key := keyOf(port, unit)
 	if e, ok := r.m[key]; ok {
 		e.info = info
 		e.lastSeen = time.Now()
+		e.cmd = cmd
 		return e, true
 	}
 	idx, gen, slot, ok := r.alloc.alloc()
@@ -51,7 +54,7 @@ func (r *Registry) Add(port string, unit int, proto string, baud int, info *mapI
 	}
 	e := &MapEntry{
 		key: key, port: port, unit: unit, proto: proto, baud: baud,
-		info: info, slotIdx: idx, gen: gen, slot: slot, lastSeen: time.Now(),
+		info: info, slotIdx: idx, gen: gen, slot: slot, cmd: cmd, lastSeen: time.Now(),
 	}
 	r.m[key] = e
 	return e, true

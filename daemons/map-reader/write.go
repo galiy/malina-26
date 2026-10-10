@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// maxOps — максимум операций в одном запросе (ограничивает удержание пулера).
+const maxOps = 64
+
 // --- Типы ошибок МАП ---
 
 // mapError — явная ошибка, вернувшаяся от МАП в кадре 'e D S' (код D).
@@ -132,13 +135,20 @@ func validateWrite(wr writeRequest) (kind, error) {
 	if len(wr.Ops) == 0 {
 		return 0, errors.New("пустой список операций")
 	}
+	if len(wr.Ops) > maxOps {
+		return 0, fmt.Errorf("слишком много операций (максимум %d)", maxOps)
+	}
 	nCmd, nReg := 0, 0
 	for _, op := range wr.Ops {
 		switch op.Op {
 		case "cmd":
 			nCmd++
-			if _, err := parseHexUint(op.Code, 8); err != nil {
+			c, err := parseHexUint(op.Code, 8)
+			if err != nil {
 				return 0, fmt.Errorf("cmd code: %v", err)
+			}
+			if c < 1 || c > 9 {
+				return 0, errors.New("команда вне диапазона 1..9")
 			}
 		case "reg":
 			nReg++
@@ -153,7 +163,7 @@ func validateWrite(wr writeRequest) (kind, error) {
 			if len(d) < 1 || len(d) > 256 {
 				return 0, errors.New("размер блока должен быть 1..256 байт")
 			}
-			if a < 0 || a+len(d)-1 > 0x7FF {
+			if a+len(d)-1 > 0x7FF {
 				return 0, errors.New("адрес вне области 0x000..0x7FF")
 			}
 		default:
@@ -265,9 +275,15 @@ func executeWrite(cfg *config, reg *Registry, p *Port, proto string, entries []*
 		resp.Op = &idx
 	}
 	var me *mapError
+	var mbe *modbusError
 	if errors.As(lastErr, &me) {
 		resp.Code = "map_error"
 		ec := fmt.Sprintf("%02X", me.code)
+		resp.ECode = &ec
+	} else if errors.As(lastErr, &mbe) {
+		resp.Code = "map_error"
+		resp.Error = fmt.Sprintf("Modbus-исключение %d", mbe.code)
+		ec := fmt.Sprintf("%02X", mbe.code)
 		resp.ECode = &ec
 	} else if errors.Is(lastErr, errUnsupported) {
 		resp.Code = "bad_request"

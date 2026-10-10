@@ -70,10 +70,10 @@ func (s *Server) handleAPIMapRaw(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(payload)
 }
 
-// handleAPIDevices — список подключённых устройств для динамического меню
-// (под авторизацией). Сейчас — МАП (type="map"); в перспективе сюда добавятся
-// КЭС (type="mppt") и др.
-func (s *Server) handleAPIDevices(w http.ResponseWriter, r *http.Request) {
+// handleAPIMapDevices — список подключённых устройств типа «map» (МАП) для
+// динамического меню. Под авторизацией (cookie || Bearer). Будущие типы (kes и
+// др.) получат свои /api/<type>/devices.
+func (s *Server) handleAPIMapDevices(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.currentUser(r); !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		return

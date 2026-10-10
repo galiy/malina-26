@@ -29,6 +29,16 @@
 
 ## API
 
+Авторизация API — **cookie-сессия `malina_session` ИЛИ `Authorization: Bearer <token>`**
+(см. `docs/api-auth.md`). Сессии/токены — в `/dev/shm/malina-auth` (переживают
+перезапуск web, idle-TTL 1 ч со скользящим продлением). Пути по типу устройства:
+`/api/<type>/...` (`map` — МАП; будущие `kes` и др.).
+
+- `POST /api/token` `{password}` → `{token, expires}`; `DELETE /api/token` — отзыв.
+- `GET /api/map/devices` — список устройств типа «map» (JSON, для меню).
+- `GET /api/map/raw?id=<id>` — бинарный контракт МАП (`application/octet-stream`).
+- `POST /api/map/write` — запись в МАП (тело — `docs/map-write-api.md`; проксирует
+  в control-сокет `map-reader`; HTTP-статус по коду: 200/400/404/422/502/500).
 - `GET /api/system` — системные данные (JSON). Список процессов **не входит**.
 - `GET /api/processes` — снимок процессов (по запросу; не автообновляется).
 - `GET /api/services` — состояние управляемых служб; `POST /services/action` — start/stop.
@@ -86,7 +96,8 @@ MALINA_WEB_DEV_PASSWORD=secret MALINA_WEB_LISTEN=:8080 go run ./cmd/malina-web
 
 - `cmd/malina-web`, `cmd/malina-netd` — точки входа.
 - `internal/web` — сервер, роутинг, шаблоны/статика/i18n (внешние assets).
-- `internal/auth` — PAM/dev аутентификатор; `internal/session` — сессии.
+- `internal/auth` — PAM/dev аутентификатор; `internal/authstore` — сессии/токены
+  в `/dev/shm/malina-auth` (сессии, токены, скользящий TTL).
 - `internal/i18n` — словари; `internal/netcfg` — конфиги режимов.
 - `internal/sysinfo` — системные данные, процессы, обёртка `run()`.
 - `internal/sysctl` — службы systemd (список/статус/start-stop) и др.
@@ -106,9 +117,13 @@ MALINA_WEB_DEV_PASSWORD=secret MALINA_WEB_LISTEN=:8080 go run ./cmd/malina-web
 
 ## Флаги / переменные
 
-- `-listen` (`MALINA_WEB_LISTEN`), по умолчанию `:80`.
+- `-listen` (`MALINA_WEB_LISTEN`), по умолчанию `:8080` (на устройстве юнит
+  задаёт `-listen :80`).
 - `-user` (`MALINA_WEB_USER`), по умолчанию `malina`.
 - `-pam-helper` (`MALINA_WEB_PAM_HELPER`), `-assets` (`MALINA_WEB_ASSETS`).
+- `-auth-shm` (`MALINA_WEB_AUTH_SHM`), по умолчанию `/dev/shm/malina-auth`.
+- `-session-idle` — скользящий TTL сессий/токенов (по умолчанию `1h`).
+- `-control-sock` (`MALINA_WEB_CONTROL_SOCK`), по умолчанию `/run/malina-map/control.sock`.
 - `MALINA_WEB_DEV_PASSWORD` — только для разработки.
 
 ## Безопасность

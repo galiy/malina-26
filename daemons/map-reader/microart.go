@@ -206,18 +206,36 @@ func buildWriteRequest(addr uint16, data []byte) []byte {
 }
 
 // parseWriteReply разбирает ответ на запись: 'o' S [\n] (успех) или 'e' D S [\n].
+// Сумма байт до S включительно должна быть нулевой (как в parseReply).
 func parseWriteReply(raw []byte) error {
 	if len(raw) == 0 {
 		return errNoMap
 	}
 	switch raw[0] {
 	case 'o':
+		if len(raw) < 2 {
+			return errNoMap
+		}
+		var sum byte
+		for k := 0; k <= 1; k++ {
+			sum += raw[k]
+		}
+		if sum != 0 {
+			return errNoMap
+		}
 		return nil
 	case 'e':
-		if len(raw) >= 2 {
-			return &mapError{code: int(raw[1])}
+		if len(raw) < 3 {
+			return errNoMap
 		}
-		return errNoMap
+		var sum byte
+		for k := 0; k <= 2; k++ {
+			sum += raw[k]
+		}
+		if sum != 0 {
+			return errNoMap
+		}
+		return &mapError{code: int(raw[1])}
 	}
 	return errNoMap
 }

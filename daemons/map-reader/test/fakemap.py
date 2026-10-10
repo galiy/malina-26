@@ -105,8 +105,11 @@ def main():
                 seq = unescape(req[1:len(req) - 1])  # [P,A1,A0,D...,S]
                 addr = (seq[1] << 8) | seq[2]
                 data = seq[3:len(seq) - 1]
-                MEM[addr:addr + len(data)] = data
-                resp = bytes([ord('o'), (0x100 - 0x6F) & 0xFF, 0x0A])
+                if addr == 0x004:  # ячейка read-only — МАП отвечает ErrRS_NoEEWR
+                    resp = bytes([ord('e'), 0x10, 0x8B, 0x0A])
+                else:
+                    MEM[addr:addr + len(data)] = data
+                    resp = bytes([ord('o'), (0x100 - 0x6F) & 0xFF, 0x0A])
             os.write(master, resp)
             req = bytearray()
             # вычитать ровно эхо ответа (демон возвращает каждый байт),

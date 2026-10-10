@@ -96,11 +96,10 @@ func (s *scanner) cycle() bool {
 		var entries []*MapEntry
 		cmds := make(chan *writeJob, 8)
 		for _, d := range dets {
-			e, ok := s.reg.Add(path, d.unit, proto, baud, d.info)
+			e, ok := s.reg.Add(path, d.unit, proto, baud, d.info, cmds)
 			if !ok {
 				break // нет свободных слотов
 			}
-			e.cmd = cmds
 			entries = append(entries, e)
 		}
 		if len(entries) == 0 {

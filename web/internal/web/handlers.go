@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/galiy/malina-26/web/internal/auth"
+	"github.com/galiy/malina-26/web/internal/authstore"
 	"github.com/galiy/malina-26/web/internal/logtail"
 	"github.com/galiy/malina-26/web/internal/session"
 	"github.com/galiy/malina-26/web/internal/sysctl"
@@ -60,11 +62,10 @@ func (s *Server) baseData(r *http.Request) map[string]any {
 }
 
 func (s *Server) currentUser(r *http.Request) (string, bool) {
-	c, err := r.Cookie(session.CookieName)
-	if err != nil {
-		return "", false
+	if r.Context().Value(authKey) == true {
+		return s.opts.User, true
 	}
-	return s.sess.User(c.Value)
+	return "", false
 }
 
 func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) (string, bool) {
@@ -231,6 +232,8 @@ func (s *Server) handleSystemPassword(w http.ResponseWriter, r *http.Request) {
 		s.redirectSystem(w, r, "err=password")
 		return
 	}
+	// Смена пароля — инвалидируем все сессии и токены.
+	s.store.PurgeAll()
 	s.redirectSystem(w, r, "ok=password")
 }
 
@@ -269,15 +272,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			s.render(w, http.StatusUnauthorized, "login", data)
 			return
 		}
-		tok, exp := s.sess.Create(s.opts.User)
-		http.SetCookie(w, &http.Cookie{
-			Name:     session.CookieName,
-			Value:    tok,
-			Path:     "/",
-			Expires:  exp,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		})
+		tok, err := authstore.NewToken()
+		if err != nil {
+			http.Error(w, "internal", http.StatusInternalServerError)
+			return
+		}
+		s.store.Issue(tok)
+		s.setSessionCookie(w, tok)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	default:
 		w.Header().Set("Allow", "GET, POST")
@@ -292,7 +293,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if c, err := r.Cookie(session.CookieName); err == nil {
-		s.sess.Delete(c.Value)
+		s.store.Revoke(c.Value)
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     session.CookieName,
@@ -302,6 +303,56 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 	})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// writeJSONStatus пишет JSON-ответ с заданным статусом.
+func writeJSONStatus(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// handleAPIToken — выпуск (`POST {password}`) и отзыв (`DELETE`) API-токена.
+func (s *Server) handleAPIToken(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		var req struct {
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
+			writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "bad_request"})
+			return
+		}
+		if err := s.auth.Authenticate(s.opts.User, req.Password); err != nil {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="malina", error="invalid_grant"`)
+			writeJSONStatus(w, http.StatusUnauthorized, map[string]any{"error": "invalid_credentials"})
+			return
+		}
+		tok, err := authstore.NewToken()
+		if err != nil {
+			writeJSONStatus(w, http.StatusInternalServerError, map[string]any{"error": "internal"})
+			return
+		}
+		s.store.Issue(tok)
+		writeJSONStatus(w, http.StatusOK, map[string]any{
+			"token":   tok,
+			"expires": time.Now().Add(s.opts.SessionIdle).Unix(),
+		})
+	case http.MethodDelete:
+		if _, ok := s.currentUser(r); !ok {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="malina", error="invalid_token"`)
+			writeJSONStatus(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
+			return
+		}
+		if tok, _, ok := tokenFrom(r); ok {
+			s.store.Revoke(tok)
+		}
+		writeJSONStatus(w, http.StatusOK, map[string]any{"ok": true})
+	default:
+		w.Header().Set("Allow", "POST, DELETE")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
 }
 
 func (s *Server) handleLang(w http.ResponseWriter, r *http.Request) {

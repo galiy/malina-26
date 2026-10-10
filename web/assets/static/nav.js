@@ -1,4 +1,4 @@
-// Динамическое меню «Мониторинг → МАП»: раз в 30 с обновляет список из /api/maps.
+// Динамическое меню «Мониторинг → МАП»: раз в 30 с обновляет список из /api/map/devices.
 (function () {
   "use strict";
   var wrap = document.getElementById("mapMenuWrap");
@@ -22,7 +22,7 @@
     items.innerHTML = html;
   }
   function poll() {
-    fetch("/api/devices", { cache: "no-store", credentials: "same-origin" })
+    fetch("/api/map/devices", { cache: "no-store", credentials: "same-origin" })
       .then(function (r) { if (!r.ok) { throw 0; } return r.json(); })
       .then(render)
       .catch(function () { /* тихо: не мешаем странице */ });

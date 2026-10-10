@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"html/template"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/galiy/malina-26/web/internal/auth"
+	"github.com/galiy/malina-26/web/internal/authstore"
 	"github.com/galiy/malina-26/web/internal/i18n"
 	"github.com/galiy/malina-26/web/internal/session"
 	"github.com/galiy/malina-26/web/internal/sysinfo"
@@ -18,26 +20,34 @@ import (
 
 // Options задаёт параметры сервера.
 type Options struct {
-	Addr        string
-	AssetsDir   string
-	Auth        auth.Authenticator
-	User        string
-	Langs       []string
-	DefaultLang string
-	SessionTTL  time.Duration
+	Addr          string
+	AssetsDir     string
+	Auth          auth.Authenticator
+	User          string
+	Langs         []string
+	DefaultLang   string
+	SessionIdle   time.Duration // скользящий TTL сессий/токенов
+	AuthStorePath string        // /dev/shm/malina-auth
+	ControlSock   string        // control-сокет map-reader
 }
 
 // Server — HTTP-сервер.
 type Server struct {
 	opts    Options
 	auth    auth.Authenticator
-	sess    *session.Manager
+	store   *authstore.Store
 	bundle  *i18n.Bundle
 	tmpl    map[string]*template.Template
 	sampler *sysinfo.Sampler
 	initial string
 	legacy  *legacyService
 }
+
+// ctxKey — ключ контекста «запрос авторизован».
+type ctxKey struct{}
+
+// authKey — значение в контексте, если middleware подтвердил сессию/токен.
+var authKey = ctxKey{}
 
 // langNames — нативные названия языков для селектора.
 var langNames = map[string]string{
@@ -55,8 +65,14 @@ func New(o Options) (*Server, error) {
 	if o.DefaultLang == "" {
 		o.DefaultLang = "en"
 	}
-	if o.SessionTTL == 0 {
-		o.SessionTTL = 12 * time.Hour
+	if o.SessionIdle == 0 {
+		o.SessionIdle = time.Hour
+	}
+	if o.AuthStorePath == "" {
+		o.AuthStorePath = "/dev/shm/malina-auth"
+	}
+	if o.ControlSock == "" {
+		o.ControlSock = "/run/malina-map/control.sock"
 	}
 	if o.AssetsDir == "" {
 		o.AssetsDir = "/malina/usr/local/share/malina/web"
@@ -109,10 +125,15 @@ func New(o Options) (*Server, error) {
 	}
 	sets["login"] = login
 
+	store, err := authstore.Open(o.AuthStorePath, o.SessionIdle)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Server{
 		opts:    o,
 		auth:    o.Auth,
-		sess:    session.NewManager(o.SessionTTL),
+		store:   store,
 		bundle:  bundle,
 		tmpl:    sets,
 		sampler: sysinfo.New(),
@@ -148,8 +169,10 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/network/save", s.handleNetworkSave)
 	mux.HandleFunc("/network/scan", s.handleNetworkScan)
 	mux.HandleFunc("/map", s.handleMapPage)
-	mux.HandleFunc("/api/devices", s.handleAPIDevices)
+	mux.HandleFunc("/api/map/devices", s.handleAPIMapDevices)
 	mux.HandleFunc("/api/map/raw", s.handleAPIMapRaw)
+	mux.HandleFunc("/api/map/write", s.handleAPIMapWrite)
+	mux.HandleFunc("/api/token", s.handleAPIToken)
 	mux.HandleFunc("/read_json.php", s.handleReadJSON)
 	mux.HandleFunc("/read_memory.php", s.handleReadMemory)
 	mux.HandleFunc("/check_daemons.php", s.handleCheckDaemons)
@@ -163,10 +186,62 @@ func (s *Server) Run() error {
 
 	srv := &http.Server{
 		Addr:              s.opts.Addr,
-		Handler:           cleanSlashes(mux),
+		Handler:           cleanSlashes(s.authMiddleware(mux)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	return srv.ListenAndServe()
+}
+
+// tokenFrom извлекает токен из cookie или `Authorization: Bearer`.
+func tokenFrom(r *http.Request) (tok string, fromCookie bool, ok bool) {
+	if c, err := r.Cookie(session.CookieName); err == nil && c.Value != "" {
+		return c.Value, true, true
+	}
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		if t := strings.TrimSpace(h[len("Bearer "):]); t != "" {
+			return t, false, true
+		}
+	}
+	return "", false, false
+}
+
+// setSessionCookie выставляет/продлевает cookie сессии (скользящий TTL).
+func (s *Server) setSessionCookie(w http.ResponseWriter, tok string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     session.CookieName,
+		Value:    tok,
+		Path:     "/",
+		MaxAge:   int(s.opts.SessionIdle / time.Second),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// authMiddleware подтверждает сессию/токен (`cookie || Bearer`), продлевает срок
+// (скользящий TTL, cookie при этом обновляется) и кладёт признак авторизации в
+// контекст запроса. Cookie и Bearer проверяются независимо: невалидная cookie не
+// блокирует корректный Bearer и наоборот.
+func (s *Server) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var cookieTok, bearerTok string
+		if c, err := r.Cookie(session.CookieName); err == nil {
+			cookieTok = c.Value
+		}
+		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+			bearerTok = strings.TrimSpace(h[len("Bearer "):])
+		}
+		authed := false
+		if cookieTok != "" && s.store.Touch(cookieTok) {
+			s.setSessionCookie(w, cookieTok) // скользящий TTL
+			authed = true
+		} else if bearerTok != "" && s.store.Touch(bearerTok) {
+			authed = true
+		}
+		if authed {
+			r = r.WithContext(context.WithValue(r.Context(), authKey, true))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // cleanSlashes устраняет дублирующиеся слэши в пути запроса. Legacy
