@@ -107,4 +107,5 @@ data=[[438,77],[1099,4]]
 - `docs/api-auth.md` — авторизация (read открыт, write Basic+PAM).
 - `docs/map-write.md`, `docs/map-write-api.md` — контракт записи в МАП.
 - `docs/legacy_read_json_map.md` — формат `read_json.php` (реверс).
+- `docs/legacy-endpoints.md` — инвентаризация legacy-API (что есть и не перенесено).
 - `web/README.md` — реализация.
