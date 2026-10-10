@@ -1,7 +1,8 @@
 # Авторизация API (зафиксированное решение)
 
 Статус: **реализовано** (web: `internal/authstore` + middleware `cookie || Bearer`,
-эндпоинты `/api/token`, `/api/map/{devices,raw,write}`; см. `web/README.md`).
+эндпоинты `/api/token`, `/api/map/{devices,raw,write}`, legacy `/write_eeprom.php`
+с Basic+PAM; см. `web/README.md`).
 TLS — **внешний слой**, нам не принадлежит и не учитывается.
 
 ## 1. Матрица эндпоинтов
@@ -12,6 +13,7 @@ TLS — **внешний слой**, нам не принадлежит и не 
 | Эндпоинт | Тип | Авторизация |
 |---|---|---|
 | `/read_json.php`, `/read_memory.php`, `/check_daemons.php` | legacy чтение | **без авторизации** (как сейчас) |
+| `/write_eeprom.php` | legacy запись | **HTTP Basic** (пароль → PAM, кэш 5 мин) |
 | `/api/map/devices` | чтение (тип map) | cookie-сессия **или** `Bearer` |
 | `/api/map/raw` | чтение (тип map) | cookie-сессия **или** `Bearer` |
 | `/api/map/write` | запись (тип map) | cookie-сессия **или** `Bearer` |
@@ -22,9 +24,12 @@ TLS — **внешний слой**, нам не принадлежит и не 
 Переименование **жёсткое** (алиасы не оставляем): `/api/devices` →
 `/api/map/devices`; web-клиент (`nav.js`, `map.js`) правится в том же изменении.
 
-**Отложено (пока не делаем):** legacy-запись `write_eeprom` и её Basic+PAM-обвязка
-(в текущем `malina-web` такого эндпоинта нет — есть только legacy-чтение).
+Legacy-запись `write_eeprom` **реализована**: `POST data=[[addr,val],…]`
+(десятичные), `addr==0` — команда, иначе — запись байта; исполняется в основном
+цикле legacy-модуля (см. `web/README.md`), ответ — текст `Ok`/`error`.
 **Rate-limit/lockout не делаем** (согласовано).
+
+Контракт legacy-API (чтение и запись) — `docs/legacy-api.md`.
 
 ## 2. Веб-сессия и токены — общий механизм
 
@@ -58,9 +63,9 @@ TLS — **внешний слой**, нам не принадлежит и не 
 - При переполнении — вытеснение oldest-idle; периодический reaper удаляет
   простаивающие >1 ч.
 
-## 5. Basic + PAM: кэш успешных проверок (5 минут) — ОТЛОЖЕНО
+## 5. Basic + PAM: кэш успешных проверок (5 минут)
 
-> Относится только к legacy `write_eeprom`, который пока не делаем (см. §1).
+> Реализовано (`internal/auth.BasicCache`), используется legacy `write_eeprom.php`.
 
 - Legacy `write_eeprom` — Basic: пароль → PAM (**пароль в открытом виде, не хеш**).
 - Чтобы не дёргать PAM каждый запрос: **in-memory LRU-кэш успешных проверок**
@@ -101,7 +106,8 @@ TLS — **внешний слой**, нам не принадлежит и не 
 4. **`/api/map/devices`** (переименование с `/api/devices`) и **`/api/map/raw`**
    под новый middleware; **переработка web-клиента** (`nav.js`, `map.js`, роуты).
 5. `/api/map/write` — по готовности сервиса записи (контракт — `docs/map-write-api.md`).
-6. Инвалидация при смене пароля.
-7. Тесты (401/скользящий TTL/переживание рестарта web).
+6. Legacy `/write_eeprom.php` (Basic+PAM-кэш; запись в цикле legacy-модуля).
+7. Инвалидация при смене пароля.
+8. Тесты (401/скользящий TTL/переживание рестарта web).
 
-Отложено: legacy `write_eeprom` + Basic+PAM-кэш (§5). Rate-limit не делаем.
+Rate-limit не делаем.

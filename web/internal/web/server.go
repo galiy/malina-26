@@ -29,12 +29,14 @@ type Options struct {
 	SessionIdle   time.Duration // скользящий TTL сессий/токенов
 	AuthStorePath string        // /dev/shm/malina-auth
 	ControlSock   string        // control-сокет map-reader
+	BasicCacheTTL time.Duration // TTL кэша успешных Basic-проверок (legacy)
 }
 
 // Server — HTTP-сервер.
 type Server struct {
 	opts    Options
 	auth    auth.Authenticator
+	basic   *auth.BasicCache
 	store   *authstore.Store
 	bundle  *i18n.Bundle
 	tmpl    map[string]*template.Template
@@ -73,6 +75,9 @@ func New(o Options) (*Server, error) {
 	}
 	if o.ControlSock == "" {
 		o.ControlSock = "/run/malina-map/control.sock"
+	}
+	if o.BasicCacheTTL == 0 {
+		o.BasicCacheTTL = 5 * time.Minute
 	}
 	if o.AssetsDir == "" {
 		o.AssetsDir = "/malina/usr/local/share/malina/web"
@@ -133,12 +138,13 @@ func New(o Options) (*Server, error) {
 	return &Server{
 		opts:    o,
 		auth:    o.Auth,
+		basic:   auth.NewBasicCache(o.Auth, o.User, o.BasicCacheTTL, 32),
 		store:   store,
 		bundle:  bundle,
 		tmpl:    sets,
 		sampler: sysinfo.New(),
 		initial: o.DefaultLang,
-		legacy:  newLegacyService(),
+		legacy:  newLegacyService(o.ControlSock),
 	}, nil
 }
 
@@ -174,6 +180,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/api/map/write", s.handleAPIMapWrite)
 	mux.HandleFunc("/api/token", s.handleAPIToken)
 	mux.HandleFunc("/read_json.php", s.handleReadJSON)
+	mux.HandleFunc("/write_eeprom.php", s.handleWriteEEPROM)
 	mux.HandleFunc("/read_memory.php", s.handleReadMemory)
 	mux.HandleFunc("/check_daemons.php", s.handleCheckDaemons)
 	mux.HandleFunc("/", s.handleIndex)

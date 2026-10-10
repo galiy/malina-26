@@ -11,12 +11,16 @@ import (
 
 // legacyService — фоновый расчёт снимка read_json.php?device=map.
 // Состояние только в памяти; выбор МАП — по серийнику.
+// Запись legacy-API идёт через этот же модуль: команда ставится в очередь и
+// исполняется в основном цикле (run), затем снимок и память пересобираются сразу.
 type legacyService struct {
 	mu       sync.RWMutex
 	snap     []byte
 	mem      []byte // образ памяти для read_memory (0x000..0x7FF)
 	snapTime int64
 	acc      legacyAcc
+	cmds     chan *legacyWriteJob
+	sock     string
 
 	// доступность map-модуля для check_daemons
 	active    bool // МАП найден в текущем цикле
@@ -28,8 +32,14 @@ type legacyService struct {
 	lostSince int64
 }
 
-func newLegacyService() *legacyService {
-	ls := &legacyService{}
+// legacyWriteJob — команда записи из legacy-API в основной цикл модуля.
+type legacyWriteJob struct {
+	ops  []map[string]any
+	resp chan bool
+}
+
+func newLegacyService(sock string) *legacyService {
+	ls := &legacyService{cmds: make(chan *legacyWriteJob, 8), sock: sock}
 	zero := &legacyFields{
 		val:  make([]uint32, len(mapFieldNames)),
 		pres: make([]bool, len(mapFieldNames)),
@@ -42,9 +52,102 @@ func newLegacyService() *legacyService {
 func (ls *legacyService) run() {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	for range t.C {
-		ls.tick()
+	for {
+		select {
+		case job := <-ls.cmds:
+			ls.doWrite(job) // запись + немедленное перечитывание
+		case <-t.C:
+			ls.tick()
+		}
 	}
+}
+
+// doWrite исполняет команду записи через map-reader и сразу перечитывает МАП,
+// обновляя снимок read_json и карту памяти read_memory. ops уже классифицированы
+// по номеру регистра (addr==0 — команда, иначе — запись байта); команды и
+// регистры разбиваются на однородные запросы (контракт map-reader это требует).
+func (ls *legacyService) doWrite(job *legacyWriteJob) {
+	id, gen, ok := ls.targetID()
+	if !ok {
+		job.resp <- false // не закреплён за МАП — не пишем
+		return
+	}
+	all := true
+	for _, reqOps := range groupOps(job.ops) {
+		body, _ := json.Marshal(map[string]any{"cmd": "write", "id": id, "gen": gen, "ops": reqOps})
+		resp, err := controlCall(ls.sock, body)
+		if err != nil {
+			all = false
+			break
+		}
+		var mr mapWriteResp
+		_ = json.Unmarshal(resp, &mr)
+		if !mr.OK {
+			all = false
+			break
+		}
+	}
+	ls.refresh(id) // перечитать и пересобрать снимок/память немедленно
+	job.resp <- all
+}
+
+// groupOps разбивает ops на однородные запросы: команды — по одному, идущие
+// подряд регистровые записи — одним запросом.
+func groupOps(ops []map[string]any) [][]map[string]any {
+	var reqs [][]map[string]any
+	var regs []map[string]any
+	flush := func() {
+		if len(regs) > 0 {
+			reqs = append(reqs, regs)
+			regs = nil
+		}
+	}
+	for _, op := range ops {
+		if op["op"] == "cmd" {
+			flush()
+			reqs = append(reqs, []map[string]any{op})
+		} else {
+			regs = append(regs, op)
+		}
+	}
+	flush()
+	return reqs
+}
+
+// targetID — МАП, за которым закреплён legacy-модуль (по серийнику). Если
+// привязки нет — false (писать некуда).
+func (ls *legacyService) targetID() (int, uint64, bool) {
+	ls.mu.RLock()
+	sel, ser, letter := ls.selected, ls.selSerial, ls.selLetter
+	ls.mu.RUnlock()
+	if !sel {
+		return 0, 0, false
+	}
+	for _, m := range loadMapList().Maps {
+		if m.Serial == ser && letterByte(m.SerialLetter) == letter {
+			return m.ID, m.Gen, true
+		}
+	}
+	return 0, 0, false
+}
+
+// refresh немедленно перечитывает выбранный МАП и пересобирает снимок/память.
+func (ls *legacyService) refresh(id int) {
+	payload := mapRawPayload(id)
+	if payload == nil {
+		return
+	}
+	f, ok := decodeLegacy(payload)
+	if !ok {
+		return
+	}
+	ls.mu.Lock()
+	ls.snap = renderLegacy(f, &ls.acc)
+	ls.mem = buildMem(f)
+	ls.snapTime = f.meta.LastSeen
+	ls.active = true
+	ls.haveState = true
+	ls.mu.Unlock()
 }
 
 func (ls *legacyService) tick() {

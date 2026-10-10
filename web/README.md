@@ -39,6 +39,13 @@
 - `GET /api/map/raw?id=<id>` — бинарный контракт МАП (`application/octet-stream`).
 - `POST /api/map/write` — запись в МАП (тело — `docs/map-write-api.md`; проксирует
   в control-сокет `map-reader`; HTTP-статус по коду: 200/400/404/422/502/500).
+- `POST /write_eeprom.php` — **legacy-запись** (`data=[[addr,val],…]`, десятичные;
+  `addr==0` — команда, иначе — байт; авторизация **Basic+PAM**; исполняется в цикле
+  legacy-модуля, сразу перечитывает и обновляет `read_json`/`read_memory`; ответ `Ok`/`error`).
+- `GET /read_json.php?device=map`, `GET /read_memory.php`, `GET /check_daemons.php` —
+  legacy-чтение (**без авторизации**).
+
+Полное описание legacy API — `docs/legacy-api.md`.
 - `GET /api/system` — системные данные (JSON). Список процессов **не входит**.
 - `GET /api/processes` — снимок процессов (по запросу; не автообновляется).
 - `GET /api/services` — состояние управляемых служб; `POST /services/action` — start/stop.

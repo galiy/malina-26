@@ -61,6 +61,10 @@ printf '%s\n' '{"cmd":"write","id":3,"gen":12345,"ops":[{"op":"cmd","code":"07"}
 Тот же контракт, доступный по HTTP. Web-модуль **проксирует** запрос в `map-reader`
 через control-сокет и возвращает тот же JSON-ответ.
 
+Legacy-запись `POST /write_eeprom.php` (`data=[[addr,val],…]`, `addr==0` — команда)
+идёт через этот же контракт: авторизация Basic+PAM, исполняется в цикле legacy-модуля
+(см. `docs/api-auth.md`, `web/README.md`).
+
 - Метод/путь: **`POST /api/map/write`**.
 - `Content-Type: application/json`.
 - Тело — **тот же объект**, что и для сокета (поле `"cmd"` можно опускать — его

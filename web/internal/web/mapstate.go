@@ -46,9 +46,21 @@ func (m MapInfo) SerialLabel() string {
 	return s
 }
 
-// MenuLabel — имя подпункта меню: серийник + порт + скорость.
+// modelNames — человекочитаемые имена моделей МАП по букве (см. docs/map.md).
+var modelNames = map[string]string{
+	"T": "Титанатор",
+	"D": "Доминатор",
+	"H": "Гибрид",
+	"P": "Pro",
+}
+
+// MenuLabel — имя подпункта меню: имя модели + серийник + порт + скорость.
 func (m MapInfo) MenuLabel() string {
-	return m.SerialLabel() + " · " + m.Port + " · " + strconv.FormatUint(uint64(m.Baud), 10)
+	base := m.SerialLabel() + " · " + m.Port + " · " + strconv.FormatUint(uint64(m.Baud), 10)
+	if n := modelNames[m.Model]; n != "" {
+		return n + " · " + base
+	}
+	return base
 }
 
 type MapList struct {
