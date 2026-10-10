@@ -46,6 +46,8 @@
    - fstab (`03-immutable`): `ro`-корень, boot `ro`, tmpfs `/tmp,/var/log,/var/tmp,
      /var/spool,/var/lib/dhcp,/var/lib/bluetooth,/var/lib/systemd`, `/etc/mtab`
      symlink; строки NM-tmpfs нет;
+   - пароли по умолчанию в образе: `malina` и `root` — **`malina-26`**
+     (`image/config` `FIRST_USER_PASS`, `stage-malina/02-auth` root chpasswd);
    - **наши бинарники/юниты/ассеты — НЕ входят**.
 5. Проверка образа (loop-mount ro): нет `/usr/local/bin|sbin` с нашими файлами и
    юнитов `malina-*`; нет `network-manager`/`raspberrypi-net-mods`/`x11-common`;
@@ -119,6 +121,10 @@ chown root:root $MAL/etc $MAL/home
 chown root:root $MAL/root ; chmod 0700 $MAL/root
 chown root:crontab $MAL/var/spool/cron/crontabs ; chmod 1730 .../crontabs
 ```
+
+> AP-пароль по умолчанию (`system/network/mode1.json`, ставится по манифесту
+> `if_absent`) — **`malina-26`**. Новый юнит `malina-net-wifi.service`
+> (опция «Выключить Wi-Fi») также ставится из `deploy/manifest.tsv`.
 
 **2.5. Перенос и симлинки в rootfs** (сначала перенести содержимое, потом заменить):
 ```
@@ -312,6 +318,10 @@ ip -br a ; nft list ruleset
 curl -sI http://127.0.0.1/login | head -1
 ```
 4. Добиться рабочей системы (режим 1 AP + web + map-reader + логи).
+5. Опция «Выключить Wi-Fi» (mode1, `wifi_off_on_eth`): при подключённом Ethernet
+   AP гаснет (`hostapd`/`dnsmasq` inactive, `wlan0 DOWN`, `rfkill` soft-blocked),
+   при отключении кабеля — поднимается; watchdog/idle-перезапуск hostapd при
+   погашенном Wi-Fi **не циклит**. STA (mode2) не затронут.
 
 ## Этап 4 — контроль-повтор
 
