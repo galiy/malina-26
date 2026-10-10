@@ -163,6 +163,7 @@ func TestValidateWrite(t *testing.T) {
 		{"big block", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "000", Data: strings.Repeat("00", 257)}}}, 0, true},
 		{"нечётный hex", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B3", Data: "0"}}}, 0, true},
 		{"битый hex", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B3", Data: "0G"}}}, 0, true},
+		{"адрес вне 0x7FF", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "800", Data: "01"}}}, 0, true},
 	}
 	for _, c := range cases {
 		got, err := validateWrite(c.req)
