@@ -30,17 +30,15 @@ func TestTenMinWindow(t *testing.T) {
 	loc := time.Local
 	w := 5 * time.Second
 	cases := []struct {
-		sec       int
-		inWindow  bool
-		boundaryS int // секунды внутри 10-минутного блока у ожидаемой границы
+		sec      int
+		inWindow bool
 	}{
-		{0, true, 0},    // ровно точка
-		{5, true, 0},    // конец «после»
-		{6, false, 0},   // вне окна
-		{30, false, 0},  // середина
-		{59, true, 600}, // «до» следующей точки
-		{55, true, 600}, // начало «до»
-		{54, false, 0},  // вне окна «до»
+		{0, true},  // ровно точка
+		{5, true},  // конец окна
+		{6, false}, // вне окна
+		{30, false},
+		{55, false}, // «до» точки не открываем
+		{59, false},
 	}
 	for _, c := range cases {
 		now := time.Date(2026, 10, 10, 12, 30, c.sec, 0, loc)
@@ -52,8 +50,7 @@ func TestTenMinWindow(t *testing.T) {
 		if !in {
 			continue
 		}
-		// Ожидаемая граница: 12:30:00 (+600 если sec>=55).
-		want := time.Date(2026, 10, 10, 12, 30, 0, 0, loc).Unix() + int64(c.boundaryS)
+		want := time.Date(2026, 10, 10, 12, 30, 0, 0, loc).Unix()
 		if b != want {
 			t.Errorf("sec=%d: boundary=%d, want %d", c.sec, b, want)
 		}

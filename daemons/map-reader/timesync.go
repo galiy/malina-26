@@ -12,22 +12,18 @@ const (
 	cellTimeMin = 0x44B // единицы минут (0..9)
 )
 
-// tenMinWindow возвращает идентификатор ближайшей «круглой» 10-минутной точки и
-// признак, что текущий момент в окне ±w вокруг неё. Для секунд «до» точки
-// (sec ≥ 60-w) идентификатор — начало СЛЕДУЮЩЕГО 10-минутного интервала.
+// tenMinWindow возвращает идентификатор «круглой» 10-минутной точки и признак,
+// что текущий момент попадает в окно w секунд ПОСЛЕ неё: [XX:X0:00 .. XX:X0:0w].
+// До точки окно не открывается (иначе установили бы «предыдущую» минуту с
+// отставанием почти в минуту).
 func tenMinWindow(now time.Time, w time.Duration) (int64, bool) {
-	ws := int(w.Seconds())
-	sec := now.Second()
-	if !(sec <= ws || sec >= 60-ws) {
+	if now.Second() > int(w.Seconds()) {
 		return 0, false
 	}
 	y, mo, d := now.Date()
 	loc := now.Location()
 	block := now.Minute() - now.Minute()%10
 	boundary := time.Date(y, mo, d, now.Hour(), block, 0, 0, loc).Unix()
-	if sec >= 60-ws {
-		boundary += 600
-	}
 	return boundary, true
 }
 
