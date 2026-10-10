@@ -3,6 +3,8 @@ package web
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
+	"strings"
 	"time"
 )
 
@@ -33,7 +35,7 @@ type legacyFields struct {
 
 // legacyContractVersion — версия бинарного контракта map-reader, которую понимает
 // legacy-api. При несовпадении снимок не обновляется (см. daemon/contract.go).
-const legacyContractVersion = 2
+const legacyContractVersion = 4
 
 // decodeLegacy разбирает бинарный payload слота (как daemon/contract.go).
 func decodeLegacy(payload []byte) (*legacyFields, bool) {
@@ -210,6 +212,62 @@ func phCurrent(l, h uint32) float64 {
 	return v / 10
 }
 
+// kesRec — один КЭС (из ячеек МАП).
+type kesRec struct {
+	I float64
+	T int
+}
+
+// mpptList возвращает список КЭС из ячеек МАП (I_Akb_MPPT_*/Takb_MPPT*).
+// Количество — LCD_MPPTNum (0x157), при наличии MPPT (LCD_BMSFunk ∈ {2,3}).
+func mpptList(f *legacyFields) []kesRec {
+	bmsf := f.u("LCD_BMSFunk")
+	n := int(f.u("LCD_MPPTNum"))
+	if (bmsf != 2 && bmsf != 3) || n < 1 || n > 16 {
+		return nil
+	}
+	out := make([]kesRec, 0, n)
+	for i := 0; i < n; i++ {
+		l := f.u(fmt.Sprintf("I_Akb_MPPT_L%d", i))
+		h := f.u(fmt.Sprintf("I_Akb_MPPT_H%d", i))
+		cur := float64((l&0xff)|((h&0x7f)<<8)) / 16 // А*16, маска старшего бита
+		t := int(f.u(fmt.Sprintf("Takb_MPPT%d", i))) - 50
+		out = append(out, kesRec{I: cur, T: t})
+	}
+	return out
+}
+
+// bmsRec — одна банка BMS.
+type bmsRec struct {
+	V float64
+	T int
+	I float64
+}
+
+// bmsList возвращает список банок BMS из ячеек МАП (UakbCell_*/TakbCell*/Q_Cell*).
+// Количество — BMS_Num (0x100), при наличии BMS (LCD_BMSFunk ∈ {1,3}).
+func bmsList(f *legacyFields) []bmsRec {
+	bmsf := f.u("LCD_BMSFunk")
+	n := int(f.u("BMS_Num"))
+	if (bmsf != 1 && bmsf != 3) || n < 1 || n > 32 {
+		return nil
+	}
+	out := make([]bmsRec, 0, n)
+	for i := 0; i < n; i++ {
+		l := f.u(fmt.Sprintf("UakbCell_L%d", i))
+		h := f.u(fmt.Sprintf("UakbCell_H%d", i))
+		v := float64((l&0xff)|((h&0x7f)<<8)) / 100 // В*100, маска старшего бита
+		raw := int(f.u(fmt.Sprintf("TakbCell%d", i)))
+		t := raw - 50
+		if raw == 255 {
+			t = 127 // нет датчика (как ждёт панель)
+		}
+		q := float64(f.u(fmt.Sprintf("Q_Cell%d", i)))
+		out = append(out, bmsRec{V: v, T: t, I: q / 100 * v})
+	}
+	return out
+}
+
 // renderLegacy формирует готовую строку JSON (формат mapd).
 func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 	unetRaw := f.u("UNET")
@@ -218,14 +276,6 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 	sh := f.u("UACC") & 0x1f
 	uch := float64(f.u("E_LCD_UAccChMax")<<sh) / 10
 	ubuf := float64(f.u("E_LCD_UAccChBUF")<<sh) / 10
-
-	// Ток АКБ: формула документа беззнаковая (магнитуда); знак задаём сами —
-	// «−» = заряд/потребление (как в legacy). Тогда _PLoad_calc = Uacc*iacc.
-	iaccRaw := int32(f.u("IAcc_med_A_u16_L") | f.u("IAcc_med_A_u16_H")<<8)
-	iacc := -float64(iaccRaw) / 16
-
-	// _PLoad в legacy отрицателен при потреблении (знак — не «направление тока»).
-	pload := -int32(int16(uint16(f.u("PLoad_L")|f.u("PLoad_H")<<8))) * 100
 
 	var unet uint32
 	if unetRaw != 0 {
@@ -275,8 +325,23 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 	mode := mapModeCode(f.u("MODE_RAM"), f.u("LCD_NETAlg"), f.u("flag_NETON_ECO"),
 		f.u("LCD_NetUpECO"), f.u("LCD_NetUpLoad"), f.u("Pmax_On"), unet)
 
-	// _I2C_Err — код I2C-ошибок из битов 2..4 RSErrDop (0x447):
-	// ErrD_I2C_BMS(0x04)/ErrD_I2C_MPPT(0x08)/ErrD_I2C_verPO4_MPPT(0x10).
+	// Ток АКБ и мощность нагрузки — строго как в mapd (all.asm, парсер и блок
+	// знаков 0x14060..0x140b0):
+	//   _Iacc           = byte[0x408] (IAcc_med_A_2) * 2          — беззнаковый
+	//   _IAcc_med_A_u16 = (byte[0x433]*256 + byte[0x432]) / 16
+	//   _PLoad          = byte[0x409] (PLoad_L) * 100
+	//   _PLoad_calc     = Uacc * _IAcc_med_A_u16
+	// Знак: при MODE != 4 (не режим заряда) _IAcc_med_A_u16 и _PLoad инвертируются.
+	iaccU16 := (float64(f.u("IAcc_med_A_u16_L")) + float64(f.u("IAcc_med_A_u16_H"))*256) / 16
+	pload := int32(f.u("PLoad_L")) * 100
+	if mode != 4 {
+		iaccU16 = -iaccU16
+		pload = -pload
+	}
+	iaccInt := int32(f.u("IAcc_med_A_2")) * 2
+
+	// _I2C_Err — код I2C-ошибок из битов 2..4 регистра RSErrDop (0x447):
+	// бит2 — ошибка I2C для BMS, бит3 — для MPPT, бит4 — устаревшая версия ПО MPPT.
 	i2c := (f.u("RSErrDop") >> 2) & 0x7
 
 	relay := f.u("Status_RELEdop")
@@ -292,25 +357,36 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 
 	t := time.Unix(f.meta.LastSeen, 0)
 
-	// Нет КЭС → _I_mppt_avg/_P_mppt_avg/_MPPTs_mode/_I_acc_avg = 0.
+	// КЭС (маленькая коллекция) из ячеек МАП; средний ток для «солнышка».
+	kes := mpptList(f)
+	bms := bmsList(f)
+	impptAvg := 0.0
+	if len(kes) > 0 {
+		var sum float64
+		for _, k := range kes {
+			sum += k.I
+		}
+		impptAvg = sum / float64(len(kes))
+	}
+
 	s := fmt.Sprintf(
 		`{"timestamp":"%d","time":"%02d:%02d:%02d","_UID":"%d","_MODE":"%d","_Status_Char":"%d","_Uacc":"%.1f","_Uch_T":"%.1f","_Ubuf_T":"%.1f","_Iacc":"%d","_PLoad":"%d","_PLoad_calc":"%.1f","_F_Acc_Over":"%d","_F_Net_Over":"%d","_UNET":"%d","_INET":"%d","_PNET":"%d","_PNET_calc":"%.1f","_TFNET":"%.1f","_ThFMAP":"%.1f","_UOUTmed":"%d","_TFNET_Limit":"%.1f","_UNET_Limit":"%d","_RSErrSis":"%d","_RSErrJobM":"%d","_RSErrJob":"%d","_RSWarning":"%d","_Temp_Grad0":"%d","_Temp_Grad2":"%d","_INET_16_4":"%.1f","_IAcc_med_A_u16":"%.1f","Temp_off":"%d","_E_NET":"%d","_E_ACC":"%d","_E_ACC_CHARGE":"%d","_E_NET_SIGN":"%d","_Inet_flag":"%d","_I_acc_avg":"%.1f","_I_mppt_avg":"%.1f","_I2C_Err":"%d","_Temp_Grad1":"%d","_Relay1":"%d","_Relay2":"%d","_Flag_ECO":"%d","_RSErrDop":"%d","_flagUnet2":"%d","_CoolerSpeed":"%d","_MPPTs_mode":"%d","_I_acc_3ph":"%.1f","_I_ph1":"%.1f","_I_ph2":"%.1f","_I_ph3":"%.1f","fw":"%d.%d","_P_mppt_avg":"%d","_P_acc_3ph":"%d","_P_ph1":"%d","_P_ph2":"%d","_P_ph3":"%d","_E_NET_B":"%d","_E_ACC_B":"%d","_E_ACC_CHARGE_B":"%d","_E_NET_SIGN_B":"%d","_I_MPPT_WIND":"%.1f","_P_MPPT_WIND":"%.0f","_fl_UAccChBUF_24h":"%d"}`,
 		f.meta.LastSeen, t.Hour(), t.Minute(), t.Second(),
 		serial, mode, f.u("StatusCh"),
 		uacc, uch, ubuf,
-		-iaccRaw/16, pload, uacc*iacc,
+		iaccInt, pload, uacc*iaccU16,
 		f.u("F_AccOver"), f.u("F_NETOver"),
 		unet, inet, pnet, pnetCalc,
 		freq("TFNET"), freq("ThFMAP"), uout, tfLimit, unetLimit,
 		f.u("RSErrSis"), f.u("RSErrJobM"), f.u("RSErrJob"), f.u("RSWarning"),
 		int32(f.u("Temp_Grad0"))-50, int32(f.u("Temp_Grad2"))-50,
-		inet16_4, iacc, f.u("Temp_off"),
+		inet16_4, iaccU16, f.u("Temp_off"),
 		e.net, e.acc, e.chg, e.signNet, 0,
-		0.0, 0.0, i2c,
+		0.0, impptAvg, i2c,
 		int32(f.u("Temp_Grad1"))-50, relay1, relay2,
 		f.u("flag_NETON_ECO"), f.u("RSErrDop"), f.u("flagUnet2"), f.u("CulerSpead"), 0,
 		i3ph, ph1, ph2, ph3, fwHi, fwLo,
-		0, int32(uacc*i3ph),
+		int32(math.Round(uacc*impptAvg)), int32(uacc*i3ph),
 		int32(uacc*ph1), int32(uacc*ph2), int32(uacc*ph3),
 		uint64(e.baseNet)+e.net, uint64(e.baseAcc)+e.acc, uint64(e.baseChg)+e.chg,
 		// _E_NET_SIGN_B: без накопителя (знаковый счётчик меняет знак, см. updateE).
@@ -318,5 +394,38 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 		0.0, 0.0,
 		f.u("fl_UAccChBUF_24h_45A"),
 	)
-	return []byte(s + "\n")
+
+	// После основного объекта — доп. коллекции ровно как ждёт оригинал (home.js):
+	// BMSFunk==1 → inter[1]=BMS; ==2 → inter[1]=КЭС; ==3 → inter[1]=BMS, inter[2]=КЭС.
+	out := s
+	bmsf := f.u("LCD_BMSFunk")
+	if bmsf == 1 || bmsf == 3 {
+		if len(bms) > 0 {
+			var b strings.Builder
+			b.WriteByte('[')
+			for i, k := range bms {
+				if i > 0 {
+					b.WriteByte(',')
+				}
+				fmt.Fprintf(&b, `{"V":"%.2f","t":"%d","I":"%.2f"}`, k.V, k.T, k.I)
+			}
+			b.WriteByte(']')
+			out += "\n" + b.String()
+		} else {
+			out += "\n[]"
+		}
+	}
+	if (bmsf == 2 || bmsf == 3) && len(kes) > 0 {
+		var b strings.Builder
+		b.WriteByte('[')
+		for i, k := range kes {
+			if i > 0 {
+				b.WriteByte(',')
+			}
+			fmt.Fprintf(&b, `{"MID":"%d","I":"%.2f","T":"%d"}`, i+1, k.I, k.T)
+		}
+		b.WriteByte(']')
+		out += "\n" + b.String()
+	}
+	return []byte(out + "\n")
 }

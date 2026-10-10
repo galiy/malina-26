@@ -24,6 +24,9 @@
   var eeprom = [];
   var map_fw = 0;
   var max_power = 48000, max_mppt_power = 5000, mppt_power_i2c = 0;
+  var map_mppt = [], map_bms = [], mppt_div = [];
+  var bms_div = [], bms_pb = [];
+  var mppt_mode = ['i', 'v', 'B', 'b'];
   var errors_total = 0, errors_new = 0;
   var map = {}, map_balance = [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0], [6, 0], [7, 0], [8, 0], [9, 0]],
     ab_balance = [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0], [6, 0], [7, 0], [8, 0], [9, 0]];
@@ -44,6 +47,41 @@
     $('.map_uab').kumaGauge({ value: 0, gaugeWidth: 15, radius: 50, paddingY: 20, paddingX: 2, min: Math.round(voltage[eeprom[0x06]] / 1.3), max: Math.round(voltage[eeprom[0x06]] * 1.3), fill: '0-#FF4F00:0-#00FF7F:50-#FF4F00:100', showNeedle: false, valueLabel: { display: true, fontFamily: 'Arial', fontColor: '#000', fontSize: '20', fontWeight: 'bolder' }, label: { display: false }, title: { display: true, value: loc['title5'], fontSize: 20, fontColor: '#3E5F8A' } });
     $('.map_ibat').kumaGauge({ value: 0, gaugeWidth: 15, radius: 50, fill: '0-#FF0000:0-#8cd2e7:50:#008000:100', paddingY: 20, paddingX: 2, min: -max_current, max: max_current, showNeedle: true, valueLabel: { display: true, fontFamily: 'Arial', fontColor: '#000', fontSize: '20', fontWeight: 'bolder' }, label: { display: false }, title: { display: true, value: loc['title6'], fontSize: 20, fontColor: '#3E5F8A' } });
     $('.map_ialt').kumaGauge({ value: 0, gaugeWidth: 15, radius: 50, paddingY: 20, paddingX: 2, min: 0, max: max_current, fill: '#34C924', gaugeBackground: '#bde5f1', showNeedle: false, valueLabel: { display: true, fontFamily: 'Arial', fontColor: '#000', fontSize: '20', fontWeight: 'bolder' }, label: { display: false }, title: { display: true, value: loc['title6_1'], fontSize: 20, fontColor: '#3E5F8A' } });
+  }
+
+  // Таблица КЭС строится по числу eeprom[0x157] (в оригинале её рендерил PHP).
+  function initMppt() {
+    if (eeprom[0x156] != 2 && eeprom[0x156] != 3) { $('#mppt_link_wrap').hide(); return; }
+    var n = eeprom[0x157];
+    if (!(n > 1)) { $('#mppt_link_wrap').hide(); return; }
+    var html = "<table class='table table-bordered'><tr class='bms' style='background-color:#def0de;'>";
+    for (var i = 1; i <= n; i++) {
+      html += "<td id='mppt_no" + i + "' style='border-color:#5CB85C !important;'><div style='float:left;'><span style='background-color:#f9f9f9; font-size:130%;font-weight:bolder;'>" + i + "</span></div>" +
+        "<div class='progress' style='height:15px !important; max-width:200px;'><div class='progress-bar progress-bar-success' role='progressbar' aria-valuenow='0' aria-valuemin='0' aria-valuemax='100' style='width:0%; color:#13293c' id='mppt_pb" + i + "'></div></div></td>";
+    }
+    html += "</tr></table>";
+    $('#mppt_table').html(html);
+    mppt_div = [];
+    for (var j = 0; j < n; j++) { mppt_div[j] = $('#mppt_pb' + (j + 1)); }
+    $('#mppt_link_wrap').show();
+  }
+
+  // Таблица BMS строится по числу eeprom[0x100] (в оригинале её рендерил PHP).
+  function initBms() {
+    if (eeprom[0x156] != 1 && eeprom[0x156] != 3) { $('#bms_link_wrap').hide(); return; }
+    var n = eeprom[0x100];
+    if (!(n > 0)) { $('#bms_link_wrap').hide(); return; }
+    var head = "<table class='table table-condensed' style='table-layout: fixed;'><thead><tr class='bms bms_header'>";
+    var body = "</tr></thead><tbody><tr class='bms'>";
+    for (var i = 1; i <= n; i++) {
+      head += "<th id='bms_h" + i + "'>BMS " + i + "</th>";
+      body += "<td><div id='bms" + i + "' style='display:inline-block'></div>" +
+        "<div class='progress' style='height:5px !important;'><div class='progress-bar' role='progressbar' aria-valuenow='0' aria-valuemin='0' aria-valuemax='100' style='width:0%; height:5px;' id='bms_pb" + i + "'></div></div></td>";
+    }
+    $('#bms_table').html(head + body + "</tr></tbody></table>");
+    bms_div = []; bms_pb = [];
+    for (var j = 0; j < n; j++) { bms_div[j] = $('#bms' + (j + 1)); bms_pb[j] = $('#bms_pb' + (j + 1)); }
+    $('#bms_link_wrap').show();
   }
 
   function update_charts() {
@@ -83,6 +121,17 @@
       var inter = data.split('\n');
       map = JSON.parse(inter[0]);
       if (typeof map == 'undefined') { return; }
+
+      // КЭС/BMS — из тех же строк ответа, как в оригинале (home.js).
+      var i1 = (typeof inter[1] !== 'undefined') ? inter[1] : "";
+      var i2 = (typeof inter[2] !== 'undefined') ? inter[2] : "";
+      map_mppt = []; map_bms = [];
+      if (eeprom[0x156] == 2) { if (i1.length > 0) map_mppt = JSON.parse(i1); }
+      if (eeprom[0x156] == 1) { if (i1.length > 0) map_bms = JSON.parse(i1); }
+      if (eeprom[0x156] == 3) {
+        if (i2.length > 0) map_bms = JSON.parse(i1);
+        if (i1.length > 0) map_mppt = JSON.parse(i2);
+      }
 
       e.map_vin.kumaGauge('update', { value: map['_UNET'] });
       e.map_vout.kumaGauge('update', { value: map['_UOUTmed'] });
@@ -162,6 +211,47 @@
       if (map['_PLoad_calc'] < 0) { e.ab_slider.css('left', (50 - position) + '%'); }
       if (!isNaN(map['_PLoad_calc'])) { e.ab_slider.html(Math.round(map['_PLoad_calc']) + ' ' + loc['W']); }
 
+      //--------------КЭС (по оригиналу home.js)
+      position = 0;
+      mppt_power_i2c = 0;
+      if (eeprom[0x156] == 2 || eeprom[0x156] == 3) {
+        mppt_power_i2c = Math.round(map['_Uacc'] * map['_I_mppt_avg']);
+        if (mppt_power_i2c > max_mppt_power) { max_mppt_power = mppt_power_i2c * 1.2; }
+        if (mppt_power_i2c > 0) { position = 80 * (Math.log(mppt_power_i2c / 10) / Math.log(max_mppt_power)); }
+        e.mppt_slider.css('left', position + '%');
+        if (!isNaN(mppt_power_i2c)) { e.mppt_slider.html(mppt_mode[map['_MPPTs_mode']] + ':' + mppt_power_i2c + ' ' + loc['W']); }
+      }
+      if (map_mppt.length > 0) {
+        for (var mi = 0; mi < map_mppt.length; mi++) {
+          var mw = 0;
+          if (map_mppt[mi]['I'] > 0) { mw = 100 * (Math.log(map_mppt[mi]['I'] / 10) / Math.log(max_mppt_power)); }
+          if (mppt_div[mi]) { mppt_div[mi].css('width', mw + '%').html(map_mppt[mi]['I'] + 'A'); }
+        }
+      }
+
+      //--------------BMS (по оригиналу home.js)
+      var min_v_bms = 0, max_v_bms = 0;
+      if (map_bms.length > 0) {
+        min_v_bms = map_bms[0]['V'];
+        for (var bi = 0; bi < map_bms.length; bi++) {
+          if (map_bms[bi]['V'] < min_v_bms) { min_v_bms = map_bms[bi]['V']; }
+          if (map_bms[bi]['V'] > max_v_bms) { max_v_bms = map_bms[bi]['V']; }
+        }
+        for (var bj = 0; bj < map_bms.length; bj++) {
+          if (!bms_div[bj] || !bms_div[bj].length) { continue; }
+          bms_div[bj].html(map_bms[bj]['V'] + loc['V'] + '<br>' + ((map_bms[bj]['t'] == 127) ? '-' : map_bms[bj]['t']) + '&degC&thinsp;' + map_bms[bj]['I'] + 'A');
+          bms_pb[bj].css('width', (100 * map_bms[bj]['V'] / 3.5) + '%');
+          if (map_bms[bj]['I'] > 1.5) { bms_pb[bj].css('background', 'yellow'); }
+          if (map_bms[bj]['I'] > 2.8) { bms_pb[bj].css('background', 'red'); }
+          if (map_bms[bj]['I'] < 1.5) { bms_pb[bj].css('background', '#5cb85c'); }
+          if (min_v_bms != max_v_bms) {
+            if (map_bms[bj]['V'] == min_v_bms) { $('#bms_h' + (bj + 1)).css('background-color', '#5bc0de'); }
+            else if (map_bms[bj]['V'] == max_v_bms) { $('#bms_h' + (bj + 1)).css('background-color', '#e48683'); }
+            else { $('#bms_h' + (bj + 1)).css('background-color', '#428bca'); }
+          }
+        }
+      }
+
       //--------- averages for charts
       if (eeprom[0x139] == 1) { avg_ab = avg_ab + Number(map['_I_acc_3ph'] * map['_Uacc']) + Number(mppt_power_i2c); }
       else { avg_ab = avg_ab + Number(map['_PLoad_calc']) + Number(mppt_power_i2c); }
@@ -221,6 +311,8 @@
       max_power = power[eeprom[0x05]] * 1500;
       map_fw = parseFloat((eeprom[2] & 0x1F) + (eeprom[2] >> 5) / 10);
       initGauges();
+      initMppt();
+      initBms();
       if (eeprom[0x139] != 1) {
         addClass(e.ab_ph1, 'hidden'); addClass(e.ab_ph2, 'hidden');
         addClass(e.ab_ph3, 'hidden'); addClass(e.ab_ph_all, 'hidden');

@@ -8,6 +8,10 @@ StartLimitBurst=5
 [Service]
 Type=simple
 ExecStart=/malina/usr/local/sbin/map-reader
+# Приоритет опроса над UI/прочей нагрузкой при конкуренции за CPU:
+# больший вес CFS (Nice) и вес cgroup (CPUWeight). Только CFS — без RT.
+Nice=-5
+CPUWeight=1000
 Restart=on-failure
 RestartSec=3
 

@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 )
@@ -42,8 +43,8 @@ func (s *Server) handleMapPage(w http.ResponseWriter, r *http.Request) {
 	data["ID"] = m.ID
 	data["FieldNames"] = mapFieldNames
 	data["SerialLabel"] = m.SerialLabel()
-	// Заголовок не локализуется: "MAP <модель> s/n <sn> порт <port>".
-	data["Title"] = "MAP " + mapModelFull(m.Model) + " s/n " + m.SerialLabel() + " порт " + m.Port
+	// Заголовок: "MAP <модель> s/n <sn> порт <port>" (шаблон локализуется).
+	data["Title"] = fmt.Sprintf(s.tr(s.lang(r), "map.title"), mapModelFull(m.Model), m.SerialLabel(), m.Port)
 	s.render(w, http.StatusOK, "map", data)
 }
 

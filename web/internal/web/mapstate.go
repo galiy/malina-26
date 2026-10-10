@@ -39,7 +39,11 @@ type MapInfo struct {
 
 // SerialLabel — серийный номер с буквой (информационное поле).
 func (m MapInfo) SerialLabel() string {
-	return strconv.FormatUint(uint64(m.Serial), 10) + m.SerialLetter
+	s := strconv.FormatUint(uint64(m.Serial), 10)
+	if m.SerialLetter != "" {
+		s += " " + m.SerialLetter
+	}
+	return s
 }
 
 // MenuLabel — имя подпункта меню: серийник + порт + скорость.

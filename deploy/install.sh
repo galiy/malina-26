@@ -87,7 +87,7 @@ echo "inst  /malina/usr/local/share/malina/web"
 if command -v gcc >/dev/null 2>&1; then
 	sudo gcc -O2 -o /tmp/malina-pamcheck pamcheck.c -ldl
 	sudo install -D -m0755 /tmp/malina-pamcheck /malina/usr/local/libexec/malina-pamcheck
-	rm -f /tmp/malina-pamcheck
+	sudo rm -f /tmp/malina-pamcheck
 	echo "inst  /malina/usr/local/libexec/malina-pamcheck"
 fi
 
@@ -96,7 +96,8 @@ sudo systemctl daemon-reload
 for u in dhclient-eth0 malina-hostname malina-web malina-net malina-net-fallback.timer malina-logrotate.timer; do
 	sudo systemctl enable "$u" >/dev/null 2>&1 || true
 done
-rm -rf /tmp/malina-install
+sudo systemctl restart malina-web
+sudo rm -rf /tmp/malina-install
 echo "install: done"
 REMOTE
 echo "Готово: артефакты установлены на $HOST"

@@ -1,33 +1,43 @@
 {{define "content"}}
 <div class="map-head">
   <h1 class="map-title">{{.Title}}</h1>
-  <label class="map-pause"><input type="checkbox" id="mapPause"> {{index .T "map.disable_update"}}</label>
+  <div class="map-headctl">
+    <label class="map-hidedebug"><input type="checkbox" id="mapHideDebug"> {{index .T "map.hide_debug"}}</label>
+    <label class="map-pause"><input type="checkbox" id="mapPause"> {{index .T "map.disable_update"}}</label>
+  </div>
 </div>
 
 <div class="flash err" id="mapErr" hidden></div>
 
 <div class="map-tabs">
-  <button type="button" class="map-tab active" data-tab="monitor">Монитор</button>
-  <button type="button" class="map-tab" data-tab="info">Информация</button>
-  <button type="button" class="map-tab" data-tab="control">Управление</button>
+  <button type="button" class="map-tab active" data-tab="monitor">{{index .T "map.tab_monitor"}}</button>
+  <button type="button" class="map-tab" data-tab="info">{{index .T "map.tab_info"}}</button>
+  <button type="button" class="map-tab" data-tab="control">{{index .T "map.tab_control"}}</button>
 </div>
 
 <div class="map-tabpane" id="tab-monitor">
-  <h2 class="map-sec">1. Новая панель</h2>
+  <h2 class="map-sec" id="secTarget">{{index .T "map.sec_target"}}</h2>
   <section class="mappanel" id="mpPanel"></section>
 
-  <h2 class="map-sec">2. Рефакторинг панели</h2>
-  <div class="map-isolated">
-    <iframe class="legacy-frame" id="panel2frame" src="/static/legacy/panel2.html" title="Рефакторинг панели" loading="lazy"></iframe>
+  <h2 class="map-sec" id="secTransit">{{index .T "map.sec_transit"}}</h2>
+  <div class="map-isolated" id="panel2wrap">
+    <iframe class="legacy-frame" id="panel2frame" src="/static/legacy/panel2.html" title="{{index .T "map.panel2_title"}}" loading="lazy"></iframe>
   </div>
 
-  <h2 class="map-sec">3. Legacy панель</h2>
-  <div class="map-isolated">
-    <iframe class="legacy-frame" src="/static/legacy/panel.html?id={{.ID}}" title="Legacy МАП" loading="lazy"></iframe>
+  <h2 class="map-sec" id="secLegacy">{{index .T "map.sec_legacy"}}</h2>
+  <div class="map-isolated" id="panel3wrap">
+    <iframe class="legacy-frame" id="panel3frame" src="/static/legacy/panel.html?id={{.ID}}" title="{{index .T "map.panel3_title"}}" loading="lazy"></iframe>
   </div>
 </div>
 
-<div class="map-tabpane" id="tab-info" hidden></div>
+<div class="map-tabpane" id="tab-info" hidden>
+  <div class="mi-subtabs">
+    <button type="button" class="mi-subtab active" data-subtab="main">{{index .T "mi.sub_main"}}</button>
+    <button type="button" class="mi-subtab" data-subtab="system">{{index .T "mi.sub_system"}}</button>
+  </div>
+  <div class="mi-pane" id="mi-main"></div>
+  <div class="mi-pane" id="mi-system" hidden></div>
+</div>
 <div class="map-tabpane" id="tab-control" hidden></div>
 
 <pre class="map-json" id="mapJson"></pre>
@@ -38,5 +48,6 @@ window.MAP_ID = {{.ID}};
 window.MAP_SERIAL = {{json .SerialLabel}};
 window.MAP_FIELDS = {{json .FieldNames}};
 </script>
+<script src="{{asset "mapinfo.js"}}"></script>
 <script src="{{asset "map.js"}}"></script>
 {{end}}

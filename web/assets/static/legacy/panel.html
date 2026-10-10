@@ -12,6 +12,12 @@
 <style>
   html, body { background: #fff; }
   body { max-width: 1100px; margin: 0 auto; padding: 8px; }
+
+  /* Отступ раскрытым таблицам, чтобы не наезжали на полосу Ubuf/Uchg (.phases_bar). */
+  /* Отступ только первой таблице (BMS) — очищает абсолютную полосу Ubuf/Uchg; КЭС идёт сразу за BMS. */
+  #bms_table .table, #mppt_table .table { margin-bottom: 6px; }
+
+  .panel-body { padding-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -28,7 +34,7 @@
       <div class="col-md-5 col-lg-5 col-sm-5" style="background-color:ivory; color:black; font-weight:bolder; text-align:center; font-size:150%;" id="map_mode">MAC MODE</div>
       <div class="col-md-2 col-lg-2 col-sm-2" style="font-size:150%;text-align:center" id="map_time"></div>
       <div class="col-md-2 col-lg-2 col-sm-2 pull-right" style="text-align:right">
-        &nbsp<span style="font-size:150%"><a data-toggle="collapse" href="#meters" style="color:#f9f9f9 !important;text-decoration: inherit !important;">МАП<span style="font-size:60%;"> ID:<span id="map_id_label">0</span></span></a></span>
+        &nbsp<span style="font-size:150%"><a data-toggle="collapse" href="#meters" style="color:#f9f9f9 !important;text-decoration: inherit !important;">МАП<span style="font-size:60%;"> s/n <span id="map_id_label">0</span></span></a></span>
       </div>
     </div>
   </div>
@@ -50,8 +56,10 @@
             <div class="phase" id="ab_slider_ph3">&#966;<sub>3</sub>:0&nbsp;кВт</div>
             <div class="phase" id="ab_slider_ph_summ">&#931;&#966;:0&nbsp;кВт</div>
             <div class="progress gradient_fill_1"><div class="slider" id="ab_slider">0</div></div>
+            <div class="pull-right" id="bms_link_wrap"><a data-toggle="collapse" href="#bms_table" style="text-decoration: inherit !important;" id="bms_link">BMS</a></div>
           </td>
           <td width="16.7%" style="background-color:lightgreen;"><span class="glyphicons glyphicons-sun drop x0.5"></span>
+            <div class="pull-right" id="mppt_link_wrap" style="display:none"><a data-toggle="collapse" href="#mppt_table" style="text-decoration: inherit !important;" id="mppt_link">MPPTs</a></div>
             <div class="progress gradient_fill_2" id="mppt_progress_wrap"><div class="progress gradient_fill_2"><div class="slider" id="mppt_slider">0</div></div></div>
           </td>
         </tr>
@@ -87,6 +95,10 @@
         <div class="pull-right gradient_fill_blue">Ошибки&nbsp<span class="badge" id="errors_count">0</span><a data-toggle="collapse" href="#map_errors_list"><span class="glyphicons glyphicons-expand" style="font-size:140%"></span></a></div>
         <div id="map_errors_list" class="collapse errors">No errors</div>
       </div>
+    </div>
+    <div id="tables_wrap" style="margin-top: 22px;">
+      <div id="bms_table" class="container-fluid collapse"></div>
+      <div id="mppt_table" class="container-fluid collapse"></div>
     </div>
   </div>
 </div>

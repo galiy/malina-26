@@ -9,8 +9,9 @@ import (
 const pollRetries = 3
 
 // pollPort опрашивает все МАП одного порта (последовательно, одной горутиной).
-// Период — 1 раз в секунду; потеря МАП — maxMiss неудачных ПОПЫТОК подряд
-// (успех сбрасывает счётчик), независимо от числа ретраев в цикле.
+// Период — 1 раз в секунду; потеря МАП — maxMiss неудачных ЦИКЛОВ подряд.
+// Цикл считается неудачным, только если провалились все pollRetries попытки;
+// успех любой попытки сбрасывает счётчик. Так короткий сбой обмена не роняет МАП.
 func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, proto string, baud int, entries []*MapEntry) {
 	defer p.close()
 
@@ -43,7 +44,6 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 				mem      memMap
 				err      error
 				firstErr error
-				removed  bool
 			)
 			t0 := time.Now()
 			for attempt := 0; attempt < pollRetries; attempt++ {
@@ -61,26 +61,24 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 				if attempt == 0 {
 					firstErr = err
 				}
-				miss[e]++ // считаем неудачные ПОПЫТКИ
-				if miss[e] >= cfg.maxMiss {
-					log.Printf("МАП %s unit=%d потерян (%d неудачных попыток подряд: %v)", port, e.unit, miss[e], err)
-					delete(miss, e)
-					reg.Remove(e)
-					removed = true
-					break
-				}
 				time.Sleep(100 * time.Millisecond) // пауза перед повтором
 			}
-			if removed {
-				continue
-			}
 			if err != nil {
-				cfg.debugf("poll %s unit=%d: попытки неудачны (%v)", port, e.unit, err)
+				// Промах ЦИКЛА: не удалась ни одна из попыток.
+				miss[e]++
+				if miss[e] >= cfg.maxMiss {
+					log.Printf("МАП %s unit=%d потерян (%d неудачных циклов подряд: %v)", port, e.unit, miss[e], firstErr)
+					delete(miss, e)
+					reg.Remove(e)
+					continue
+				}
+				cfg.debugf("poll %s unit=%d: цикл неудачен (%v), промахов %d/%d", port, e.unit, firstErr, miss[e], cfg.maxMiss)
 				alive = append(alive, e)
 				continue
 			}
 			miss[e] = 0
 			reg.Touch(e)
+			simInjectKesBms(mem) // ВРЕМЕННО: эмуляция КЭС/BMS для UI (удалить)
 			e.slot.Publish(buildContract(mem, reg.Meta(e)))
 			alive = append(alive, e)
 		}
