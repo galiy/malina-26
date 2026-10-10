@@ -105,12 +105,10 @@ make arm      # dist/map-reader-armv7 (Linux/armv7, статический)
 
 (Устаревшие скрипты `daemons/map-reader/deploy.sh` и `deploy/provision.sh` — в `archive/`.)
 
-**Эмулятор КЭС/BMS (стенд):** по умолчанию **не** ставится (убран из
-`deploy/manifest.tsv`). Включение вручную: скопировать
-`system/systemd/map-reader.service.d/sim.conf` в
-`/etc/systemd/system/map-reader.service.d/`, затем
-`systemctl daemon-reload && systemctl restart map-reader` (эмулятор встроен в
-бинарник; активируется `Environment=MALINA_SIM_KES_BMS=1` из drop-in). Удалим в
+**Эмулятор КЭС/BMS (стенд):** включён **на постоянную** — drop-in
+`system/systemd/map-reader.service.d/sim.conf` ставится из `deploy/manifest.tsv`
+в `/etc/systemd/system/map-reader.service.d/` и активирует
+`Environment=MALINA_SIM_KES_BMS=1`. Удалим в
 конце проекта.
 
 > Запись в МАП (`w`, `ComMAP_*`) запрещена без явного разрешения; демон по
