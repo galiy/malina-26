@@ -843,3 +843,41 @@ a.dropdown-sub { padding-left: 22px; }
   cursor: pointer;
 }
 .pw .eye:hover { background: #f2f7f4; color: #0d5637; }
+
+/* --- Мобильная адаптация страницы МАП (панель 1). Десктоп не затрагивается. --- */
+@media (max-width: 640px) {
+  .map-head { gap: 8px; }
+  .map-title { font-size: 18px; }
+  .map-headctl { gap: 10px; font-size: 13px; }
+  .map-tabs { overflow-x: auto; }
+  .map-tab { white-space: nowrap; }
+  .mappanel { max-width: 100%; }
+  .map-sec { font-size: 16px; }
+
+  /* Колонки панели 1 — одна под другой */
+  .p1-head { flex-wrap: wrap; gap: 6px; padding: 6px 8px; }
+  .p1-right { gap: 10px; flex-wrap: wrap; }
+  .p1-time { font-size: 18px; }
+  .p1-maptime { font-size: 16px; }
+  .p1-id { font-size: 13px; }
+  .p1-main, .p1-main tbody, .p1-main tr, .p1-main td { display: block; width: auto !important; }
+  .p1-main td { padding: 8px; }
+
+  /* Гейджи — по центру, чуть меньше */
+  .p1-gauges { justify-content: center; gap: 2px 6px; padding: 6px; }
+  .p1-gauge svg { width: 104px; height: auto; }
+
+  /* Строка инфо-значений — переносим по 3 в ряд */
+  .p1-inf tbody, .p1-inf, .p1-inf tr, .p1-inf td { display: block; width: auto; white-space: normal; }
+  .p1-inf tr { display: flex; flex-wrap: wrap; }
+  .p1-inf td { flex: 1 1 33%; padding: 4px 2px; }
+
+  .p1-foot { flex-wrap: wrap; gap: 4px 10px; padding: 6px 8px; }
+  .p1-phases { font-size: 12px; }
+
+  .mi-pane { max-width: 100%; }
+}
+@media (max-width: 420px) {
+  .p1-gauge svg { width: 92px; }
+  .p1-inf td { flex: 1 1 50%; }
+}
