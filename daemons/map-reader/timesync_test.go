@@ -30,29 +30,32 @@ func TestTenMinWindow(t *testing.T) {
 	loc := time.Local
 	w := 5 * time.Second
 	cases := []struct {
+		min      int
 		sec      int
 		inWindow bool
 	}{
-		{0, true},  // ровно точка
-		{5, true},  // конец окна
-		{6, false}, // вне окна
-		{30, false},
-		{55, false}, // «до» точки не открываем
-		{59, false},
+		{30, 0, true},  // ровно точка
+		{30, 5, true},  // конец окна
+		{30, 6, false}, // вне окна
+		{30, 30, false},
+		{30, 55, false}, // «до» точки не открываем
+		{33, 0, false},  // НЕ «круглая» минута — окна нет
+		{39, 3, false},  // НЕ «круглая» минута
+		{40, 2, true},   // следующая круглая точка (12:40)
 	}
 	for _, c := range cases {
-		now := time.Date(2026, 10, 10, 12, 30, c.sec, 0, loc)
+		now := time.Date(2026, 10, 10, 12, c.min, c.sec, 0, loc)
 		b, in := tenMinWindow(now, w)
 		if in != c.inWindow {
-			t.Errorf("sec=%d: inWindow=%v, want %v", c.sec, in, c.inWindow)
+			t.Errorf("%02d:%02d: inWindow=%v, want %v", c.min, c.sec, in, c.inWindow)
 			continue
 		}
 		if !in {
 			continue
 		}
-		want := time.Date(2026, 10, 10, 12, 30, 0, 0, loc).Unix()
+		want := time.Date(2026, 10, 10, 12, c.min, 0, 0, loc).Unix()
 		if b != want {
-			t.Errorf("sec=%d: boundary=%d, want %d", c.sec, b, want)
+			t.Errorf("%02d:%02d: boundary=%d, want %d", c.min, c.sec, b, want)
 		}
 	}
 }
