@@ -51,6 +51,8 @@
 - `GET /api/services` — состояние управляемых служб; `POST /services/action` — start/stop.
 - `GET /api/log?file=<name>&lines=100&offset=<n>` — хвост/история лога (whitelist).
 - `POST /system/reboot` — перезагрузка; `POST /logout`; `GET /lang?set=..&next=..`.
+- `POST /system/map-time-sync` (`enabled=1|0`) — вкл/выкл синхронизацию времени МАП
+  (флаг-файл `/malina/etc/malina/map-time-sync.off`; саму синхронизацию делает `map-reader`).
 
 ## Подсистема `malina-netd`
 

@@ -20,16 +20,17 @@ import (
 
 // Options задаёт параметры сервера.
 type Options struct {
-	Addr          string
-	AssetsDir     string
-	Auth          auth.Authenticator
-	User          string
-	Langs         []string
-	DefaultLang   string
-	SessionIdle   time.Duration // скользящий TTL сессий/токенов
-	AuthStorePath string        // /dev/shm/malina-auth
-	ControlSock   string        // control-сокет map-reader
-	BasicCacheTTL time.Duration // TTL кэша успешных Basic-проверок (legacy)
+	Addr           string
+	AssetsDir      string
+	Auth           auth.Authenticator
+	User           string
+	Langs          []string
+	DefaultLang    string
+	SessionIdle    time.Duration // скользящий TTL сессий/токенов
+	AuthStorePath  string        // /dev/shm/malina-auth
+	ControlSock    string        // control-сокет map-reader
+	BasicCacheTTL  time.Duration // TTL кэша успешных Basic-проверок (legacy)
+	MapTimeSyncOff string        // флаг-файл отключения синхронизации времени МАП
 }
 
 // Server — HTTP-сервер.
@@ -78,6 +79,9 @@ func New(o Options) (*Server, error) {
 	}
 	if o.BasicCacheTTL == 0 {
 		o.BasicCacheTTL = 5 * time.Minute
+	}
+	if o.MapTimeSyncOff == "" {
+		o.MapTimeSyncOff = "/malina/etc/malina/map-time-sync.off"
 	}
 	if o.AssetsDir == "" {
 		o.AssetsDir = "/malina/usr/local/share/malina/web"
@@ -165,6 +169,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/system/host", s.handleSystemHost)
 	mux.HandleFunc("/system/logging", s.handleSystemLogging)
 	mux.HandleFunc("/system/password", s.handleSystemPassword)
+	mux.HandleFunc("/system/map-time-sync", s.handleSystemMapTimeSync)
 	mux.HandleFunc("/services", s.handleServices)
 	mux.HandleFunc("/api/services", s.handleAPIServices)
 	mux.HandleFunc("/services/action", s.handleServiceAction)

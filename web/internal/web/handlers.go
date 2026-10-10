@@ -3,6 +3,8 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -141,6 +143,7 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	data["Timezone"] = sysctl.CurrentTimezone()
 	data["Timezones"] = sysctl.ListTimezones()
 	data["RemoteSyslog"] = sysctl.RemoteSyslogSetting()
+	data["MapTimeSyncEnabled"] = timeSyncEnabled(s.opts.MapTimeSyncOff)
 	lang := s.lang(r)
 	if ok := r.URL.Query().Get("ok"); ok != "" {
 		data["Ok"] = s.tr(lang, "sys.msg."+ok+"_ok")
@@ -153,6 +156,44 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) redirectSystem(w http.ResponseWriter, r *http.Request, key string) {
 	http.Redirect(w, r, "/system?"+key, http.StatusSeeOther)
+}
+
+// timeSyncEnabled — включена ли синхронизация времени МАП (нет флаг-файла).
+func timeSyncEnabled(offPath string) bool {
+	_, err := os.Stat(offPath)
+	return err != nil
+}
+
+// setTimeSyncEnabled создаёт/удаляет флаг-файл отключения синхронизации времени МАП.
+func setTimeSyncEnabled(offPath string, enabled bool) error {
+	if enabled {
+		if err := os.Remove(offPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(offPath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(offPath, []byte("off\n"), 0o644)
+}
+
+// handleSystemMapTimeSync — переключатель синхронизации времени МАП («Параметры системы»).
+func (s *Server) handleSystemMapTimeSync(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAuth(w, r); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	_ = r.ParseForm()
+	enabled := r.FormValue("enabled") == "1"
+	if err := setTimeSyncEnabled(s.opts.MapTimeSyncOff, enabled); err != nil {
+		s.redirectSystem(w, r, "err=maptime")
+		return
+	}
+	s.redirectSystem(w, r, "ok=maptime")
 }
 
 // handleSystemHost — общая «хост»-настройка: имя хоста + часовой пояс.

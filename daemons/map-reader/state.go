@@ -18,6 +18,7 @@ type MapEntry struct {
 	gen      uint64
 	slot     *Slot
 	cmd      chan *writeJob // очередь команд записи к пулеру этого порта
+	syncWin  int64          // последнее проверенное окно синхронизации времени
 	lastSeen time.Time
 }
 

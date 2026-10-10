@@ -39,6 +39,10 @@ const (
 
 	defWriteRetries = 5                      // попыток записи на одну операцию
 	defWritePause   = 500 * time.Millisecond // пауза между попытками записи
+
+	defTimeSyncOff       = "/malina/etc/malina/map-time-sync.off" // флаг-файл отключения синка
+	defTimeSyncWindow    = 5 * time.Second                        // окно вокруг 10-минутной точки
+	defTimeSyncThreshMin = 1                                      // порог коррекции, минут
 )
 
 // config — параметры демона.
@@ -64,6 +68,15 @@ type config struct {
 	writeRetries int           // попыток записи на операцию
 	writePause   time.Duration // пауза между попытками записи
 
+	timeSyncOff       string        // флаг-файл: существует → синхронизация выключена
+	timeSyncWindow    time.Duration // окно ± вокруг 10-минутной точки
+	timeSyncThreshMin int           // порог коррекции времени, минут
+
+	// Кэш наличия флаг-файла (общий, TTL 1 мин — не дёргать stat каждый цикл).
+	timeSyncOffMu   sync.Mutex
+	timeSyncOffLast bool
+	timeSyncOffAt   time.Time
+
 	debug bool // подробный лог (попытки проб, пропуски портов)
 }
 
@@ -74,7 +87,31 @@ func (c *config) debugf(format string, args ...any) {
 	}
 }
 
+// timeSyncOffTTL — время жизни кэша наличия флаг-файла синхронизации.
+const timeSyncOffTTL = time.Minute
+
+// timeSyncDisabled — выключена ли синхронизация флаг-файлом. Результат stat
+// кэшируется на timeSyncOffTTL, чтобы не проверять ФС на каждом цикле опроса.
+func (c *config) timeSyncDisabled(now time.Time) bool {
+	if c.timeSyncOff == "" {
+		return false
+	}
+	c.timeSyncOffMu.Lock()
+	defer c.timeSyncOffMu.Unlock()
+	if now.Sub(c.timeSyncOffAt) < timeSyncOffTTL {
+		return c.timeSyncOffLast
+	}
+	_, err := os.Stat(c.timeSyncOff)
+	c.timeSyncOffLast = err == nil
+	c.timeSyncOffAt = now
+	return c.timeSyncOffLast
+}
+
 func newConfig(debug bool) *config {
+	off := defTimeSyncOff
+	if v := os.Getenv("MALINA_MAP_TIME_SYNC_OFF"); v != "" {
+		off = v
+	}
 	return &config{
 		shmPath:       defSHMPath,
 		sockPath:      defSockPath,
@@ -90,7 +127,12 @@ func newConfig(debug bool) *config {
 		probeEcho:     defProbeEcho,
 		writeRetries:  defWriteRetries,
 		writePause:    defWritePause,
-		debug:         debug,
+
+		timeSyncOff:       off,
+		timeSyncWindow:    defTimeSyncWindow,
+		timeSyncThreshMin: defTimeSyncThreshMin,
+
+		debug: debug,
 	}
 }
 

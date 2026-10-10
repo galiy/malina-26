@@ -226,7 +226,7 @@ a:hover { color: var(--accent-dark); text-decoration: underline; }
 .flash.err { background: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
 .sysforms {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
 }
 .card form label { display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
