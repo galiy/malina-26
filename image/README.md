@@ -11,8 +11,9 @@
 - Hostname `malina`; локаль `ru_RU.UTF-8`, клавиатура `ru`, TZ `Europe/Moscow`.
 - Разделы: boot 512 МБ (FAT, `/boot/firmware`), root 8 ГБ (ext4).
 - Корень **read-only**, логи/временные данные — в tmpfs (см. `stage-malina`).
-- Раздел `/malina` (rw) — создаётся при провижининге (`deploy/provision.sh`),
-  туда переносятся `/root`, `/home`, cron, `wpa_supplicant`.
+- Раздел `/malina` (rw) — создаётся при деплое артефактов (локально —
+  `deploy/local/stage2.sh`), туда переносятся `/root`, `/home`, cron,
+  `wpa_supplicant`.
 - Пользователь по умолчанию `malina`/`malina`; **на рабочем устройстве пароли
   `malina` и `root` изменены на `malina26`** (образ пересобирать не требуется).
 - journald `Storage=volatile` (журнал в `/run`, на диск не пишется).

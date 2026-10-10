@@ -110,7 +110,7 @@ install -m0444 $PROV/machine-id $ROOT/etc/machine-id
 install -m0644 $PROV/hostname   $ROOT/etc/hostname
 ```
 
-**2.7. Артефакты `system/*` по manifest** (как `install.sh`/`provision.sh`):
+**2.7. Артефакты `system/*` по manifest** (как `install.sh`):
 для каждой строки `src dst mode policy` — `install -D -o root -g root -m <mode> $REPO/$src $ROOT$dst`
 (политика `if_absent` — не перезаписывать существующее).
 

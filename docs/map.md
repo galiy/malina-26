@@ -13,8 +13,8 @@
 ### Настройка образа (BT сохраняется)
 
 Чтобы аппаратный PL011 обслуживал GPIO14/15, а Bluetooth остался живым, BT
-уводится на mini-UART (стадия образа `image/stage-malina/05-map-uart`, а также
-шаг 1b в `deploy/provision.sh`):
+уводится на mini-UART (стадия образа `image/stage-malina/05-map-uart`; ранее
+дублировалось шагом 1b в `deploy/provision.sh`, ныне в `archive/`):
 
 - `config.txt` (`[all]`): `enable_uart=1`, `dtoverlay=miniuart-bt`;
 - `cmdline.txt`: без `console=serial0,...` (только `console=tty1`);

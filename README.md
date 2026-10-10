@@ -23,8 +23,9 @@
 - `image/` — сборка образа (pi-gen, стейдж `stage-malina`).
 - `system/` — артефакты системы: systemd-юниты, конфиги, seed-конфиги сети,
   snapshot провижининга (`fstab`, `cmdline.txt`, `config.txt`, списки пакетов/масок).
-- `deploy/` — установка/провижининг на устройство (`manifest.tsv`, `install.sh`,
-  `provision.sh`) и `restore.md`.
+- `deploy/` — установка/провижининг: `manifest.tsv`, `install.sh`, локальный
+  деплой `local/stage2.sh` (+ `local-deploy.md`), восстановление `restore.md`.
+  Устаревшие скрипты — в `archive/` (вне git).
 - `web/` — Go-сервисы (`cmd/malina-web`, `cmd/malina-netd`, `internal/*`),
   статика/шаблоны/i18n, PAM-хелпер.
 - `tests/` — автотесты (UI smoke на Playwright).
@@ -55,8 +56,12 @@ image/build.sh
 make -C web arm
 MALINA_PASS=<пароль> deploy/install.sh <user@host>       # + --build для сборки на месте
 
-# провижининг раздела /malina, артефактов, сети
-deploy/provision.sh
+# локальный деплой на SD (этап 2 после записи образа) — см. deploy/local-deploy.md
+deploy/local/stage2.sh /dev/sdX
+
+# (устаревший SSH-провижининг deploy/provision.sh перенесён в archive/)
+# точечные обновления на загруженном устройстве:
+MALINA_PASS=<пароль> deploy/install.sh <user@host>
 ```
 
 ## Доступы по умолчанию

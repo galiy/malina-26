@@ -90,8 +90,8 @@ MALINA_WEB_DEV_PASSWORD=secret MALINA_WEB_LISTEN=:8080 go run ./cmd/malina-web
 - Статика: `/malina/usr/local/share/malina/web` (флаг `-assets`).
 - Хелперы: `/malina/usr/local/libexec/malina-pamcheck`, `…/malina-remote-syslog`,
   `/malina/usr/local/sbin/malina-rw`.
-- Юниты/PAM/конфиги — из `system/` по `deploy/manifest.tsv` (`deploy/install.sh`,
-  `deploy/provision.sh`).
+- Юниты/PAM/конфиги — из `system/` по `deploy/manifest.tsv` (установка:
+  `deploy/local/stage2.sh` локально; `deploy/install.sh` по SSH).
 - Установка требует `MALINA_PASS` (env) или строки `MALINA_PASS=…` в `.kilo/secrets`.
 
 ## Флаги / переменные
