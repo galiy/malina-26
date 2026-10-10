@@ -113,3 +113,8 @@
   (`ping`, `list`, `write`). Команда `write` — запись в МАП (см. `docs/map-write-api.md`).
 - Логи — syslog/stderr, без локального файла; юнит `Restart=on-failure` + лимит
   стартов.
+- **Тесты/контроль** (`daemons/map-reader/test/`):
+  - `fakemap.py` — эмулятор МАП на PTY (чтение+запись), для `write_test.go`;
+  - `shm_dump.py` — контроль через shm: декодирует дамп `/dev/shm/malina-map-state`
+    и печатает значения ячеек по адресам (обход без правок демона).
+  - `go test .` — round-trip записи на `fakemap.py` + тесты валидации/обрамления.

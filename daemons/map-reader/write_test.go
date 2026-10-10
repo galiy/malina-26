@@ -39,7 +39,9 @@ func TestWriteRoundtripNative(t *testing.T) {
 	}
 	defer p.close()
 
-	echo, resp := 50*time.Millisecond, 200*time.Millisecond
+	// Повышенные таймауты: на загруженной машине эхо PTY-эмулятора иногда
+	// приходит позже «боевых» 50 мс.
+	echo, resp := 300*time.Millisecond, 800*time.Millisecond
 
 	// Чтение до записи — проверка самого обмена.
 	if b, err := microartRead(p, 0x1B0, 3, echo, resp); err != nil {
@@ -69,6 +71,7 @@ func TestWriteRoundtripNative(t *testing.T) {
 			t.Fatalf("блок: got %v, want %v", got, want)
 		}
 	}
+	time.Sleep(200 * time.Millisecond) // эмулятору — дососать эхо ответа
 
 	// Команда: запись байта по адресу 0.
 	if err := microartWrite(p, 0x0000, []byte{0x02}, echo, resp); err != nil {
@@ -99,7 +102,43 @@ func asMapError(err error, target **mapError) bool {
 	return false
 }
 
-// TestValidateWrite — проверка правил контракта.
+// TestBuildSequence — обрамление: RAM и EEPROM обрамляются (pre3/post7),
+// команда — нет; no_frame снимает обрамление.
+func TestBuildSequence(t *testing.T) {
+	ram := writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x405, Data: []int{2}}}}
+	k, _ := validateWrite(ram)
+	seq := buildSequence(ram, k)
+	if len(seq) != 3 || !seq[0].isCmd || seq[0].code != 3 || seq[1].isCmd || !seq[2].isCmd || seq[2].code != 7 {
+		t.Fatalf("RAM должен обрамляться pre3/post7: %+v", seq)
+	}
+	two := writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x1B6, Data: []int{0x38}}, {Op: "reg", Addr: 0x44B, Data: []int{0}}}}
+	seq = buildSequence(two, k)
+	if len(seq) != 5 {
+		t.Fatalf("два блока: ожидали 5 элементов, got %+v", seq)
+	}
+	want := []int{3, -2, 3, -2, 7} // 3=pre, -2=reg(не cmd), 7=post
+	for i, w := range want {
+		got := -2
+		if seq[i].isCmd {
+			got = seq[i].code
+		}
+		if got != w {
+			t.Fatalf("два блока: pre3 перед каждым, затем post7: got %+v", seq)
+		}
+	}
+	nf := writeRequest{NoFrame: true, Ops: []writeOp{{Op: "reg", Addr: 0x405, Data: []int{2}}}}
+	seq = buildSequence(nf, k)
+	if len(seq) != 1 || seq[0].isCmd {
+		t.Fatalf("no_frame RAM должен быть без обрамления: %+v", seq)
+	}
+	cmd := writeRequest{Ops: []writeOp{{Op: "cmd", Code: 2}}}
+	kc, _ := validateWrite(cmd)
+	seq = buildSequence(cmd, kc)
+	if len(seq) != 1 || !seq[0].isCmd || seq[0].code != 2 {
+		t.Fatalf("команда не обрамляется: %+v", seq)
+	}
+}
+
 func TestValidateWrite(t *testing.T) {
 	cases := []struct {
 		name string
@@ -107,10 +146,10 @@ func TestValidateWrite(t *testing.T) {
 		want kind
 		bad  bool
 	}{
-		{"eeprom", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x1B3, Data: []int{1}}}}, kindEEPROM, false},
-		{"ram", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x400, Data: []int{1}}}}, kindRAM, false},
+		{"eeprom", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x1B3, Data: []int{1}}}}, kindReg, false},
+		{"ram", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x400, Data: []int{1}}}}, kindReg, false},
 		{"cmd", writeRequest{Ops: []writeOp{{Op: "cmd", Code: 7}}}, kindCmd, false},
-		{"mix eeprom+ram", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x1B3, Data: []int{1}}, {Op: "reg", Addr: 0x400, Data: []int{1}}}}, 0, true},
+		{"eeprom+ram вместе", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x1B6, Data: []int{0x60}}, {Op: "reg", Addr: 0x44B, Data: []int{0}}}}, kindReg, false},
 		{"mix reg+cmd", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x1B3, Data: []int{1}}, {Op: "cmd", Code: 7}}}, 0, true},
 		{"two cmd", writeRequest{Ops: []writeOp{{Op: "cmd", Code: 7}, {Op: "cmd", Code: 2}}}, 0, true},
 		{"empty", writeRequest{}, 0, true},

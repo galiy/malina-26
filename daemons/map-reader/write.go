@@ -78,17 +78,18 @@ func fail(code, msg string) writeResponse {
 type kind int
 
 const (
-	kindEEPROM kind = iota
-	kindRAM
+	kindReg kind = iota
 	kindCmd
 )
 
 // validateWrite — чистая проверка контракта (без обращения к МАП).
+// Разрешение: один запрос — это либо операции с регистрами (EEPROM и/или RAM
+// вместе), либо ровно одна команда. Смешивать регистры и команду нельзя.
 func validateWrite(wr writeRequest) (kind, error) {
 	if len(wr.Ops) == 0 {
 		return 0, errors.New("пустой список операций")
 	}
-	nCmd, nReg, eeprom, ram := 0, 0, 0, 0
+	nCmd, nReg := 0, 0
 	for _, op := range wr.Ops {
 		switch op.Op {
 		case "cmd":
@@ -109,17 +110,12 @@ func validateWrite(wr writeRequest) (kind, error) {
 					return 0, errors.New("значение байта вне диапазона 0..255")
 				}
 			}
-			if op.Addr <= 0x3FF {
-				eeprom++
-			} else {
-				ram++
-			}
 		default:
 			return 0, fmt.Errorf("неизвестная операция %q", op.Op)
 		}
 	}
 	if nCmd > 0 && nReg > 0 {
-		return 0, errors.New("смешение сущностей eeprom/ram/cmd в одном запросе")
+		return 0, errors.New("смешение сущностей reg/cmd в одном запросе")
 	}
 	if nCmd > 1 {
 		return 0, errors.New("допустима ровно одна cmd-операция")
@@ -127,13 +123,7 @@ func validateWrite(wr writeRequest) (kind, error) {
 	if nCmd == 1 {
 		return kindCmd, nil
 	}
-	if eeprom > 0 && ram > 0 {
-		return 0, errors.New("нельзя смешивать EEPROM и RAM в одном запросе")
-	}
-	if eeprom > 0 {
-		return kindEEPROM, nil
-	}
-	return kindRAM, nil
+	return kindReg, nil
 }
 
 // --- Последовательность операций (с обрамлением) ---
@@ -151,18 +141,19 @@ func buildSequence(wr writeRequest, k kind) []element {
 	if k == kindCmd {
 		return []element{{opIdx: 0, isCmd: true, code: wr.Ops[0].Code}}
 	}
-	// EEPROM обрамляется, RAM — нет.
-	if k == kindEEPROM && !wr.NoFrame {
-		seq = append(seq, element{opIdx: -1, isCmd: true, code: 3}) // ComMAP_EEPromWR
-	}
+	// Регистровая запись (EEPROM и RAM): разрешение (pre 3) — ПЕРЕД КАЖДОЙ
+	// посылкой записи (МАП потребляет его на одну запись), затем один post 7.
 	for i, op := range wr.Ops {
+		if !wr.NoFrame {
+			seq = append(seq, element{opIdx: -1, isCmd: true, code: 3}) // ComMAP_EEPromWR
+		}
 		data := make([]byte, len(op.Data))
 		for j, b := range op.Data {
 			data[j] = byte(b)
 		}
 		seq = append(seq, element{opIdx: i, addr: op.Addr, data: data})
 	}
-	if k == kindEEPROM && !wr.NoFrame {
+	if !wr.NoFrame {
 		seq = append(seq, element{opIdx: -1, isCmd: true, code: 7}) // ComMAP_Call_load_EEProm
 	}
 	return seq
