@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -92,6 +93,12 @@ func TestParseWriteReply(t *testing.T) {
 	if !asMapError(err, &me) || me.code != 0x10 {
 		t.Fatalf("ожидали mapError 0x10, получили %v", err)
 	}
+	if got := mapErrorText(0x10); !strings.HasPrefix(got, "ErrRS_NoEEWR") {
+		t.Fatalf("текст для 0x10: %q", got)
+	}
+	if got := mapErrorText(0xAB); got != "МАП вернул неописанную ошибку 0xAB" {
+		t.Fatalf("текст для неизвестного кода: %q", got)
+	}
 }
 
 func asMapError(err error, target **mapError) bool {
@@ -105,13 +112,13 @@ func asMapError(err error, target **mapError) bool {
 // TestBuildSequence — обрамление: RAM и EEPROM обрамляются (pre3/post7),
 // команда — нет; no_frame снимает обрамление.
 func TestBuildSequence(t *testing.T) {
-	ram := writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x405, Data: []int{2}}}}
+	ram := writeRequest{Ops: []writeOp{{Op: "reg", Addr: "405", Data: "02"}}}
 	k, _ := validateWrite(ram)
 	seq := buildSequence(ram, k)
 	if len(seq) != 3 || !seq[0].isCmd || seq[0].code != 3 || seq[1].isCmd || !seq[2].isCmd || seq[2].code != 7 {
 		t.Fatalf("RAM должен обрамляться pre3/post7: %+v", seq)
 	}
-	two := writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x1B6, Data: []int{0x38}}, {Op: "reg", Addr: 0x44B, Data: []int{0}}}}
+	two := writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B6", Data: "38"}, {Op: "reg", Addr: "44B", Data: "00"}}}
 	seq = buildSequence(two, k)
 	if len(seq) != 5 {
 		t.Fatalf("два блока: ожидали 5 элементов, got %+v", seq)
@@ -126,12 +133,12 @@ func TestBuildSequence(t *testing.T) {
 			t.Fatalf("два блока: pre3 перед каждым, затем post7: got %+v", seq)
 		}
 	}
-	nf := writeRequest{NoFrame: true, Ops: []writeOp{{Op: "reg", Addr: 0x405, Data: []int{2}}}}
+	nf := writeRequest{NoFrame: true, Ops: []writeOp{{Op: "reg", Addr: "405", Data: "02"}}}
 	seq = buildSequence(nf, k)
 	if len(seq) != 1 || seq[0].isCmd {
 		t.Fatalf("no_frame RAM должен быть без обрамления: %+v", seq)
 	}
-	cmd := writeRequest{Ops: []writeOp{{Op: "cmd", Code: 2}}}
+	cmd := writeRequest{Ops: []writeOp{{Op: "cmd", Code: "02"}}}
 	kc, _ := validateWrite(cmd)
 	seq = buildSequence(cmd, kc)
 	if len(seq) != 1 || !seq[0].isCmd || seq[0].code != 2 {
@@ -146,14 +153,16 @@ func TestValidateWrite(t *testing.T) {
 		want kind
 		bad  bool
 	}{
-		{"eeprom", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x1B3, Data: []int{1}}}}, kindReg, false},
-		{"ram", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x400, Data: []int{1}}}}, kindReg, false},
-		{"cmd", writeRequest{Ops: []writeOp{{Op: "cmd", Code: 7}}}, kindCmd, false},
-		{"eeprom+ram вместе", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x1B6, Data: []int{0x60}}, {Op: "reg", Addr: 0x44B, Data: []int{0}}}}, kindReg, false},
-		{"mix reg+cmd", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x1B3, Data: []int{1}}, {Op: "cmd", Code: 7}}}, 0, true},
-		{"two cmd", writeRequest{Ops: []writeOp{{Op: "cmd", Code: 7}, {Op: "cmd", Code: 2}}}, 0, true},
+		{"eeprom", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B3", Data: "01"}}}, kindReg, false},
+		{"ram", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "400", Data: "01"}}}, kindReg, false},
+		{"cmd", writeRequest{Ops: []writeOp{{Op: "cmd", Code: "07"}}}, kindCmd, false},
+		{"eeprom+ram вместе", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B6", Data: "60"}, {Op: "reg", Addr: "44B", Data: "00"}}}, kindReg, false},
+		{"mix reg+cmd", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B3", Data: "01"}, {Op: "cmd", Code: "07"}}}, 0, true},
+		{"two cmd", writeRequest{Ops: []writeOp{{Op: "cmd", Code: "07"}, {Op: "cmd", Code: "02"}}}, 0, true},
 		{"empty", writeRequest{}, 0, true},
-		{"big block", writeRequest{Ops: []writeOp{{Op: "reg", Addr: 0x000, Data: make([]int, 257)}}}, 0, true},
+		{"big block", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "000", Data: strings.Repeat("00", 257)}}}, 0, true},
+		{"нечётный hex", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B3", Data: "0"}}}, 0, true},
+		{"битый hex", writeRequest{Ops: []writeOp{{Op: "reg", Addr: "1B3", Data: "0G"}}}, 0, true},
 	}
 	for _, c := range cases {
 		got, err := validateWrite(c.req)

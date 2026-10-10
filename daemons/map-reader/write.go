@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -11,7 +13,24 @@ import (
 // mapError — явная ошибка, вернувшаяся от МАП в кадре 'e D S' (код D).
 type mapError struct{ code int }
 
-func (e *mapError) Error() string { return fmt.Sprintf("МАП вернул ошибку %d", e.code) }
+func (e *mapError) Error() string { return mapErrorText(e.code) }
+
+// mapErrorNames — коды ошибок МАП из документации (protocol_MAP_cells).
+var mapErrorNames = map[int]string{
+	0x01: "ErrRS_sum: неправильная контрольная сумма",
+	0x02: "ErrRS_eco: нет эхо при передаче",
+	0x04: "ErrRS_cod: неправильный код при передаче",
+	0x10: "ErrRS_NoEEWR: не было предварительной команды разрешения записи в EEPROM",
+	0x20: "ErrRS_reserve: используется резерв адресного пространства",
+}
+
+// mapErrorText — человекочитаемый текст по коду ошибки МАП.
+func mapErrorText(code int) string {
+	if s, ok := mapErrorNames[code]; ok {
+		return s
+	}
+	return fmt.Sprintf("МАП вернул неописанную ошибку 0x%02X", code)
+}
 
 // modbusError — Modbus-исключение (ответ с установленным старшим битом fc).
 type modbusError struct{ code int }
@@ -48,9 +67,33 @@ func isRetryable(err error) bool {
 
 type writeOp struct {
 	Op   string `json:"op"`
-	Addr int    `json:"addr,omitempty"`
-	Data []int  `json:"data,omitempty"`
-	Code int    `json:"code,omitempty"`
+	Addr string `json:"addr,omitempty"` // hex без префикса, напр. "1B6"
+	Data string `json:"data,omitempty"` // hex-строка, 2 символа на байт, напр. "000082"
+	Code string `json:"code,omitempty"` // hex без префикса, напр. "02"
+}
+
+// parseHexUint — hex-строка без префикса → целое (bits — разрядность).
+func parseHexUint(s string, bits int) (int, error) {
+	if s == "" {
+		return 0, errors.New("пустое hex-значение")
+	}
+	v, err := strconv.ParseUint(s, 16, bits)
+	if err != nil {
+		return 0, fmt.Errorf("не hex-число: %q", s)
+	}
+	return int(v), nil
+}
+
+// parseHexBytes — hex-строка (чётная длина) → байты.
+func parseHexBytes(s string) ([]byte, error) {
+	if len(s) == 0 || len(s)%2 != 0 {
+		return nil, errors.New("data: hex-строка должна быть чётной длины")
+	}
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return nil, fmt.Errorf("data: не hex-строка: %q", s)
+	}
+	return b, nil
 }
 
 type writeRequest struct {
@@ -62,11 +105,11 @@ type writeRequest struct {
 }
 
 type writeResponse struct {
-	OK    bool   `json:"ok"`
-	Code  string `json:"code,omitempty"`
-	Error string `json:"error,omitempty"`
-	Op    *int   `json:"op,omitempty"`
-	ECode *int   `json:"ecode,omitempty"`
+	OK    bool    `json:"ok"`
+	Code  string  `json:"code,omitempty"`
+	Error string  `json:"error,omitempty"`
+	Op    *int    `json:"op,omitempty"`
+	ECode *string `json:"ecode,omitempty"`
 }
 
 func fail(code, msg string) writeResponse {
@@ -94,21 +137,24 @@ func validateWrite(wr writeRequest) (kind, error) {
 		switch op.Op {
 		case "cmd":
 			nCmd++
-			if op.Code < 0 || op.Code > 255 {
-				return 0, errors.New("code вне диапазона 0..255")
+			if _, err := parseHexUint(op.Code, 8); err != nil {
+				return 0, fmt.Errorf("cmd code: %v", err)
 			}
 		case "reg":
 			nReg++
-			if len(op.Data) < 1 || len(op.Data) > 256 {
+			a, err := parseHexUint(op.Addr, 16)
+			if err != nil {
+				return 0, fmt.Errorf("reg addr: %v", err)
+			}
+			d, err := parseHexBytes(op.Data)
+			if err != nil {
+				return 0, err
+			}
+			if len(d) < 1 || len(d) > 256 {
 				return 0, errors.New("размер блока должен быть 1..256 байт")
 			}
-			if op.Addr < 0 || op.Addr+len(op.Data)-1 > 0x7FF {
+			if a < 0 || a+len(d)-1 > 0x7FF {
 				return 0, errors.New("адрес вне области 0x000..0x7FF")
-			}
-			for _, b := range op.Data {
-				if b < 0 || b > 255 {
-					return 0, errors.New("значение байта вне диапазона 0..255")
-				}
 			}
 		default:
 			return 0, fmt.Errorf("неизвестная операция %q", op.Op)
@@ -139,7 +185,8 @@ type element struct {
 func buildSequence(wr writeRequest, k kind) []element {
 	var seq []element
 	if k == kindCmd {
-		return []element{{opIdx: 0, isCmd: true, code: wr.Ops[0].Code}}
+		c, _ := parseHexUint(wr.Ops[0].Code, 8)
+		return []element{{opIdx: 0, isCmd: true, code: c}}
 	}
 	// Регистровая запись (EEPROM и RAM): разрешение (pre 3) — ПЕРЕД КАЖДОЙ
 	// посылкой записи (МАП потребляет его на одну запись), затем один post 7.
@@ -147,11 +194,9 @@ func buildSequence(wr writeRequest, k kind) []element {
 		if !wr.NoFrame {
 			seq = append(seq, element{opIdx: -1, isCmd: true, code: 3}) // ComMAP_EEPromWR
 		}
-		data := make([]byte, len(op.Data))
-		for j, b := range op.Data {
-			data[j] = byte(b)
-		}
-		seq = append(seq, element{opIdx: i, addr: op.Addr, data: data})
+		a, _ := parseHexUint(op.Addr, 16)
+		d, _ := parseHexBytes(op.Data)
+		seq = append(seq, element{opIdx: i, addr: a, data: d})
 	}
 	if !wr.NoFrame {
 		seq = append(seq, element{opIdx: -1, isCmd: true, code: 7}) // ComMAP_Call_load_EEProm
@@ -187,10 +232,12 @@ func executeWrite(cfg *config, reg *Registry, p *Port, proto string, entries []*
 			if op.Op != "reg" {
 				continue
 			}
-			if op.Addr%2 != 0 || len(op.Data)%2 != 0 {
+			a, _ := parseHexUint(op.Addr, 16)
+			d, _ := parseHexBytes(op.Data)
+			if a%2 != 0 || len(d)%2 != 0 {
 				return fail("bad_request", "Modbus: поддержаны только блоки с чётным адресом и чётной длиной (docs/map-write.md §6)")
 			}
-			if len(op.Data) > 250 {
+			if len(d) > 250 {
 				return fail("bad_request", "Modbus: блок больше 250 байт")
 			}
 		}
@@ -220,8 +267,8 @@ func executeWrite(cfg *config, reg *Registry, p *Port, proto string, entries []*
 	var me *mapError
 	if errors.As(lastErr, &me) {
 		resp.Code = "map_error"
-		c := me.code
-		resp.ECode = &c
+		ec := fmt.Sprintf("%02X", me.code)
+		resp.ECode = &ec
 	} else if errors.Is(lastErr, errUnsupported) {
 		resp.Code = "bad_request"
 	} else {
