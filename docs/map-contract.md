@@ -28,6 +28,17 @@ web выкладывать **одним релизом** (иначе payload р�
   (`mapCellAddr`, `mapCellSize`), `internal/web/legacy.go` (`legacyFieldIdx`, `buildMem`),
   `internal/web/legacyapi.go` (размеры по `mapFieldNames`), `internal/web/maps.go`
   (`data["FieldNames"]`).
+- **Версия контракта пиннится у потребителя:** `internal/web/legacy.go`
+  (`legacyContractVersion`) обязан совпадать с `contractVersion` в
+  `daemons/map-reader/contract.go`. При расхождении `decodeLegacy` отвергает
+  payload, снимок `read_json.php` не обновляется, `check_daemons.php` отдаёт
+  `mapd=1`. Потребитель этой связки — внешний легаси-агрегатор **«Мастер-Узел»**
+  (`master_node.php` на других узлах, через `request_node.php`), который при
+  `mapd=1` не рисует блок МАП и телеметрия «не идёт» — см.
+  `docs/legacy/master-node.md`. Панель `assets/static/map.js` версию не сверяет
+  (только магию и `nfields`), поэтому локальный UI может работать, а легаси-узел
+  нет. Равенство версий проверяется тестом
+  `web/internal/web/legacy_contract_test.go` (падает при расхождении).
 - Фронтенд: `assets/templates/map.html` (`window.MAP_FIELDS`), `assets/static/map.js`
   (декод payload по индексу), `assets/static/mapinfo.js`, `assets/static/control.js`
   (`window.MAP_CONTROL.addr2fid`), панель 2 (`assets/static/legacy/panel2.js` — тот же

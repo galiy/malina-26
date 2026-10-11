@@ -15,15 +15,13 @@
 
     <nav class="mainnav">
       <div class="navitem dropdown {{if eq .Active "map"}}active{{end}}">
-        <span class="navlink">{{index .T "menu.monitoring"}} <span class="caret">▾</span></span>
+        <span class="navlink">{{index .T "menu.map"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
           <div id="mapMenuWrap" {{if not .Maps}}hidden{{end}}>
-            <span class="dropdown-label">{{index .T "menu.map"}}</span>
             <div id="mapMenuItems">
               {{range .Maps}}<a class="dropdown-sub" href="map?id={{.ID}}&gen={{.Gen}}">{{.MenuLabel}}</a>{{end}}
             </div>
           </div>
-          <a href="#">{{index .T "menu.kes"}}</a>
         </div>
       </div>
       <div class="navitem dropdown">

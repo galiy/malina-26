@@ -911,6 +911,7 @@ a.dropdown-sub { padding-left: 22px; }
 .ctl-btn.ghost { background: #fff; color: #333; border-color: #bbb; }
 .ctl-btn.sm { padding: 3px 8px; font-size: 12px; }
 .ctl-btn.danger { background: #d9534f; border-color: #d9534f; }
+.ctl-btn[disabled] { opacity: .45; cursor: default; pointer-events: none; }
 .ctl-cmds { margin-bottom: 12px; }
 .ctl-cmdrow { display: flex; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
 .ctl-toggle { padding: 6px 14px; border: 1px solid #1a6533; background: #1f7a3d; color: #fff; border-radius: 4px; cursor: pointer; font-size: 13px; }
@@ -932,3 +933,24 @@ a.dropdown-sub { padding-left: 22px; }
 .ctl-edit.ctl-invalid .ctl-input { border-color: #d9534f; background: #fdeaea; }
 tr.ctl-changed { background: #fff8e1; }
 .ctl-pop { position: fixed; z-index: 9999; max-width: 440px; white-space: pre-line; background: #222; color: #fff; padding: 8px 10px; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.35); font-size: 13px; line-height: 1.35; }
+
+/* Вкладка «Управление» — мобильная раскладка (таблица → карточки) */
+@media (max-width: 700px) {
+  .ctl-head { flex-direction: column; }
+  .ctl-head .ctl-btn { width: 100%; }
+  .ctl-cmdrow { flex-direction: column; }
+  .ctl-cmdrow .ctl-toggle, .ctl-cmdrow .ctl-btn, #ctlRelays { width: 100%; }
+  #ctlRelays { display: flex; flex-direction: column; gap: 8px; }
+  .ctl-tbl thead { display: none; }
+  .ctl-tbl, .ctl-tbl tbody, .ctl-tbl tr, .ctl-tbl td { display: block; width: auto; }
+  .ctl-tbl tr { border: 1px solid #e2e2e2; border-radius: 8px; padding: 8px 10px; margin: 8px 0; background: #fff; }
+  .ctl-tbl tr.ctl-changed { background: #fff8e1; }
+  .ctl-tbl td { border: none; padding: 2px 0; }
+  .ctl-tbl td.ctl-name { font-weight: 600; padding-bottom: 6px; }
+  .ctl-tbl td.ctl-q, .ctl-tbl td.ctl-q2 { width: auto; text-align: left; margin-left: 4px; }
+  .ctl-tbl td[data-l]:not([data-l=""]):not(:empty)::before { content: attr(data-l) ": "; color: #666; }
+  .ctl-tbl td.ctl-cur:empty, .ctl-tbl td.ctl-unit:empty { display: none; }
+  .ctl-input { font-size: 16px; } /* без зума при фокусе на iOS */
+  .ctl-act .ctl-btn { width: 100%; margin-top: 4px; }
+  .ctl-pop { max-width: 92vw; }
+}

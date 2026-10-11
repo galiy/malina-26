@@ -7,6 +7,9 @@
 Уже перенесено (см. `docs/legacy-api.md`): `read_json.php`, `read_memory.php`,
 `check_daemons.php`, `write_eeprom.php`.
 
+Скоуп и ручки пункта меню «МАСТЕР-УЗЕЛ» (агрегатор узлов) —
+`docs/legacy/master-node.md`.
+
 Исторически многие — тонкие обёртки над `shell_exec(...)`/файлами; ответы
 разнородны (текст, HTML-строки таблиц, JSON, `redirect` на referer).
 

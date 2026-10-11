@@ -26,6 +26,17 @@ import (
 //	56  lastSeen  uint64  (unix)
 //	64  presence  [ceil(nfields/8)]byte   (бит i = поле i присутствует)
 //	64+presenceLen  values  nfields × uint32 LE (сырое значение ячейки)
+//
+// ВНИМАНИЕ: contractVersion пиннится потребителями отдельными константами.
+// При подъёме версии править синхронно (см. docs/map-contract.md,
+// «Зависимости контракта»):
+//   - web/internal/web/legacy.go: legacyContractVersion — декодер снимка
+//     read_json.php и check_daemons.php. Его потребитель — внешний легаси-агрегатор
+//     «Мастер-Узел» (master_node.php на других узлах): при несовпадении версии
+//     снимок не обновляется, check_daemons отдаёт mapd=1, и телеметрия МАП
+//     перестаёт приходить на страницу «Отобразить» (docs/legacy/master-node.md).
+//     Равенство версий проверяется тестом web/internal/web/legacy_contract_test.go.
+//   - web/assets/static/map.js — декодер панели, версию не сверяет (магия+nfields).
 const (
 	contractMagic    = 0x4441504D // "MAPD"
 	contractVersion  = 5

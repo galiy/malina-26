@@ -68,8 +68,8 @@
   function build() {
     var parts = [];
     parts.push('<div class="ctl-head">' +
-      '<button type="button" id="ctlSaveAll" class="ctl-btn">' + esc(t("ctl.save_all")) + '</button>' +
-      '<button type="button" id="ctlCancelAll" class="ctl-btn ghost">' + esc(t("ctl.cancel_all")) + '</button>' +
+      '<button type="button" id="ctlSaveAll" class="ctl-btn" disabled>' + esc(t("ctl.save_all")) + '</button>' +
+      '<button type="button" id="ctlCancelAll" class="ctl-btn ghost" disabled>' + esc(t("ctl.cancel_all")) + '</button>' +
       '</div>');
     // Группа «Управление» (команды)
     parts.push('<h2 class="map-sec">' + esc(t("ctl.group_control")) + '</h2>');
@@ -78,6 +78,7 @@
     META.groups.forEach(function (g, gi) { parts.push(paramGroup(g, gi)); });
     tab.innerHTML = parts.join("");
     wire();
+    updateGlobalButtons();
   }
 
   function cmdGroup() {
@@ -103,10 +104,10 @@
     return '<tr data-addr="' + p.addr + '">' +
       '<td class="ctl-name"><span>' + esc(p.name) + '</span></td>' +
       '<td class="ctl-q">' + (h ? '<a href="#" class="ctl-help">?</a>' : '') + '</td>' +
-      '<td class="ctl-cur"></td>' +
+      '<td class="ctl-cur" data-l="' + esc(t("ctl.col_cur")) + '"></td>' +
       '<td class="ctl-q2"></td>' +
-      '<td class="ctl-edit"></td>' +
-      '<td class="ctl-unit">' + esc(p.unit || "") + '</td>' +
+      '<td class="ctl-edit" data-l="' + esc(t("ctl.col_edit")) + '"></td>' +
+      '<td class="ctl-unit" data-l="' + esc(t("ctl.col_unit")) + '">' + esc(p.unit || "") + '</td>' +
       '<td class="ctl-act"></td></tr>';
   }
   function norm(s) { return (s || "").trim().replace(/\.+$/, "").toLowerCase(); }
@@ -184,12 +185,27 @@
 
   function renderActs(p, row) {
     var st = state[p.addr], act = row.querySelector(".ctl-act");
-    if (!st.edited) { act.innerHTML = ""; return; }
+    if (!st.edited) { act.innerHTML = ""; updateGlobalButtons(); return; }
     act.innerHTML = (st.valid ? '<button type="button" class="ctl-btn sm" data-a="save">' + esc(t("ctl.save")) + '</button>' : '') +
       '<button type="button" class="ctl-btn sm ghost" data-a="cancel">' + esc(t("ctl.cancel")) + '</button>';
     var sv = act.querySelector('[data-a="save"]');
     if (sv) { sv.onclick = function () { saveOne(p); }; }
     act.querySelector('[data-a="cancel"]').onclick = function () { cancelOne(p, row); };
+    updateGlobalButtons();
+  }
+
+  // Кнопки «Сохранить всё»/«Отменить всё» активны только при наличии
+  // изменённых (несохранённых) параметров.
+  function anyEdited() {
+    var a = false;
+    META.groups.forEach(function (g) { g.params.forEach(function (p) { if (state[p.addr] && state[p.addr].edited) { a = true; } }); });
+    return a;
+  }
+  function updateGlobalButtons() {
+    var e = anyEdited();
+    var sa = document.getElementById("ctlSaveAll"), ca = document.getElementById("ctlCancelAll");
+    if (sa) { sa.disabled = !e; }
+    if (ca) { ca.disabled = !e; }
   }
 
   function cancelOne(p, row) {

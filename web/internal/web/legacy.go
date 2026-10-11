@@ -9,7 +9,7 @@ import (
 )
 
 // legacy-api: совместимость со старым read_json.php?device=map (mapd).
-// Формат/формулы сверены с живым mapd на .68 (см. docs/legacy_read_json_map.md).
+// Формат/формулы сверены с живым mapd на боевом узле (см. docs/legacy_read_json_map.md).
 
 // legacyFieldIdx — имя поля -> id в контракте MapData (порядок mapFieldNames).
 var legacyFieldIdx = func() map[string]int {
@@ -34,8 +34,17 @@ type legacyFields struct {
 }
 
 // legacyContractVersion — версия бинарного контракта map-reader, которую понимает
-// legacy-api. При несовпадении снимок не обновляется (см. daemon/contract.go).
-const legacyContractVersion = 4
+// legacy-api. Обязана совпадать с contractVersion в daemons/map-reader/contract.go:
+// при несовпадении decodeLegacy отвергает payload, снимок read_json не обновляется,
+// а check_daemons отдаёт mapd=1.
+//
+// Потребитель этой версии — внешний легаси-агрегатор «Мастер-Узел» (другие
+// узлы): страница master_node.php опрашивает узел через request_node.php
+// ручками /check_daemons.php и /read_json.php?device=map.
+// Если check_daemons отвечает mapd=1, блок МАП не рисуется и read_json вообще
+// не запрашивается — телеметрия «не идёт» (см. docs/legacy/master-node.md).
+// При подъёме contractVersion в map-reader обязательно править и эту константу.
+const legacyContractVersion = 5
 
 // decodeLegacy разбирает бинарный payload слота (как daemon/contract.go).
 func decodeLegacy(payload []byte) (*legacyFields, bool) {

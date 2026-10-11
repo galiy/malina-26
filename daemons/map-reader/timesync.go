@@ -86,9 +86,15 @@ func maybeSyncTime(cfg *config, reg *Registry, p *Port, proto string, entries []
 		{Op: "reg", Addr: "44B", Data: fmt.Sprintf("%02X", minut)},
 	}}
 	resp := executeWrite(cfg, reg, p, proto, entries, wr)
+	model, sn := "", ""
+	if e.info != nil {
+		model = e.info.Model
+		sn = fmt.Sprintf("sn=%d%s", e.info.Serial, string(rune(e.info.SerialLetter)))
+	}
+	tag := fmt.Sprintf("slot=%d port=%s unit=%d model=%s %s", e.slotIdx, e.port, e.unit, model, sn)
 	if resp.OK {
-		log.Printf("синк времени МАП unit=%d: установлено %02d:%02d (было %02d:%02d)", e.unit, now.Hour(), now.Minute(), mapMin/60, mapMin%60)
+		log.Printf("синк времени МАП %s: установлено %02d:%02d (было %02d:%02d)", tag, now.Hour(), now.Minute(), mapMin/60, mapMin%60)
 	} else {
-		log.Printf("синк времени МАП unit=%d: ошибка: %s", e.unit, resp.Error)
+		log.Printf("синк времени МАП %s: ошибка: %s", tag, resp.Error)
 	}
 }
