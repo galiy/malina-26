@@ -5,6 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "smoke": "node run-smoke.js",
+    "api-e2e": "node run-api-e2e.js",
     "phone-ap": "bash phone-ap-connect.sh"
   },
   "keywords": [],
