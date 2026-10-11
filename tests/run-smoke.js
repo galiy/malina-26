@@ -1,5 +1,5 @@
 // Smoke-тест через headless Chrome (Playwright) на системном Chrome.
-// Запуск: node run-smoke.js [baseURL]   (по умолчанию http://192.168.13.60)
+// Запуск: node run-smoke.js [baseURL]   (по умолчанию http://malina.local или $MALINA_WEB)
 const { chromium } = require("playwright");
 
 const BASE = process.argv[2] || process.env.MALINA_WEB || "http://malina.local";
