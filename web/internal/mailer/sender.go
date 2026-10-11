@@ -207,17 +207,22 @@ func (m *Mailer) SecretConfigured() bool {
 	return err == nil && c.SecretEnc != ""
 }
 
-// SendText — «простой текст» (в аутбокс). Возвращает id.
+// SendText — «простой текст» (в аутбокс), получатель — из настроек.
 func (m *Mailer) SendText(subject, body string) (string, error) {
-	return m.enqueue(subject, body, false)
+	return m.enqueue(subject, body, false, "")
+}
+
+// SendTextTo — то же, но с переопределением получателя (пусто — из настроек).
+func (m *Mailer) SendTextTo(subject, body, recipient string) (string, error) {
+	return m.enqueue(subject, body, false, recipient)
 }
 
 // SendHTML — «HTML с параметрами» (в аутбокс). Возвращает id.
 func (m *Mailer) SendHTML(subject, tmpl string, vars map[string]any) (string, error) {
-	return m.enqueue(subject, renderTemplate(tmpl, vars), true)
+	return m.enqueue(subject, renderTemplate(tmpl, vars), true, "")
 }
 
-func (m *Mailer) enqueue(subject, body string, html bool) (string, error) {
+func (m *Mailer) enqueue(subject, body string, html bool, recipient string) (string, error) {
 	c, err := m.LoadConfig()
 	if err != nil {
 		return "", err
@@ -225,11 +230,18 @@ func (m *Mailer) enqueue(subject, body string, html bool) (string, error) {
 	if err := Validate(c); err != nil {
 		return "", err
 	}
-	msg := Message{Subject: subject, Body: body, HTML: html, Recipient: c.Recipient}
+	if strings.TrimSpace(recipient) != "" {
+		if !validEmail(recipient) {
+			return "", fmt.Errorf("некорректный адрес получателя")
+		}
+	} else {
+		recipient = c.Recipient
+	}
+	msg := Message{Subject: subject, Body: body, HTML: html, Recipient: recipient}
 	if err := m.Outbox.Add(msg); err != nil {
 		return "", err
 	}
-	m.emit(Event{Kind: "enqueue", Subject: subject, Recipient: c.Recipient})
+	m.emit(Event{Kind: "enqueue", Subject: subject, Recipient: recipient})
 	return msg.ID, nil
 }
 

@@ -65,27 +65,45 @@
     return { gen: Number(dv.getBigUint64(48, true)), last_seen: Number(dv.getBigUint64(56, true)), fields: f };
   }
 
-  // Композитный код режима (алгоритм mapd). Возвращает число или undefined.
+  // Композитный код режима — плоский список по кодам полей (зеркало mapmode.Mode).
+  // Заряд (_MODE>3) уточняется ступенью из StatusCh (точное равенство): 0x00→4, 0x01→5, 0x02→6, 0x04→7, 0x08→8, иначе 9.
   function modeNum(f) {
-    var M = f.MODE_RAM, N = f.LCD_NETAlg, E = f.flag_NETON_ECO || 0, U = f.LCD_NetUpECO,
-        L = f.LCD_NetUpLoad, P = f.Pmax_On || 0, V = (f.UNET ? f.UNET + 100 : 0), c;
-    if (typeof M !== "number") { return undefined; }
-    if (M <= 1 || M > 3) { c = M; }
-    else if (U === 0) {
-      if (L === 1 && (P & 2) && V > 100) { c = 18; }
-      else if (M === 2) { c = (V > 100) ? (N === 2 ? 10 : (N === 3 && (E & 2) === 0 ? 11 : (N === 3 ? 12 : 2))) : 2; }
-      else { c = 3; }
-    } else {
-      c = M;
-      if (M === 3 && U === 1) { if (N === 2) { c = (E & 1) ? 15 : 13; } else if (N === 3) { c = (E & 2) ? 12 : 16; } }
-      else if (M === 3 && U === 2) { if (N === 2) { c = (E & 1) ? 15 : 14; } else if (N === 3) { c = (E & 2) ? 12 : 17; } }
+    if (typeof f.MODE_RAM !== "number") { return undefined; }
+    switch (true) {
+      case f.MODE_RAM <= 1: return f.MODE_RAM;
+      case f.MODE_RAM > 3 && (f.StatusCh || 0) === 0x00: return 4;
+      case f.MODE_RAM > 3 && (f.StatusCh || 0) === 0x01: return 5;
+      case f.MODE_RAM > 3 && (f.StatusCh || 0) === 0x02: return 6;
+      case f.MODE_RAM > 3 && (f.StatusCh || 0) === 0x04: return 7;
+      case f.MODE_RAM > 3 && (f.StatusCh || 0) === 0x08: return 8;
+      case f.MODE_RAM > 3: return 9;
+      case f.LCD_NetUpECO === 0 && f.LCD_NetUpLoad === 1 && ((f.Pmax_On || 0) & 2) && (f.UNET ? f.UNET + 100 : 0) > 100: return 18;
+      case f.LCD_NetUpECO === 0 && f.MODE_RAM === 2 && (f.UNET ? f.UNET + 100 : 0) > 100 && f.LCD_NETAlg === 2: return 10;
+      case f.LCD_NetUpECO === 0 && f.MODE_RAM === 2 && (f.UNET ? f.UNET + 100 : 0) > 100 && f.LCD_NETAlg === 3 && ((f.flag_NETON_ECO || 0) & 2) === 0: return 11;
+      case f.LCD_NetUpECO === 0 && f.MODE_RAM === 2 && (f.UNET ? f.UNET + 100 : 0) > 100 && f.LCD_NETAlg === 3: return 12;
+      case f.LCD_NetUpECO === 0 && f.MODE_RAM === 2: return 2;
+      case f.LCD_NetUpECO === 0: return 3;
+      case f.MODE_RAM === 3 && f.LCD_NetUpECO === 1 && f.LCD_NETAlg === 2 && ((f.flag_NETON_ECO || 0) & 1): return 15;
+      case f.MODE_RAM === 3 && f.LCD_NetUpECO === 1 && f.LCD_NETAlg === 2: return 13;
+      case f.MODE_RAM === 3 && f.LCD_NetUpECO === 1 && f.LCD_NETAlg === 3 && ((f.flag_NETON_ECO || 0) & 2): return 12;
+      case f.MODE_RAM === 3 && f.LCD_NetUpECO === 1 && f.LCD_NETAlg === 3: return 16;
+      case f.MODE_RAM === 3 && f.LCD_NetUpECO === 2 && f.LCD_NETAlg === 2 && ((f.flag_NETON_ECO || 0) & 1): return 15;
+      case f.MODE_RAM === 3 && f.LCD_NetUpECO === 2 && f.LCD_NETAlg === 2: return 14;
+      case f.MODE_RAM === 3 && f.LCD_NetUpECO === 2 && f.LCD_NETAlg === 3 && ((f.flag_NETON_ECO || 0) & 2): return 12;
+      case f.MODE_RAM === 3 && f.LCD_NetUpECO === 2 && f.LCD_NETAlg === 3: return 17;
+      case f.MODE_RAM === 2: return 2;
     }
-    return c;
+    return 3;
+  }
+  function isCharge(f) { var c = modeNum(f); return c >= 4 && c <= 9; }
+  function modeLabel(c, f) {
+    if (c === 9) { var sc = (f && f.StatusCh) || 0; return t("p1.mode9_prefix") + " " + sc + " (" + sc.toString(2) + ")"; }
+    return t("p1.mode" + c);
   }
   function modeText(f) {
     var c = modeNum(f);
     if (c == null) { return ""; }
-    return t("p1.mode" + c);
+    return modeLabel(c, f);
   }
   function serialOf(f) {
     if (SERIAL) { return SERIAL; }
@@ -107,7 +125,7 @@
     if (il !== undefined && ih !== undefined) {
       // Как в mapd: беззнаковое (L + H*256)/16, знак — по режиму (заряд MODE==4 → «+», иначе «−»).
       v.Iacc = (il + ih * 256) / 16;
-      if (modeNum(f) !== 4) { v.Iacc = -v.Iacc; }
+      if (!isCharge(f)) { v.Iacc = -v.Iacc; }
     }
     var sh = (typeof f["UACC"] === "number") ? (f["UACC"] & 0x1f) : 2;
     if (typeof f["E_LCD_UAccChBUF"] === "number") { v.Ubuf = (f["E_LCD_UAccChBUF"] << sh) / 10; }
@@ -377,7 +395,7 @@
       case "adddev": return L("mi.adddev", raw);
       case "extdev": return L("mi.ext", raw);
       case "din": return L("mi.din", raw);
-      case "mode": return t("p1.mode" + raw);
+      case "mode": return modeLabel(raw, f);
       default: return String(raw);
     }
   }
@@ -387,7 +405,7 @@
     function r(v, u, k) { return { v: v, u: u, t: k }; }
     switch (name) {
       case "UAcc_med_VH": { var vh = gv(f, "UAcc_med_VH"), vl = gv(f, "UAcc_med_VL"); if (vh === undefined && vl === undefined) { return null; } return r((((vh || 0) * 256 + (vl || 0)) / 10).toFixed(1), "V", "mi.f.battery_voltage"); }
-      case "IAcc_med_A_u16_L": { var l = gv(f, "IAcc_med_A_u16_L"), h = gv(f, "IAcc_med_A_u16_H"); if (l === undefined && h === undefined) { return null; } var am = (l + (h || 0) * 256) / 16; if (modeNum(f) !== 4) { am = -am; } return r(am.toFixed(2), "A", "mi.f.iacc_med"); }
+      case "IAcc_med_A_u16_L": { var l = gv(f, "IAcc_med_A_u16_L"), h = gv(f, "IAcc_med_A_u16_H"); if (l === undefined && h === undefined) { return null; } var am = (l + (h || 0) * 256) / 16; if (!isCharge(f)) { am = -am; } return r(am.toFixed(2), "A", "mi.f.iacc_med"); }
       case "M_POWhourNET_L": return r(cnt24(f, "M_POWhourNET").toFixed(2), "kWh", "mi.f.e_net");
       case "M_POWhourMAP_L": return r(cnt24(f, "M_POWhourMAP").toFixed(2), "kWh", "mi.f.e_acc");
       case "M_POWhourMAPCharge_L": return r(cnt24(f, "M_POWhourMAPCharge").toFixed(2), "kWh", "mi.f.e_chg");

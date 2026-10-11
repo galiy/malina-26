@@ -6,7 +6,8 @@
 
   var power = [1.3, 1.5, 2, 3, 4.5, 6, 9, 12, 15, 18, 24, 36];
   var voltage = [12, 24, 48, 96];
-  var map_mode = ["МАП выключен и нет сети на входе", "МАП выключен. Сеть на входе", "МАП включен. Генерация от АКБ. Нет сети.", "МАП включен и транслирует сеть", "МАП включен. Трансляция + заряд", "", "", "", "", "",
+  var map_mode = ["МАП выключен и нет сети на входе", "МАП выключен. Сеть на входе", "МАП включен. Генерация от АКБ. Нет сети.", "МАП включен и транслирует сеть",
+    "МАП включен. Трансляция + заряд. Трансляция", "МАП включен. Трансляция + заряд. Буферный заряд", "МАП включен. Трансляция + заряд. Заряд 1 ступень", "МАП включен. Трансляция + заряд. Заряд 2 ступень", "МАП включен. Трансляция + заряд. Дозаряд 3 ступень", "",
     "Принудительная генерация", "Тарифная сеть. максимальный тариф. принудительная генерация", "Тарифная сеть. минимальный тариф",
     "Трансляция + эко-подкачка", "Трансляция + продажа в сеть", "Ожидание внешнего полного заряда", "Тарифная сеть. трансляция+эко-подкачка",
     "Тарифная сеть. трансляция+продажа в сеть", "Подкачка Pmax"];
@@ -54,19 +55,38 @@
   function s32(v) { return v | 0; }
   function u24(f, l, h, hh) { return u(f, l) + u(f, h) * 256 + u(f, hh) * 65536; }
 
-  function modeCode(M, N, E, U, L, P, V) {
-    if (typeof M !== "number") { return undefined; }
-    if (M <= 1) { return M; } if (M > 3) { return M; }
-    if (U === 0) {
-      if (L === 1 && (P & 2) && V > 100) { return 18; }
-      if (M === 2) { if (V > 100) { if (N === 2) { return 10; } if (N === 3 && (E & 2) === 0) { return 11; } if (N === 3) { return 12; } } return 2; }
-      return 3;
+  // Плоский список по кодам полей (зеркало mapmode.Mode). Заряд (_MODE>3) + ступень из StatusCh.
+  function modeCode(f) {
+    if (typeof f.MODE_RAM !== "number") { return undefined; }
+    switch (true) {
+      case u(f, "MODE_RAM") <= 1: return u(f, "MODE_RAM");
+      case u(f, "MODE_RAM") > 3 && (u(f, "StatusCh") || 0) === 0x00: return 4;
+      case u(f, "MODE_RAM") > 3 && (u(f, "StatusCh") || 0) === 0x01: return 5;
+      case u(f, "MODE_RAM") > 3 && (u(f, "StatusCh") || 0) === 0x02: return 6;
+      case u(f, "MODE_RAM") > 3 && (u(f, "StatusCh") || 0) === 0x04: return 7;
+      case u(f, "MODE_RAM") > 3 && (u(f, "StatusCh") || 0) === 0x08: return 8;
+      case u(f, "MODE_RAM") > 3: return 9;
+      case u(f, "LCD_NetUpECO") === 0 && u(f, "LCD_NetUpLoad") === 1 && (u(f, "Pmax_On") & 2) && (u(f, "UNET") ? u(f, "UNET") + 100 : 0) > 100: return 18;
+      case u(f, "LCD_NetUpECO") === 0 && u(f, "MODE_RAM") === 2 && (u(f, "UNET") ? u(f, "UNET") + 100 : 0) > 100 && u(f, "LCD_NETAlg") === 2: return 10;
+      case u(f, "LCD_NetUpECO") === 0 && u(f, "MODE_RAM") === 2 && (u(f, "UNET") ? u(f, "UNET") + 100 : 0) > 100 && u(f, "LCD_NETAlg") === 3 && (u(f, "flag_NETON_ECO") & 2) === 0: return 11;
+      case u(f, "LCD_NetUpECO") === 0 && u(f, "MODE_RAM") === 2 && (u(f, "UNET") ? u(f, "UNET") + 100 : 0) > 100 && u(f, "LCD_NETAlg") === 3: return 12;
+      case u(f, "LCD_NetUpECO") === 0 && u(f, "MODE_RAM") === 2: return 2;
+      case u(f, "LCD_NetUpECO") === 0: return 3;
+      case u(f, "MODE_RAM") === 3 && u(f, "LCD_NetUpECO") === 1 && u(f, "LCD_NETAlg") === 2 && (u(f, "flag_NETON_ECO") & 1): return 15;
+      case u(f, "MODE_RAM") === 3 && u(f, "LCD_NetUpECO") === 1 && u(f, "LCD_NETAlg") === 2: return 13;
+      case u(f, "MODE_RAM") === 3 && u(f, "LCD_NetUpECO") === 1 && u(f, "LCD_NETAlg") === 3 && (u(f, "flag_NETON_ECO") & 2): return 12;
+      case u(f, "MODE_RAM") === 3 && u(f, "LCD_NetUpECO") === 1 && u(f, "LCD_NETAlg") === 3: return 16;
+      case u(f, "MODE_RAM") === 3 && u(f, "LCD_NetUpECO") === 2 && u(f, "LCD_NETAlg") === 2 && (u(f, "flag_NETON_ECO") & 1): return 15;
+      case u(f, "MODE_RAM") === 3 && u(f, "LCD_NetUpECO") === 2 && u(f, "LCD_NETAlg") === 2: return 14;
+      case u(f, "MODE_RAM") === 3 && u(f, "LCD_NetUpECO") === 2 && u(f, "LCD_NETAlg") === 3 && (u(f, "flag_NETON_ECO") & 2): return 12;
+      case u(f, "MODE_RAM") === 3 && u(f, "LCD_NetUpECO") === 2 && u(f, "LCD_NETAlg") === 3: return 17;
+      case u(f, "MODE_RAM") === 2: return 2;
     }
-    if (M === 3) {
-      if (U === 1) { if (N === 2) { return (E & 1) ? 15 : 13; } if (N === 3) { return (E & 2) ? 12 : 16; } }
-      if (U === 2) { if (N === 2) { return (E & 1) ? 15 : 14; } if (N === 3) { return (E & 2) ? 12 : 17; } }
-    }
-    return M;
+    return 3;
+  }
+  function modeText(_mm, _sc) {
+    if (_mm === 9) { return "МАП включен. Трансляция + заряд. Режим " + (_sc || 0) + " (" + ((_sc || 0)).toString(2) + ")"; }
+    return map_mode[_mm] || "";
   }
 
   // --- пересчёт legacy-полей из контракта ---
@@ -81,12 +101,12 @@
     m['_UNET'] = unetRaw ? unetRaw + 100 : 0;
 
     // Режим считаем раньше — от него зависит знак тока АКБ (как в mapd).
-    m['_MODE'] = modeCode(u(f, "MODE_RAM"), u(f, "LCD_NETAlg"), u(f, "flag_NETON_ECO"),
-      u(f, "LCD_NetUpECO"), u(f, "LCD_NetUpLoad"), u(f, "Pmax_On"), m['_UNET']);
+    m['_MODE'] = modeCode(f);
+    m['_StatusCh'] = u(f, "StatusCh");
 
     // Ток АКБ — точно как mapd: (L + H*256)/16, знак по режиму заряда (MODE==4 → «+»).
     m['_IAcc_med_A_u16'] = (u(f, "IAcc_med_A_u16_L") + u(f, "IAcc_med_A_u16_H") * 256) / 16;
-    if (m['_MODE'] !== 4) { m['_IAcc_med_A_u16'] = -m['_IAcc_med_A_u16']; }
+    if (!(m['_MODE'] >= 4 && m['_MODE'] <= 9)) { m['_IAcc_med_A_u16'] = -m['_IAcc_med_A_u16']; }
     var uoutRaw = u(f, "UOUTmed");
     m['_UOUTmed'] = uoutRaw ? uoutRaw + 100 : 0;
     m['_INET_16_4'] = u(f, "INET_16_4") / (u(f, "INET") >= 16 ? 4 : 16);
@@ -251,7 +271,7 @@
     e.map_ubat.kumaGauge('update', { value: d1(map['_Uacc']) });
     e.map_ibat.kumaGauge('update', { value: d1(map['_IAcc_med_A_u16']) });
 
-    e.map_mode_div.html(map_mode[map['_MODE']]);
+    e.map_mode_div.html(modeText(map['_MODE'], map['_StatusCh']));
     e.map_time.html(new Date().toLocaleTimeString());
 
     var position = 0;

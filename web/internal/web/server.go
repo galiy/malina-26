@@ -15,6 +15,7 @@ import (
 	"github.com/galiy/malina-26/web/internal/audit"
 	"github.com/galiy/malina-26/web/internal/auth"
 	"github.com/galiy/malina-26/web/internal/authstore"
+	"github.com/galiy/malina-26/web/internal/events"
 	"github.com/galiy/malina-26/web/internal/i18n"
 	"github.com/galiy/malina-26/web/internal/mailer"
 	"github.com/galiy/malina-26/web/internal/masternode"
@@ -43,6 +44,8 @@ type Options struct {
 	EmailConfigPath  string        // путь к email.json
 	EmailKeyPath     string        // путь к ключу шифрования секрета
 	EmailOutboxDir   string        // каталог аутбокса (tmpfs)
+	EventsConfigPath string        // путь к events.json (менеджер событий)
+	EventsLogTag     string        // syslog-тег лога менеджера событий
 }
 
 // Server — HTTP-сервер.
@@ -68,6 +71,9 @@ type Server struct {
 	masterCfgOK   bool
 
 	email *mailer.Mailer
+
+	eventsPath   string
+	eventsEngine *events.Engine
 }
 
 // ctxKey — ключ контекста «запрос авторизован».
@@ -125,6 +131,12 @@ func New(o Options) (*Server, error) {
 	if o.EmailOutboxDir == "" {
 		o.EmailOutboxDir = mailer.DefaultOutboxDir
 	}
+	if o.EventsConfigPath == "" {
+		o.EventsConfigPath = events.DefaultPath
+	}
+	if o.EventsLogTag == "" {
+		o.EventsLogTag = "malina-events"
+	}
 	// Источник строк — русский; недостающие ключи добираются из него.
 	bundle, err := i18n.Load(os.DirFS(o.AssetsDir), "i18n", "ru", o.Langs)
 	if err != nil {
@@ -164,6 +176,7 @@ func New(o Options) (*Server, error) {
 		"master":          "master.html",
 		"master_settings": "master_settings.html",
 		"email":           "email.html",
+		"events":          "events.html",
 	} {
 		t, err := template.New("").Funcs(funcs).
 			ParseFiles(layout, filepath.Join(tplDir, page))
@@ -225,13 +238,30 @@ func New(o Options) (*Server, error) {
 		masterProxy: masternode.NewProxy(o.MasterCacheDir, o.MasterTTL),
 
 		email: em,
+
+		eventsPath: o.EventsConfigPath,
 	}, nil
+}
+
+// startEvents запускает движок менеджера событий; результат/срабатывания пишутся
+// в отдельный лог (свой тег → отдельный файл на log-хосте).
+func (s *Server) startEvents() {
+	evLog := audit.New(s.opts.AuditEnabled, s.opts.EventsLogTag)
+	s.eventsEngine = events.New(s.eventsPath,
+		&mapEventsProvider{s: s}, &eventsActions{s: s},
+		func(result string, fields map[string]any) { evLog.Event(result, fields) },
+	)
+	lang := s.opts.DefaultLang
+	s.eventsEngine.ModeLabel = func(code uint32) string { return s.modeLabelStatic(lang, code) }
+	s.eventsEngine.ModeText = func(code, statusCh uint32) string { return s.modeTextDynamic(lang, code, statusCh) }
+	go s.eventsEngine.Run(context.Background())
 }
 
 // Run запускает HTTP-сервер.
 func (s *Server) Run() error {
 	s.email.Start()
 	defer s.email.Stop()
+	s.startEvents()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/logout", s.handleLogout)
@@ -261,6 +291,8 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/system/email/save", s.handleEmailSave)
 	mux.HandleFunc("/system/email/test", s.handleEmailTest)
 	mux.HandleFunc("/system/email/outbox", s.handleEmailOutbox)
+	mux.HandleFunc("/system/events", s.handleEvents)
+	mux.HandleFunc("/system/events/save", s.handleEventsSave)
 	mux.HandleFunc("/api/master/check_daemons", s.handleAPIMasterCheckDaemons)
 	mux.HandleFunc("/api/master/read_json", s.handleAPIMasterReadJSON)
 	mux.HandleFunc("/network", s.handleNetwork)

@@ -745,6 +745,42 @@ a.dropdown-sub { padding-left: 22px; }
 .email-instr h3 { margin: 0 0 6px; }
 .email-instr .instr { white-space: pre-line; }
 .email-err { color: #b00; max-width: 320px; word-break: break-word; }
+/* Менеджер событий: таблица правил. */
+.ev-wrap { width: 100%; margin: 12px auto; overflow-x: auto; }
+.ev-tbl { border-collapse: collapse; width: auto; }
+.ev-tbl th, .ev-tbl td { padding: 3px 6px; border-bottom: 1px solid var(--line, #e3e3e3); text-align: left; vertical-align: middle; white-space: nowrap; }
+.ev-tbl select, .ev-tbl input { box-sizing: border-box; }
+.ev-tbl input[name="source_serial"], .ev-tbl input[name="target_serial"] { width: 72px; }
+.ev-tbl input[name="value"] { width: 80px; }
+.ev-tbl input[name="cooldown"] { width: 60px; }
+.ev-tbl input[name="recipient"] { width: 170px; }
+.ev-tbl input[name="trap_host"] { width: 120px; }
+.ev-del { cursor: pointer; color: #b00; }
+
+/* Менеджер событий: оформление и кнопки. */
+.ev-tbl th { background: #eef3f8; border-bottom: 2px solid #cfd8e0; font-weight: 600; }
+.ev-tbl tbody tr:nth-child(even) { background: #f8fbfe; }
+.ev-tbl tbody tr:hover { background: #eef6ff; }
+.ev-tbl input, .ev-tbl select { padding: 5px 6px; border: 1px solid #cfd8e0; border-radius: 6px; background: #fff; }
+.ev-tbl input:focus, .ev-tbl select:focus { outline: none; border-color: #2c6db5; box-shadow: 0 0 0 2px rgba(44,109,181,.15); }
+.ev-actions { display: flex; gap: 10px; margin: 14px auto 0; max-width: 100%; }
+.btn { border: 0; border-radius: 7px; padding: 8px 18px; font-weight: 600; font-size: 14px; color: #fff; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.12); transition: filter .15s; }
+.btn:hover:not([disabled]) { filter: brightness(1.06); }
+.btn:active:not([disabled]) { transform: translateY(1px); }
+.btn-add { background: #2c6db5; }
+.btn-save { background: #2e9e5b; }
+.btn-cancel { background: #7a8699; }
+.btn-clear { background: #c0392b; }
+.btn[disabled] { background: #c4ccd6; cursor: not-allowed; box-shadow: none; opacity: .8; }
+
+/* Комбобокс серийников. */
+.ev-combo { position: relative; display: inline-block; }
+.ev-combo input { width: 78px; }
+.ev-combo-btn { margin-left: 3px; padding: 5px 8px; border: 1px solid #cfd8e0; border-radius: 6px; background: #fff; cursor: pointer; }
+.ev-combo-btn:hover { background: #eef6ff; }
+.ev-combo-list { position: absolute; z-index: 60; left: 0; top: 100%; min-width: 96px; max-height: 220px; overflow: auto; background: #fff; border: 1px solid #cfd8e0; border-radius: 6px; box-shadow: 0 6px 16px rgba(0,0,0,.15); }
+.ev-combo-opt { padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.ev-combo-opt:hover { background: #eef6ff; }
 @media (max-width: 640px) {
   .email-form .form-row { flex-wrap: wrap; }
   .email-form .form-row label { flex: 1 1 100%; }

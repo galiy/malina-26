@@ -6,6 +6,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	"github.com/galiy/malina-26/web/internal/mapmode"
 )
 
 // legacy-api: совместимость со старым read_json.php?device=map (mapd).
@@ -151,67 +153,6 @@ func (a *legacyAcc) updateE(net, acc, chg uint64, sign int64) legacyEnergy {
 	}
 }
 
-// mapModeCode — композитный _MODE (алгоритм mapd compound_mode).
-func mapModeCode(M, N, E, U, L, P, V uint32) uint32 {
-	if M <= 1 {
-		return M
-	}
-	if M > 3 {
-		return M
-	}
-	if U == 0 {
-		if L == 1 && P&2 != 0 && V > 100 {
-			return 18
-		}
-		if M == 2 {
-			if V > 100 {
-				if N == 2 {
-					return 10
-				}
-				if N == 3 && E&2 == 0 {
-					return 11
-				}
-				if N == 3 {
-					return 12
-				}
-			}
-			return 2
-		}
-		return 3
-	}
-	if M == 3 {
-		if U == 1 {
-			if N == 2 {
-				if E&1 != 0 {
-					return 15
-				}
-				return 13
-			}
-			if N == 3 {
-				if E&2 != 0 {
-					return 12
-				}
-				return 16
-			}
-		}
-		if U == 2 {
-			if N == 2 {
-				if E&1 != 0 {
-					return 15
-				}
-				return 14
-			}
-			if N == 3 {
-				if E&2 != 0 {
-					return 12
-				}
-				return 17
-			}
-		}
-	}
-	return M
-}
-
 // _I_phN: ((H&0x7F)<<8 | L)/10, знак — бит 0x80 в H.
 func phCurrent(l, h uint32) float64 {
 	v := float64((l & 0xff) | ((h & 0x7f) << 8))
@@ -331,8 +272,15 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 	ph3 := phCurrent(f.u("I_Akb_MAP_faz3L"), f.u("I_Akb_MAP_faz3H"))
 	i3ph := ph1 + ph2 + ph3
 
-	mode := mapModeCode(f.u("MODE_RAM"), f.u("LCD_NETAlg"), f.u("flag_NETON_ECO"),
-		f.u("LCD_NetUpECO"), f.u("LCD_NetUpLoad"), f.u("Pmax_On"), unet)
+	mode := mapmode.Mode(func(n string) uint32 {
+		if n == "UNET" {
+			if r := f.u("UNET"); r != 0 {
+				return r + 100 // как в mapd: признак сети = UNET+100
+			}
+			return 0
+		}
+		return f.u(n)
+	})
 
 	// Ток АКБ и мощность нагрузки — строго как в mapd (all.asm, парсер и блок
 	// знаков 0x14060..0x140b0):
@@ -340,12 +288,11 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 	//   _IAcc_med_A_u16 = (byte[0x433]*256 + byte[0x432]) / 16
 	//   _PLoad          = byte[0x409] (PLoad_L) * 100
 	//   _PLoad_calc     = Uacc * _IAcc_med_A_u16
-	// Знак: при MODE != 4 (не режим заряда) _IAcc_med_A_u16 и _PLoad инвертируются.
+	// Знак: вне режимов заряда (MODE не 4..9) _IAcc_med_A_u16 и _PLoad инвертируются.
 	iaccU16 := (float64(f.u("IAcc_med_A_u16_L")) + float64(f.u("IAcc_med_A_u16_H"))*256) / 16
 	pload := int32(f.u("PLoad_L")) * 100
-	if mode != 4 {
+	if !(mode >= 4 && mode <= 9) { // заряд — режимы 4..9
 		iaccU16 = -iaccU16
-		pload = -pload
 	}
 	iaccInt := int32(f.u("IAcc_med_A_2")) * 2
 

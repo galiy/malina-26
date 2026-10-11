@@ -1,0 +1,87 @@
+{{define "content"}}
+<div class="map-head">
+  <h1 class="map-title">{{index .T "events.title"}}</h1>
+</div>
+{{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
+{{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
+
+<form method="post" action="/system/events/save">
+  <div class="ev-wrap">
+  <table class="ev-tbl">
+    <thead>
+      <tr>
+        <th>{{index .T "events.col_enabled"}}</th>
+        <th>{{index .T "events.col_source"}}</th>
+        <th>{{index .T "events.col_type"}}</th>
+        <th>{{index .T "events.col_event"}}</th>
+        <th>{{index .T "events.col_action"}}</th>
+        <th>{{index .T "events.col_actparams"}}</th>
+        <th>{{index .T "events.col_cooldown"}}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="evRows">
+      {{range .Events}}{{$e := .}}
+      <tr class="ev-row">
+        <td><select name="enabled"><option value="1" {{if .Enabled}}selected{{end}}>{{index $.T "events.yes"}}</option><option value="0" {{if not .Enabled}}selected{{end}}>{{index $.T "events.no"}}</option></select></td>
+        <td><input type="hidden" name="id" value="{{.ID}}">
+            <select name="source_kind"><option value="map" {{if eq .Source.Kind "map"}}selected{{end}}>{{index $.T "events.kind_map"}}</option><option value="kes" {{if eq .Source.Kind "kes"}}selected{{end}}>{{index $.T "events.kind_kes"}}</option></select>
+            <input name="source_serial" value="{{.Source.Serial}}" size="7" placeholder="{{index $.T "events.serial_ph"}}"></td>
+        <td><select name="type" class="ev-type">
+            <option value="param" {{if eq .Type "param"}}selected{{end}}>{{index $.T "events.type_param"}}</option>
+            <option value="time" {{if eq .Type "time"}}selected{{end}}>{{index $.T "events.type_time"}}</option>
+            <option value="mode" {{if eq .Type "mode"}}selected{{end}}>{{index $.T "events.type_mode"}}</option>
+        </select></td>
+        <td class="ev-ctl">
+          <span class="ev-param" {{if ne .Type "param"}}hidden{{end}}>
+            <select name="field"><option value=""></option>{{range $.Params}}<option value="{{.Key}}" {{if eq .Key $e.Field}}selected{{end}}>{{index $.T .Label}}</option>{{end}}</select>
+            <select name="op">
+              <option value="le" {{if eq $e.Op "le"}}selected{{end}}>&#8804;</option>
+              <option value="ge" {{if eq $e.Op "ge"}}selected{{end}}>&#8805;</option>
+              <option value="eq" {{if eq $e.Op "eq"}}selected{{end}}>=</option>
+              <option value="ne" {{if eq $e.Op "ne"}}selected{{end}}>&#8800;</option>
+            </select>
+            <input name="value" value="{{$e.Value}}" size="8">
+          </span>
+          <span class="ev-time" {{if ne .Type "time"}}hidden{{end}}><input name="time" type="time" value="{{$e.Value}}"></span>
+          <span class="ev-mode" {{if ne .Type "mode"}}hidden{{end}}>
+            <select name="mode">{{range $.Modes}}<option value="{{.}}" {{if eq (printf "%d" .) $e.Value}}selected{{end}}>{{index $.T (printf "p1.mode%d" .)}}</option>{{end}}</select>
+          </span>
+        </td>
+        <td><select name="action" class="ev-action">
+            <option value="email" {{if eq .Action "email"}}selected{{end}}>{{index $.T "events.act_email"}}</option>
+            <option value="relay1_on" {{if eq .Action "relay1_on"}}selected{{end}}>{{index $.T "events.act_relay1_on"}}</option>
+            <option value="relay1_off" {{if eq .Action "relay1_off"}}selected{{end}}>{{index $.T "events.act_relay1_off"}}</option>
+            <option value="relay2_on" {{if eq .Action "relay2_on"}}selected{{end}}>{{index $.T "events.act_relay2_on"}}</option>
+            <option value="relay2_off" {{if eq .Action "relay2_off"}}selected{{end}}>{{index $.T "events.act_relay2_off"}}</option>
+            <option value="relay3_on" {{if eq .Action "relay3_on"}}selected{{end}}>{{index $.T "events.act_relay3_on"}}</option>
+            <option value="relay3_off" {{if eq .Action "relay3_off"}}selected{{end}}>{{index $.T "events.act_relay3_off"}}</option>
+            <option value="mac_stop_gen" {{if eq .Action "mac_stop_gen"}}selected{{end}}>{{index $.T "events.act_stop_gen"}}</option>
+            <option value="mac_stop" {{if eq .Action "mac_stop"}}selected{{end}}>{{index $.T "events.act_stop"}}</option>
+            <option value="mac_start" {{if eq .Action "mac_start"}}selected{{end}}>{{index $.T "events.act_start"}}</option>
+            <option value="snmp" {{if eq .Action "snmp"}}selected{{end}}>{{index $.T "events.act_snmp"}}</option>
+        </select></td>
+        <td class="ev-actctl">
+          <span class="ev-recipient" hidden><input name="recipient" value="{{.Recipient}}" size="16" placeholder="{{index $.T "events.recipient_default"}}"></span>
+          <span class="ev-target" hidden><select name="target_kind"><option value="" {{if eq .Target.Kind ""}}selected{{end}}>{{index $.T "events.target_cur"}}</option><option value="map" {{if eq .Target.Kind "map"}}selected{{end}}>{{index $.T "events.kind_map"}}</option><option value="kes" {{if eq .Target.Kind "kes"}}selected{{end}}>{{index $.T "events.kind_kes"}}</option></select>
+            <input name="target_serial" value="{{.Target.Serial}}" size="7" placeholder="{{index $.T "events.serial_ph"}}" {{if eq .Target.Kind ""}}hidden{{end}}></span>
+          <span class="ev-trap" hidden><input name="trap_host" value="{{.TrapHost}}" size="12" placeholder="IP"></span>
+        </td>
+        <td><input name="cooldown" type="number" min="0" max="86400" value="{{.Cooldown}}" size="5"></td>
+        <td><span class="ev-del" title="{{index $.T "events.del"}}">&#10005;</span></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  </div>
+  <div class="ev-actions">
+    <button type="button" id="evAdd" class="btn btn-add">{{index .T "events.add"}}</button>
+    <button type="submit" id="evSave" name="do" value="save" class="btn btn-save" disabled>{{index .T "events.save"}}</button>
+    <button type="button" id="evCancel" class="btn btn-cancel" disabled>{{index .T "events.cancel"}}</button>
+    <button type="button" id="evClear" class="btn btn-clear" {{if eq (len .Events) 0}}disabled{{end}}>{{index .T "events.clear"}}</button>
+  </div>
+</form>
+
+<script>window.EV_I18N = {{json .EvI18N}}; window.EV_PARAMS = {{json .EvParams}}; window.EV_MODES = {{json .EvModes}}; window.EV_ACTIONS = {{json .EvActions}}; window.EV_SERIALS = {{json .MapSerials}};</script>
+<script src="{{asset "events.js"}}"></script>
+{{end}}

@@ -80,7 +80,8 @@ function update_nodes() {
 
             if (map[i] !== 'ERROR' && typeof map[i] !== "undefined") {
                 $('#' + i + '_bat_v').html(map[i]['_Uacc'] + '&thinsp;' + loc['V']);
-                $('#' + i + '_map_mode').html(map_mode[map[i]['_MODE']]);
+                var _mm = map[i]['_MODE'], _sc = map[i]['_Status_Char'] || 0;
+                $('#' + i + '_map_mode').html(_mm === 9 ? ("МАП включен. Трансляция + заряд. Режим " + _sc + " (" + _sc.toString(2) + ")") : (map_mode[_mm] || ""));
                 $('#' + i + '_mac_vin').html('~' + map[i]['_UNET'] + '&thinsp;' + loc['V']);
                 $('#' + i + '_mac_vout').html('~' + map[i]['_UOUTmed'] + '&thinsp;' + loc['V']);
 
