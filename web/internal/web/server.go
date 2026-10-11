@@ -16,6 +16,7 @@ import (
 	"github.com/galiy/malina-26/web/internal/auth"
 	"github.com/galiy/malina-26/web/internal/authstore"
 	"github.com/galiy/malina-26/web/internal/i18n"
+	"github.com/galiy/malina-26/web/internal/mailer"
 	"github.com/galiy/malina-26/web/internal/masternode"
 	"github.com/galiy/malina-26/web/internal/session"
 	"github.com/galiy/malina-26/web/internal/sysinfo"
@@ -39,6 +40,9 @@ type Options struct {
 	MasterConfigPath string        // путь к nodes.json (мастер-узел)
 	MasterCacheDir   string        // каталог кэша мастер-узла (tmpfs)
 	MasterTTL        time.Duration // TTL кэша мастер-узла (по умолчанию 5s)
+	EmailConfigPath  string        // путь к email.json
+	EmailKeyPath     string        // путь к ключу шифрования секрета
+	EmailOutboxDir   string        // каталог аутбокса (tmpfs)
 }
 
 // Server — HTTP-сервер.
@@ -62,6 +66,8 @@ type Server struct {
 	masterCfgMod  time.Time
 	masterCfgSize int64
 	masterCfgOK   bool
+
+	email *mailer.Mailer
 }
 
 // ctxKey — ключ контекста «запрос авторизован».
@@ -110,6 +116,15 @@ func New(o Options) (*Server, error) {
 	if o.MasterCacheDir == "" {
 		o.MasterCacheDir = masternode.DefaultCacheDir
 	}
+	if o.EmailConfigPath == "" {
+		o.EmailConfigPath = mailer.DefaultConfigPath
+	}
+	if o.EmailKeyPath == "" {
+		o.EmailKeyPath = mailer.DefaultKeyPath
+	}
+	if o.EmailOutboxDir == "" {
+		o.EmailOutboxDir = mailer.DefaultOutboxDir
+	}
 	// Источник строк — русский; недостающие ключи добираются из него.
 	bundle, err := i18n.Load(os.DirFS(o.AssetsDir), "i18n", "ru", o.Langs)
 	if err != nil {
@@ -119,6 +134,8 @@ func New(o Options) (*Server, error) {
 	layout := filepath.Join(tplDir, "layout.html")
 
 	funcs := template.FuncMap{
+		// safeHTML — доверенный HTML (i18n-строки с ссылками в инструкциях).
+		"safeHTML": func(s string) template.HTML { return template.HTML(s) },
 		"json": func(v any) template.JS {
 			b, _ := json.Marshal(v)
 			return template.JS(b)
@@ -146,6 +163,7 @@ func New(o Options) (*Server, error) {
 		"reboot":          "reboot.html",
 		"master":          "master.html",
 		"master_settings": "master_settings.html",
+		"email":           "email.html",
 	} {
 		t, err := template.New("").Funcs(funcs).
 			ParseFiles(layout, filepath.Join(tplDir, page))
@@ -183,6 +201,14 @@ func New(o Options) (*Server, error) {
 		})
 	})
 
+	em := mailer.New(o.EmailConfigPath, o.EmailKeyPath, o.EmailOutboxDir)
+	em.OnEvent = func(e mailer.Event) {
+		aud.Event("email_send", map[string]any{
+			"kind": e.Kind, "subject": e.Subject, "recipient": e.Recipient,
+			"attempts": e.Attempts, "error": e.Error,
+		})
+	}
+
 	return &Server{
 		opts:    o,
 		auth:    o.Auth,
@@ -197,11 +223,15 @@ func New(o Options) (*Server, error) {
 
 		masterPath:  o.MasterConfigPath,
 		masterProxy: masternode.NewProxy(o.MasterCacheDir, o.MasterTTL),
+
+		email: em,
 	}, nil
 }
 
 // Run запускает HTTP-сервер.
 func (s *Server) Run() error {
+	s.email.Start()
+	defer s.email.Stop()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/logout", s.handleLogout)
@@ -227,6 +257,10 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/master", s.handleMaster)
 	mux.HandleFunc("/master/panel", s.handleMasterPanel)
 	mux.HandleFunc("/master/settings", s.handleMasterSettings)
+	mux.HandleFunc("/system/email", s.handleEmail)
+	mux.HandleFunc("/system/email/save", s.handleEmailSave)
+	mux.HandleFunc("/system/email/test", s.handleEmailTest)
+	mux.HandleFunc("/system/email/outbox", s.handleEmailOutbox)
 	mux.HandleFunc("/api/master/check_daemons", s.handleAPIMasterCheckDaemons)
 	mux.HandleFunc("/api/master/read_json", s.handleAPIMasterReadJSON)
 	mux.HandleFunc("/network", s.handleNetwork)

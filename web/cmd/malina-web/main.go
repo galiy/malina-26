@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/galiy/malina-26/web/internal/auth"
+	"github.com/galiy/malina-26/web/internal/mailer"
 	"github.com/galiy/malina-26/web/internal/masternode"
 	"github.com/galiy/malina-26/web/internal/web"
 )
@@ -30,6 +31,9 @@ func main() {
 	auditTag := flag.String("audit-tag", envOr("MALINA_WEB_AUDIT_TAG", "malina-web-audit"), "syslog-тег аудита")
 	masterConfig := flag.String("master-config", envOr("MALINA_WEB_MASTER_CONFIG", masternode.DefaultPath), "путь к nodes.json мастер-узла")
 	masterCache := flag.String("master-cache", envOr("MALINA_WEB_MASTER_CACHE", masternode.DefaultCacheDir), "каталог кэша мастер-узла")
+	emailConfig := flag.String("email-config", envOr("MALINA_WEB_EMAIL_CONFIG", mailer.DefaultConfigPath), "путь к email.json")
+	emailKey := flag.String("email-key", envOr("MALINA_WEB_EMAIL_KEY", mailer.DefaultKeyPath), "путь к ключу шифрования секрета")
+	emailOutbox := flag.String("email-outbox", envOr("MALINA_WEB_EMAIL_OUTBOX", mailer.DefaultOutboxDir), "каталог аутбокса")
 	flag.Parse()
 
 	var a auth.Authenticator
@@ -53,6 +57,10 @@ func main() {
 
 		MasterConfigPath: *masterConfig,
 		MasterCacheDir:   *masterCache,
+
+		EmailConfigPath: *emailConfig,
+		EmailKeyPath:    *emailKey,
+		EmailOutboxDir:  *emailOutbox,
 	})
 	if err != nil {
 		log.Fatalf("init: %v", err)
