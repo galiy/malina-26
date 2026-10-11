@@ -96,8 +96,8 @@
 
 | Эндпоинт | Запрос | Ответ | Эффект |
 |---|---|---|---|
-| `read_sec.php` | GET `id,offset` | данные / `error` | «безопасное» чтение по id (mapd/mppt) |
-| `write_sec.php` | POST | `error`/… | «безопасная» запись (через mapd) |
+| `read_sec.php` | GET `id,offset,count` | JSON-массив байт / `error` | чтение ячеек КЭС по id (1-based) |
+| `write_sec.php` | GET/POST `id,relay,mode` или `id,data=[[c,v]]` | `Ok`/`error`/`unread` | реле/ячейки КЭС (спека: `docs/kes-reader.md` §4.3) |
 | `write_shm.php` | GET `target=uc1…` | `error` / число | запись управляющих байтов в shm |
 | `get_eeprom_state.php` | GET | `error`/`reload`/`no_changes` | чтение/сброс флага состояния EEPROM в shm |
 | `batmon_100.php` | POST | пусто | SIGUSR2 batmond (перечитать 100 %) |

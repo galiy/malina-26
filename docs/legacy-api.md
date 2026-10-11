@@ -102,7 +102,14 @@ data=[[438,77],[1099,4]]
 на однородные запросы). Ограничение на одну заявку к `map-reader` — **≤64 операций**
 (длинные серии регистров режутся на несколько заявок автоматически).
 
-## 7. Ссылки
+## 7. КЭС (план)
+
+Legacy-API КЭС (`read_sec.php`, `write_sec.php`, `read_json.php?device=mppt`,
+`get_mppt_e.php`, `mppt_errors*.php`, `wind_mppts_set.php`, `devices.php`,
+`find_devices.php`) — к реализации вместе с `kes-reader`. Спека совместимости:
+`docs/kes-reader.md` §4.3; разбор legacy — `docs/legacy/kes-legacy-malina2.md`.
+
+## 8. Ссылки
 
 - `docs/api-auth.md` — авторизация (read открыт, write Basic+PAM).
 - `docs/map-write.md`, `docs/map-write-api.md` — контракт записи в МАП.
