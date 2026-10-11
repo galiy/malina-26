@@ -28,7 +28,7 @@ import (
 //	64+presenceLen  values  nfields × uint32 LE (сырое значение ячейки)
 const (
 	contractMagic    = 0x4441504D // "MAPD"
-	contractVersion  = 4
+	contractVersion  = 5
 	contractMetaSize = 64
 	contractPortSize = 32
 )

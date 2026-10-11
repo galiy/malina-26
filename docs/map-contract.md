@@ -5,7 +5,41 @@
 многобайтовые ячейки слиты (little-endian), битовые карты раскладываются
 потребителем по описанию.
 
-Формат: `version = 4`, полей — `392`. Версия 4: добавлен блок BMS (банки `UakbCell_L/H0..31` 0x480..0x4BF, `TakbCell0..31` 0x4C0..0x4DF, `Q_Cell0..31` 0x4E0..0x4FF) и регион чтения `0x480..0x4FF`. Версия 3: очистка контракта от бит-значений/шума и добавление `LCD_MPPTNum`. Источник — `protocol_MAP_cells_2026_07_15`.
+Формат: `version = 5`, полей — `402`. Версия 5: **добавлены ячейки в конец списка**
+(id 392..401): `E_T_CHARGE_NEED_ECO` (0x07F), `TdizProfilact_day` (0x0DB),
+`LCD_Rele3_Funk/L1/L2/Gist` (0x120..0x123), `LCD_ReleII_Funk/L1/L2/Gist`
+(0x124..0x127); добавлен регион чтения `0x120..0x127`. Версия 4: добавлен блок BMS
+(банки `UakbCell_L/H0..31` 0x480..0x4BF, `TakbCell0..31` 0x4C0..0x4DF,
+`Q_Cell0..31` 0x4E0..0x4FF) и регион чтения `0x480..0x4FF`. Версия 3: очистка
+контракта от бит-значений/шума и добавление `LCD_MPPTNum`.
+Источник — `protocol_MAP_cells_2026_07_15`.
+
+## Зависимости контракта (менять синхронно!)
+
+`id` = **позиция в `documentedCells`** (`daemons/map-reader/cells.go`). Любое
+добавление/удаление/перестановка ячеек затрагивает ВСЕ места ниже; map-reader и
+web выкладывать **одним релизом** (иначе payload разойдётся с декодером).
+
+- `daemons/map-reader`: `cells.go` (`documentedCells`, `regionsT`, `regionsPHD`,
+  `regionsFor`), `contract.go` (`buildContract`, `DecodePayload`,
+  `readRegionsNative/Modbus`, `contractVersion`), `mapdata.go` (структура `MapData`
+  — порядок полей = id), `poll.go`/`write.go` (`buildContract`, `regionsFor`).
+- `web` (Go): `internal/web/mapfields.go` (`mapFieldNames`), `internal/web/legacy_cells.go`
+  (`mapCellAddr`, `mapCellSize`), `internal/web/legacy.go` (`legacyFieldIdx`, `buildMem`),
+  `internal/web/legacyapi.go` (размеры по `mapFieldNames`), `internal/web/maps.go`
+  (`data["FieldNames"]`).
+- Фронтенд: `assets/templates/map.html` (`window.MAP_FIELDS`), `assets/static/map.js`
+  (декод payload по индексу), `assets/static/mapinfo.js`, `assets/static/control.js`
+  (`window.MAP_CONTROL.addr2fid`), панель 2 (`assets/static/legacy/panel2.js` — тот же
+  `MAP_FIELDS`), панель 3 (`assets/static/legacy_map.js` — через легаси-API).
+- Легаси-API: `read_json.php`/`read_memory.php`/`check_daemons.php` (через `legacy.go`)
+  — `read_memory` собирается из `mapCellAddr/Size`.
+- Генератор: `web/tools/gen_control.py` (читает `cells.go` → `addr2fid`).
+- Док: `docs/map-memory.md` (регионы).
+
+Пример: добавление 4 ячеек Rele3 требовало правки `cells.go` (+регионы),
+`mapdata.go`, `mapfields.go`, `legacy_cells.go`, реген `control-data` и версии
+контракта.
 
 ## Сегмент shm и заголовки (полный формат)
 
@@ -31,7 +65,7 @@
 5  protocol     u8   (0=Микроарт, 1=Modbus)
 6  unit         u16
 8  seq          u64  (seqlock: нечёт=идёт запись)
-16 gen          u64  (номер «аренды» слота)
+16 gen          u64  (номер «аренды» слота = timestamp назначения, `uint64`)
 24 baud         u32
 28 serial       u16
 30 serialLetter u8

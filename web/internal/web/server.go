@@ -31,6 +31,7 @@ type Options struct {
 	ControlSock    string        // control-сокет map-reader
 	BasicCacheTTL  time.Duration // TTL кэша успешных Basic-проверок (legacy)
 	MapTimeSyncOff string        // флаг-файл отключения синхронизации времени МАП
+	BasePath       string        // базовый путь монтирования (напр. /malina); "" — корень
 }
 
 // Server — HTTP-сервер.
@@ -83,6 +84,7 @@ func New(o Options) (*Server, error) {
 	if o.MapTimeSyncOff == "" {
 		o.MapTimeSyncOff = "/malina/etc/malina/map-time-sync.off"
 	}
+	o.BasePath = strings.TrimRight(pathOnly(o.BasePath), "/")
 	if o.AssetsDir == "" {
 		o.AssetsDir = "/malina/usr/local/share/malina/web"
 	}
@@ -100,14 +102,17 @@ func New(o Options) (*Server, error) {
 			return template.JS(b)
 		},
 		"list": func(items ...string) []string { return items },
-		// asset добавляет версию (?v=<mtime>) для cache-busting статики.
+		// asset — ОТНОСИТЕЛЬНЫЙ путь к статике (резолвится через <base href>),
+		// с версией (?v=<mtime>) для cache-busting.
 		"asset": func(p string) string {
 			fp := filepath.Join(o.AssetsDir, "static", p)
 			if fi, err := os.Stat(fp); err == nil {
-				return "/static/" + p + "?v=" + strconv.FormatInt(fi.ModTime().Unix(), 10)
+				return "static/" + p + "?v=" + strconv.FormatInt(fi.ModTime().Unix(), 10)
 			}
-			return "/static/" + p
+			return "static/" + p
 		},
+		// base — базовый путь монтирования (для ссылок/форм): {{base}}/login.
+		"base": func() string { return o.BasePath },
 	}
 
 	sets := map[string]*template.Template{}
@@ -159,7 +164,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/logout", s.handleLogout)
 	mux.HandleFunc("/lang", s.handleLang)
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/static/img/malina_small.gif", http.StatusFound)
+		http.Redirect(w, r, s.base(r)+"/static/img/malina_small.gif", http.StatusFound)
 	})
 	mux.HandleFunc("/api/system", s.handleAPISystem)
 	mux.HandleFunc("/api/processes", s.handleAPIProcesses)
@@ -196,13 +201,50 @@ func (s *Server) Run() error {
 	staticFS := http.FileServer(http.Dir(staticDir))
 	mux.Handle("/static/", http.StripPrefix("/static/", cacheStatic(staticFS)))
 
+	h := cleanSlashes(s.authMiddleware(mux))
+	// Базовый путь монтирования (TLS-слой кладёт сайт в /malina): если префикс
+	// пришёл — срезаем; если прокси уже срезал — пропускаем как есть.
+	if bp := s.opts.BasePath; bp != "" {
+		inner := h
+		h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == bp {
+				http.Redirect(w, r, bp+"/", http.StatusMovedPermanently)
+				return
+			}
+			if strings.HasPrefix(r.URL.Path, bp+"/") {
+				r2 := r.Clone(r.Context())
+				r2.URL.Path = strings.TrimPrefix(r.URL.Path, bp)
+				inner.ServeHTTP(w, r2)
+				return
+			}
+			inner.ServeHTTP(w, r)
+		})
+	}
 	srv := &http.Server{
 		Addr:              s.opts.Addr,
-		Handler:           cleanSlashes(s.authMiddleware(mux)),
+		Handler:           h,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	return srv.ListenAndServe()
 }
+
+// url — внешний путь с базовым префиксом (для редиректов).
+func (s *Server) url(p string) string { return s.opts.BasePath + p }
+
+// pathOnly убирает схему/хост (http://, https://) — оставляем только путь.
+func pathOnly(u string) string {
+	if i := strings.Index(u, "://"); i >= 0 {
+		rest := u[i+3:]
+		if j := strings.IndexByte(rest, '/'); j >= 0 {
+			return rest[j:]
+		}
+		return "/"
+	}
+	return u
+}
+
+// base — базовый путь монтирования (фиксированный, из -base/MALINA_WEB_BASE).
+func (s *Server) base(r *http.Request) string { return s.opts.BasePath }
 
 // tokenFrom извлекает токен из cookie или `Authorization: Bearer`.
 func tokenFrom(r *http.Request) (tok string, fromCookie bool, ok bool) {

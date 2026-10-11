@@ -240,8 +240,8 @@
 
   async function tick() {
     try {
-      var r = await fetch("/api/system", { cache: "no-store" });
-      if (r.status === 401) { location.href = "/login"; return; }
+      var r = await fetch("api/system", { cache: "no-store" });
+      if (r.status === 401) { location.href = "login"; return; }
       if (!r.ok) { return; }
       lastData = await r.json();
       el.innerHTML = render(lastData);
@@ -282,7 +282,7 @@
 
   async function loadProcs() {
     try {
-      var r = await fetch("/api/processes", { cache: "no-store" });
+      var r = await fetch("api/processes", { cache: "no-store" });
       if (!r.ok) { return; }
       var d = await r.json();
       lastProcs = d.processes || [];

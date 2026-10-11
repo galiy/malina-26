@@ -29,6 +29,7 @@
 | E7 | `0xE0..0xFF` | **САП / модем / питание** | `_CAP_OnOff`(0xF6), `_P_ModemVdd`(0xFE) |
 | E8 | `0x100..0x137` | **BMS и калибровки порогов** | `_BMS_Num`(0x100), `_LCD_CAcc/UAccMin/.../NetMaxPow_dop`(0x101-107) |
 | E9 | `0x138..0x16F` | **Инвертор / сеть / ЭКО / синус** | `_LCD_TypeSin`(0x138), `_LCD_UMAP220_NEED`(0x13A), `_LCD_UAccMin`(0x13D), `_LCD_Net2`(0x151), `_LCD_NetMaxPow`(0x168), `_LCD_UNETUp/Down`(0x169-16A), `_LCD_NETAlg`(0x16B), `_LCD_UAccMinNetGen`(0x16C), `_LCD_TimeEcoStart/End`(0x16D-16E) |
+| E9a | `0x120..0x127` | **Реле 3 / Реле II** (Титанатор/спец. модели) | `_LCD_Rele3_Funk/L1/L2/Gist`(0x120-123), `_LCD_ReleII_Funk/L1/L2/Gist`(0x124-127) |
 | E10 | `0x180..0x187` | **Параметры АКБ и заряда** | `_LCD_AccType`(0x180), `_LCD_CAcc`(0x181), `_LCD_CIChargeStart/End`(0x182-183), `_LCD_ChargeAlg`(0x184), `_LCD_UAccChMax/BUF/Start`(0x185-187) |
 | E11 | `0x198..0x19F` | **Реле 1/2 (функции/пороги)** | `_LCD_Rele1_*`(0x198-19B), `_LCD_Rele2_*`(0x19C-19F) |
 | E12 | `0x1B0..0x1B7` | **ЖКИ / звук / время / RS-скорость** | `_LCD_LCDType`(0x1B2), `_LCD_Sound`(0x1B3), `_LCD_RSBAUD`(0x1B5), `_LCD_TimeCyr`(0x1B6), `_LCD_T_MAXCharge`(0x1B7) |
@@ -96,6 +97,7 @@ RAM конец = 0x400 + (_RAM_END_H*256 + _RAM_END_L)
 |---|---|---|---|
 | `0x000..0x08A` | 139 | 16.7 | 16.46 |
 | `0x0D7..0x107` | 49 | 8.4 | 8.46 |
+| `0x120..0x127` | 8 | — | — |
 | `0x138..0x1CE` | 151 | 17.8 | 17.57 |
 | `0x400..0x458` | 89 | 12.1 | 12.15 |
 | `0x516..0x52E` | 25 | 6.1 | 6.21 |
@@ -113,6 +115,7 @@ RAM конец = 0x400 + (_RAM_END_H*256 + _RAM_END_L)
 |---|---|
 | `0x000..0x083` | 132 |
 | `0x0D7..0x107` | 49 |
+| `0x120..0x127` | 8 |
 | `0x138..0x1CE` | 151 |
 | `0x400..0x458` | 89 |
 | `0x516..0x52E` | 25 |

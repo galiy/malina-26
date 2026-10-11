@@ -47,7 +47,7 @@ func (s *Server) handleAPIServices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) redirectServices(w http.ResponseWriter, r *http.Request, key string) {
-	http.Redirect(w, r, "/services?"+key, http.StatusSeeOther)
+	http.Redirect(w, r, s.base(r)+"/services?"+key, http.StatusSeeOther)
 }
 
 // handleServiceAction запускает/останавливает управляемую службу.

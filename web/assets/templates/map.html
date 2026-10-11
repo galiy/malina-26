@@ -21,12 +21,12 @@
 
   <h2 class="map-sec" id="secTransit">{{index .T "map.sec_transit"}}</h2>
   <div class="map-isolated" id="panel2wrap">
-    <iframe class="legacy-frame" id="panel2frame" src="/static/legacy/panel2.html" title="{{index .T "map.panel2_title"}}" loading="lazy"></iframe>
+    <iframe class="legacy-frame" id="panel2frame" src="static/legacy/panel2.html" title="{{index .T "map.panel2_title"}}" loading="lazy"></iframe>
   </div>
 
   <h2 class="map-sec" id="secLegacy">{{index .T "map.sec_legacy"}}</h2>
   <div class="map-isolated" id="panel3wrap">
-    <iframe class="legacy-frame" id="panel3frame" src="/static/legacy/panel.html?id={{.ID}}" title="{{index .T "map.panel3_title"}}" loading="lazy"></iframe>
+    <iframe class="legacy-frame" id="panel3frame" src="static/legacy/panel.html?id={{.ID}}" title="{{index .T "map.panel3_title"}}" loading="lazy"></iframe>
   </div>
 </div>
 
@@ -45,9 +45,12 @@
 <script>
 window.I18N = {{json .T}};
 window.MAP_ID = {{.ID}};
+window.MAP_GEN = {{.Gen}};
 window.MAP_SERIAL = {{json .SerialLabel}};
 window.MAP_FIELDS = {{json .FieldNames}};
 </script>
+<script src="{{asset "control-data.js"}}"></script>
+<script src="{{asset "control.js"}}"></script>
 <script src="{{asset "mapinfo.js"}}"></script>
 <script src="{{asset "map.js"}}"></script>
 {{end}}

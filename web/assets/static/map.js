@@ -612,13 +612,13 @@
 
   function showErr(m) { if (!errBox) { return; } if (m) { errBox.textContent = m; errBox.hidden = false; } else { errBox.hidden = true; } }
 
-  function tick() {
-    if (pause && pause.checked) { return; }
+  function tick(force) {
+    if (pause && pause.checked && !force) { return; }
     inflight = new AbortController();
-    fetch("/api/map/raw?id=" + encodeURIComponent(ID), { cache: "no-store", signal: inflight.signal })
+    fetch("api/map/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(window.MAP_GEN || 0), { cache: "no-store", signal: inflight.signal })
       .then(function (r) { if (r.status === 404) { throw { gone: true }; } if (r.status === 401) { throw { auth: true }; } if (!r.ok) { throw new Error("HTTP " + r.status); } return r.arrayBuffer(); })
-      .then(function (buf) { showErr(""); var p = parse(buf); lastP = p; renderPanel(p); if (infoActive) { renderInfo(p); } if (!debugHidden) { pre.textContent = JSON.stringify(p); postToPanel2(buf); } })
-      .catch(function (e) { if (e && e.auth) { window.location.href = "/login"; return; } if (e && e.gone) { showErr(t("map.gone")); } else if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });
+      .then(function (buf) { showErr(""); var p = parse(buf); lastP = p; renderPanel(p); if (infoActive) { renderInfo(p); } if (!debugHidden) { pre.textContent = JSON.stringify(p); postToPanel2(buf); } window.MAP_LAST_FIELDS = p.fields; window.MAP_GEN = p.gen; window.MAP_MODE = modeNum(p.fields); if (typeof window.mapControlRaw === "function") { try { window.mapControlRaw(p.fields, p.gen); } catch (e) { /* ignore */ } } })
+      .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { showErr(t("map.gone")); } else if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });
   }
   function start() { if (timer) { return; } tick(); timer = setInterval(tick, INTERVAL); }
   function stop() { if (timer) { clearInterval(timer); timer = null; } if (inflight) { inflight.abort(); inflight = null; } }
@@ -627,14 +627,20 @@
   function initTabs() {
     var tabs = document.querySelectorAll(".map-tab");
     var panes = { monitor: document.getElementById("tab-monitor"), info: document.getElementById("tab-info"), control: document.getElementById("tab-control") };
+    var TAB_KEY = "malina.map.tab";
     function show(name) {
       Array.prototype.forEach.call(tabs, function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === name); });
       Object.keys(panes).forEach(function (k) { if (panes[k]) { panes[k].hidden = (k !== name); } });
       infoActive = (name === "info");
       if (infoActive && lastP) { renderInfo(lastP); }
     }
-    Array.prototype.forEach.call(tabs, function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-tab")); }); });
-    show("monitor");
+    Array.prototype.forEach.call(tabs, function (b) { b.addEventListener("click", function () {
+      var nm = b.getAttribute("data-tab"); show(nm);
+      try { window.localStorage.setItem(TAB_KEY, nm); } catch (e) { /* ignore */ }
+    }); });
+    var init = "monitor";
+    try { var sv = window.localStorage.getItem(TAB_KEY); if (sv === "monitor" || sv === "info" || sv === "control") { init = sv; } } catch (e) { /* ignore */ }
+    show(init);
   }
   initTabs();
   initSubTabs();
@@ -677,5 +683,6 @@
     });
   }
 
+  window.MAP_FORCE_REFRESH = function () { tick(true); };
   start();
 })();

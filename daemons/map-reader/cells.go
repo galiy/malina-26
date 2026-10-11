@@ -403,11 +403,24 @@ var documentedCells = []cellDef{
 	{"UAccMinNetGen_S", 0x5DC, 2},
 	{"SoC", 0x718, 2},
 	{"SoH", 0x71A, 2},
+	// Дописаны в конец (id = порядок), чтобы не сдвигать существующие id:
+	// документированные, но ранее пропущенные ячейки (в т.ч. блок 0x120..0x127).
+	{"E_T_CHARGE_NEED_ECO", 0x07F, 1},
+	{"TdizProfilact_day", 0x0DB, 1},
+	{"LCD_Rele3_Funk", 0x120, 1},
+	{"LCD_Rele3_L1", 0x121, 1},
+	{"LCD_Rele3_L2", 0x122, 1},
+	{"LCD_Rele3_Gist", 0x123, 1},
+	{"LCD_ReleII_Funk", 0x124, 1},
+	{"LCD_ReleII_L1", 0x125, 1},
+	{"LCD_ReleII_L2", 0x126, 1},
+	{"LCD_ReleII_Gist", 0x127, 1},
 }
 
 var regionsT = [][2]int{
 	{0x000, 0x08A},
 	{0x0D7, 0x107},
+	{0x120, 0x127},
 	{0x138, 0x1CF},
 	{0x400, 0x45F},
 	{0x480, 0x4FF},
@@ -421,6 +434,7 @@ var regionsT = [][2]int{
 var regionsPHD = [][2]int{
 	{0x000, 0x08A},
 	{0x0D7, 0x107},
+	{0x120, 0x127},
 	{0x138, 0x1CF},
 	{0x400, 0x45F},
 	{0x480, 0x4FF},

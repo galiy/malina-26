@@ -904,3 +904,31 @@ a.dropdown-sub { padding-left: 22px; }
   }
   .dropdown-menu a { white-space: normal; }
 }
+
+/* Вкладка «Управление» (control) */
+.ctl-head { display: flex; gap: 8px; margin: 8px 0 12px; }
+.ctl-btn { padding: 6px 12px; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.ctl-btn.ghost { background: #fff; color: #333; border-color: #bbb; }
+.ctl-btn.sm { padding: 3px 8px; font-size: 12px; }
+.ctl-btn.danger { background: #d9534f; border-color: #d9534f; }
+.ctl-cmds { margin-bottom: 12px; }
+.ctl-cmdrow { display: flex; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+.ctl-toggle { padding: 6px 14px; border: 1px solid #1a6533; background: #1f7a3d; color: #fff; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.ctl-toggle.on { background: #1f7a3d; border-color: #1a6533; }
+.ctl-toggle.act-off { background: #d9534f; border-color: #c9302c; color: #fff; }
+#ctlRelays { display: inline-flex; gap: 8px; }
+.ctl-tbl { width: 100%; border-collapse: collapse; margin: 4px 0 16px; }
+.ctl-tbl th, .ctl-tbl td { border-bottom: 1px solid #e2e2e2; padding: 5px 8px; text-align: left; font-size: 13px; vertical-align: middle; }
+.ctl-tbl th { color: #666; font-weight: 600; }
+.ctl-name { width: 40%; }
+.ctl-cur { width: 12%; white-space: nowrap; }
+.ctl-edit { width: 22%; }
+.ctl-unit { width: 8%; color: #666; }
+.ctl-q, .ctl-q2 { width: 28px; text-align: center; }
+.ctl-act { width: 18%; white-space: nowrap; }
+.ctl-help { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 6px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; text-decoration: none; vertical-align: middle; line-height: 1; }
+.ctl-help:hover { background: var(--accent-dark, #2a6496); }
+.ctl-input { width: 100%; box-sizing: border-box; padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; }
+.ctl-edit.ctl-invalid .ctl-input { border-color: #d9534f; background: #fdeaea; }
+tr.ctl-changed { background: #fff8e1; }
+.ctl-pop { position: fixed; z-index: 9999; max-width: 440px; white-space: pre-line; background: #222; color: #fff; padding: 8px 10px; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.35); font-size: 13px; line-height: 1.35; }

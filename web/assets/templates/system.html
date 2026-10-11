@@ -7,7 +7,7 @@
 <div class="sysforms">
   <section class="card">
     <h2>{{index .T "sys.host"}}</h2>
-    <form method="post" action="/system/host">
+    <form method="post" action="system/host">
       <label for="hostname">{{index .T "sys.hostname"}}</label>
       <input id="hostname" name="hostname" type="text" value="{{.Hostname}}" autocomplete="off">
       <label for="timezone">{{index .T "sys.timezone"}}</label>
@@ -22,7 +22,7 @@
 
   <section class="card">
     <h2>{{index .T "sys.logging"}}</h2>
-    <form method="post" action="/system/logging">
+    <form method="post" action="system/logging">
       <label for="host">{{index .T "sys.logging_host"}}</label>
       <input id="host" name="host" type="text" value="{{.RemoteSyslog}}" autocomplete="off" placeholder="syslog.example.lan">
       <p class="muted">{{index .T "sys.logging_hint"}}</p>
@@ -32,7 +32,7 @@
 
   <section class="card">
     <h2>{{index .T "sys.maptime"}}</h2>
-    <form method="post" action="/system/map-time-sync">
+    <form method="post" action="system/map-time-sync">
       <label class="check">
         <input type="checkbox" name="enabled" value="1"{{if .MapTimeSyncEnabled}} checked{{end}}>
         {{index .T "sys.maptime_enable"}}
@@ -44,7 +44,7 @@
 
   <section class="card">
     <h2>{{index .T "sys.password"}}</h2>
-    <form method="post" action="/system/password">
+    <form method="post" action="system/password">
       <label for="password_new">{{index .T "sys.password_new"}}</label>
       <span class="pw">
         <input id="password_new" name="password_new" type="password" autocomplete="new-password">

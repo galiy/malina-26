@@ -35,8 +35,9 @@
 `/api/<type>/...` (`map` — МАП; будущие `kes` и др.).
 
 - `POST /api/token` `{password}` → `{token, expires}`; `DELETE /api/token` — отзыв.
-- `GET /api/map/devices` — список устройств типа «map» (JSON, для меню).
-- `GET /api/map/raw?id=<id>` — бинарный контракт МАП (`application/octet-stream`).
+- `GET /api/map/devices` — список устройств типа «map» (JSON `[{type,id,gen,label}]`, для меню).
+- `GET /api/map/raw?id=<id>&gen=<gen>` — бинарный контракт МАП (`application/octet-stream`);
+  **`gen` обязателен** (id+gen должны совпасть, иначе 404). `gen` — timestamp аренды слота.
 - `POST /api/map/write` — запись в МАП (тело — `docs/map-write-api.md`; проксирует
   в control-сокет `map-reader`; HTTP-статус по коду: 200/400/404/422/502/500).
 - `POST /write_eeprom.php` — **legacy-запись** (`data=[[addr,val],…]`, десятичные;
@@ -53,6 +54,15 @@
 - `POST /system/reboot` — перезагрузка; `POST /logout`; `GET /lang?set=..&next=..`.
 - `POST /system/map-time-sync` (`enabled=1|0`) — вкл/выкл синхронизацию времени МАП
   (флаг-файл `/malina/etc/malina/map-time-sync.off`; саму синхронизацию делает `map-reader`).
+
+### Вкладка «Управление» (`/map`)
+
+Запись в МАП из браузера: команды (ON/OFF, Charge, реле, Reset) и группы параметров
+(таблица: имя+«?», текущее значение, редактор, единица, Сохранить/Отменить; сверху
+«Сохранить всё»/«Отменить всё»). Пишет через `POST /api/map/write`; текущие значения
+берёт из штатного raw-пула страницы. Данные параметров — `static/control-data.js`,
+генерируется `web/tools/gen_control.py` из `~/src/mapsettings/catalog.json` (+легаси-набор);
+логика — `static/control.js`. Требования — `docs/map-write-ui.md`.
 
 ## Подсистема `malina-netd`
 
@@ -133,6 +143,10 @@ MALINA_WEB_DEV_PASSWORD=secret MALINA_WEB_LISTEN=:8080 go run ./cmd/malina-web
 - `-auth-shm` (`MALINA_WEB_AUTH_SHM`), по умолчанию `/dev/shm/malina-auth`.
 - `-session-idle` — скользящий TTL сессий/токенов (по умолчанию `1h`).
 - `-control-sock` (`MALINA_WEB_CONTROL_SOCK`), по умолчанию `/run/malina-map/control.sock`.
+- `-base` (`MALINA_WEB_BASE`) — базовый путь монтирования (напр. `/malina`), **задавать,
+  если TLS-слой кладёт сайт в подпапку**. Пусто — корень. Все ссылки/редиректы/`fetch`
+  строятся с этим префиксом; входящие с префиксом срезаются (если прокси не срезает),
+  без префикса — принимаются. Авто-вычисления базы нет — только фиксированное значение.
 - `MALINA_WEB_DEV_PASSWORD` — только для разработки.
 
 ## Безопасность

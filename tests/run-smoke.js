@@ -2,7 +2,7 @@
 // Запуск: node run-smoke.js [baseURL]   (по умолчанию http://192.168.13.60)
 const { chromium } = require("playwright");
 
-const BASE = process.argv[2] || "http://192.168.13.60";
+const BASE = process.argv[2] || process.env.MALINA_WEB || "http://malina.local";
 const PASS = process.env.MALINA_PASS || "";
 if (!PASS) {
   console.error("задайте пароль веб-логина: MALINA_PASS=<пароль> node run-smoke.js");
@@ -33,7 +33,7 @@ function assert(cond, msg) {
   await page.fill('input[name="password"]', PASS);
   await page.click('button[type="submit"]');
   await page.waitForLoadState("networkidle");
-  assert(page.url().replace(/\/$/, "").endsWith(BASE.replace(/\/$/, "")), "login ok -> home");
+  assert(/\/map(\?|$)/.test(page.url()), "login ok -> /map (" + page.url() + ")");
 
   // Меню
   const html = await page.content();

@@ -17,12 +17,12 @@
     wrap.hidden = false;
     var html = "";
     for (var i = 0; i < maps.length; i++) {
-      html += '<a class="dropdown-sub" href="/map?id=' + encodeURIComponent(maps[i].id) + '">' + esc(maps[i].label) + "</a>";
+      html += '<a class="dropdown-sub" href="map?id=' + encodeURIComponent(maps[i].id) + '&gen=' + encodeURIComponent(maps[i].gen) + '">' + esc(maps[i].label) + "</a>";
     }
     items.innerHTML = html;
   }
   function poll() {
-    fetch("/api/map/devices", { cache: "no-store", credentials: "same-origin" })
+    fetch("api/map/devices", { cache: "no-store", credentials: "same-origin" })
       .then(function (r) { if (!r.ok) { throw 0; } return r.json(); })
       .then(render)
       .catch(function () { /* тихо: не мешаем странице */ });

@@ -117,12 +117,13 @@ func (sl *Slot) seq() *uint64   { return (*uint64)(unsafe.Pointer(&sl.b[16])) }
 func (sl *Slot) lenn() *uint32  { return (*uint32)(unsafe.Pointer(&sl.b[24])) }
 func (sl *Slot) crc() *uint32   { return (*uint32)(unsafe.Pointer(&sl.b[28])) }
 
-// Prepare готовит слот к записи (state=0 до первой публикации) и выдаёт gen.
-func (sl *Slot) Prepare() uint64 {
+// PrepareGen готовит слот к записи (state=0 до первой публикации) и задаёт gen.
+// gen задаёт вызывающий (timestamp, монотонно) — см. slotAlloc.alloc.
+func (sl *Slot) PrepareGen(gen uint64) {
 	atomic.StoreUint32(sl.state(), 0)
 	atomic.StoreUint64(sl.seq(), 0)
 	atomic.StoreUint32(sl.lenn(), 0)
-	return atomic.AddUint64(sl.gen(), 1)
+	atomic.StoreUint64(sl.gen(), gen)
 }
 
 // Release помечает слот свободным (seqlock-безопасно: нечётный seq на время).

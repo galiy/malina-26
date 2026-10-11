@@ -71,7 +71,7 @@
 
   async function refresh() {
     try {
-      var r = await fetch("/api/services", { cache: "no-store" });
+      var r = await fetch("api/services", { cache: "no-store" });
       if (!r.ok) { return; }
       var d = await r.json();
       render(d.services || []);
@@ -84,7 +84,7 @@
       var fd = new URLSearchParams();
       fd.set("unit", unit);
       fd.set("action", action);
-      var r = await fetch("/services/action", {
+      var r = await fetch("services/action", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: fd.toString()

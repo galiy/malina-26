@@ -27,12 +27,20 @@ func (s *Server) handleMapPage(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(r.URL.Query().Get("id"))
 	m, ok := findMap(id)
 	if !ok {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, s.base(r)+"/", http.StatusSeeOther)
 		return
+	}
+	// Если задан gen — он должен совпасть (защита от переиспользования слота).
+	if gs := r.URL.Query().Get("gen"); gs != "" {
+		if g, err := strconv.ParseUint(gs, 10, 64); err != nil || g != m.Gen {
+			http.Redirect(w, r, s.base(r)+"/", http.StatusSeeOther)
+			return
+		}
 	}
 	data := s.baseData(r)
 	data["Active"] = "map"
 	data["ID"] = m.ID
+	data["Gen"] = m.Gen
 	data["FieldNames"] = mapFieldNames
 	data["SerialLabel"] = m.SerialLabel()
 	// Заголовок: "MAP <модель> s/n <sn> порт <port>" (шаблон локализуется).
@@ -52,6 +60,16 @@ func (s *Server) handleAPIMapRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.Atoi(r.URL.Query().Get("id"))
+	// gen обязателен: id+gen должны совпасть с текущим устройством.
+	g, err := strconv.ParseUint(r.URL.Query().Get("gen"), 10, 64)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if m, ok := findMap(id); !ok || m.Gen != g {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
 	payload := mapRawPayload(id)
 	if payload == nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -73,11 +91,12 @@ func (s *Server) handleAPIMapDevices(w http.ResponseWriter, r *http.Request) {
 	type device struct {
 		Type  string `json:"type"`
 		ID    int    `json:"id"`
+		Gen   uint64 `json:"gen"`
 		Label string `json:"label"`
 	}
 	out := make([]device, 0, 8)
 	for _, m := range loadMapList().Maps {
-		out = append(out, device{Type: "map", ID: m.ID, Label: m.MenuLabel()})
+		out = append(out, device{Type: "map", ID: m.ID, Gen: m.Gen, Label: m.MenuLabel()})
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

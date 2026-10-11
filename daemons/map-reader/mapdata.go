@@ -397,4 +397,14 @@ type MapData struct {
 	UAccMinNetGen_S         uint32 // id=389 0x5DC 2B
 	SoC                     uint32 // id=390 0x718 2B
 	SoH                     uint32 // id=391 0x71A 2B
+	E_T_CHARGE_NEED_ECO     uint32 // id=392 0x07F 1B
+	TdizProfilact_day       uint32 // id=393 0x0DB 1B
+	LCD_Rele3_Funk          uint32 // id=394 0x120 1B
+	LCD_Rele3_L1            uint32 // id=395 0x121 1B
+	LCD_Rele3_L2            uint32 // id=396 0x122 1B
+	LCD_Rele3_Gist          uint32 // id=397 0x123 1B
+	LCD_ReleII_Funk         uint32 // id=398 0x124 1B
+	LCD_ReleII_L1           uint32 // id=399 0x125 1B
+	LCD_ReleII_L2           uint32 // id=400 0x126 1B
+	LCD_ReleII_Gist         uint32 // id=401 0x127 1B
 }

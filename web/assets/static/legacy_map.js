@@ -117,7 +117,7 @@
 
   function map_update() {
     if (maps_number <= 0) { return; }
-    jQuery.get("/read_json.php?device=map", function (data) {
+    jQuery.get("read_json.php?device=map", function (data) {
       var inter = data.split('\n');
       map = JSON.parse(inter[0]);
       if (typeof map == 'undefined') { return; }
@@ -302,7 +302,7 @@
     if (maps_number <= 0) { return; }
     $('[data-toggle="tooltip"]').tooltip();
 
-    jQuery.get("/read_memory.php?offset=0&count=400", function (data) {
+    jQuery.get("read_memory.php?offset=0&count=400", function (data) {
       eeprom = JSON.parse(data);
       // «ID» в оригинале — серийник МАП (uid = eeprom[0x19]*256 + eeprom[0x18]).
       var uidLabel = document.getElementById('map_id_label');
