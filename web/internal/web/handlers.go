@@ -190,9 +190,11 @@ func (s *Server) handleSystemMapTimeSync(w http.ResponseWriter, r *http.Request)
 	_ = r.ParseForm()
 	enabled := r.FormValue("enabled") == "1"
 	if err := setTimeSyncEnabled(s.opts.MapTimeSyncOff, enabled); err != nil {
+		s.audit.Event("system_settings", map[string]any{"what": "maptime", "result": "err", "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=maptime")
 		return
 	}
+	s.audit.Event("system_settings", map[string]any{"what": "maptime", "enabled": enabled, "result": "ok", "ip": clientIP(r)})
 	s.redirectSystem(w, r, "ok=maptime")
 }
 
@@ -210,17 +212,21 @@ func (s *Server) handleSystemHost(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("hostname"))
 	tz := strings.TrimSpace(r.FormValue("timezone"))
 	if !sysctl.ValidHostname(name) {
+		s.audit.Event("system_settings", map[string]any{"what": "host", "result": "err", "reason": "hostname", "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=hostname")
 		return
 	}
 	if !sysctl.ValidTimezone(tz) {
+		s.audit.Event("system_settings", map[string]any{"what": "host", "result": "err", "reason": "timezone", "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=timezone")
 		return
 	}
 	if err := sysctl.SetHost(name, tz); err != nil {
+		s.audit.Event("system_settings", map[string]any{"what": "host", "result": "err", "reason": "generic", "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=generic")
 		return
 	}
+	s.audit.Event("system_settings", map[string]any{"what": "host", "hostname": name, "timezone": tz, "result": "ok", "ip": clientIP(r)})
 	s.redirectSystem(w, r, "ok=host")
 }
 
@@ -235,13 +241,16 @@ func (s *Server) handleSystemLogging(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	host := strings.TrimSpace(r.FormValue("host"))
 	if host != "" && !sysctl.ValidRemoteHost(host) {
+		s.audit.Event("system_settings", map[string]any{"what": "logging", "result": "err", "reason": "host", "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=logging")
 		return
 	}
 	if err := sysctl.SetRemoteSyslog(host); err != nil {
+		s.audit.Event("system_settings", map[string]any{"what": "logging", "result": "err", "reason": "generic", "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=generic")
 		return
 	}
+	s.audit.Event("system_settings", map[string]any{"what": "logging", "host": host, "result": "ok", "ip": clientIP(r)})
 	s.redirectSystem(w, r, "ok=logging")
 }
 
@@ -257,25 +266,30 @@ func (s *Server) handleSystemPassword(w http.ResponseWriter, r *http.Request) {
 	p1 := r.FormValue("password_new")
 	p2 := r.FormValue("password_confirm")
 	if p1 != p2 {
+		s.audit.Event("password_change", map[string]any{"result": "err", "reason": "mismatch", "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=password_mismatch")
 		return
 	}
 	if len(p1) < 4 {
+		s.audit.Event("password_change", map[string]any{"result": "err", "reason": "short", "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=password_short")
 		return
 	}
 	if strings.ContainsAny(p1, "\n\r:") ||
 		strings.IndexFunc(p1, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		s.audit.Event("password_change", map[string]any{"result": "err", "reason": "chars", "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=password_chars")
 		return
 	}
 	if err := auth.ChangePassword(s.opts.User, p1); err != nil {
+		s.audit.Event("password_change", map[string]any{"result": "err", "reason": "password", "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=password")
 		return
 	}
 	// Смена пароля — инвалидируем все сессии, токены и кэш Basic-проверок.
 	s.store.PurgeAll()
 	s.basic.Invalidate()
+	s.audit.Event("password_change", map[string]any{"result": "ok", "purged": true, "ip": clientIP(r)})
 	s.redirectSystem(w, r, "ok=password")
 }
 
@@ -309,6 +323,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		password := r.FormValue("password")
 		if err := s.auth.Authenticate(s.opts.User, password); err != nil {
+			s.audit.Event("login", map[string]any{"result": "fail", "ip": clientIP(r)})
 			data := s.baseData(r)
 			data["Error"] = true
 			s.render(w, http.StatusUnauthorized, "login", data)
@@ -321,6 +336,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		s.store.Issue(tok)
 		s.setSessionCookie(w, tok)
+		s.audit.Event("login", map[string]any{"result": "ok", "ip": clientIP(r), "token": tokenPrefix(tok)})
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	default:
 		w.Header().Set("Allow", "GET, POST")
@@ -336,6 +352,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	if c, err := r.Cookie(session.CookieName); err == nil {
 		s.store.Revoke(c.Value)
+		s.audit.Event("logout", map[string]any{"ip": clientIP(r), "token": tokenPrefix(c.Value)})
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     session.CookieName,
@@ -367,6 +384,7 @@ func (s *Server) handleAPIToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.auth.Authenticate(s.opts.User, req.Password); err != nil {
+			s.audit.Event("token_issue", map[string]any{"result": "fail", "ip": clientIP(r)})
 			w.Header().Set("WWW-Authenticate", `Bearer realm="malina", error="invalid_grant"`)
 			writeJSONStatus(w, http.StatusUnauthorized, map[string]any{"error": "invalid_credentials"})
 			return
@@ -377,6 +395,7 @@ func (s *Server) handleAPIToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.store.Issue(tok)
+		s.audit.Event("token_issue", map[string]any{"result": "ok", "ip": clientIP(r), "token": tokenPrefix(tok)})
 		writeJSONStatus(w, http.StatusOK, map[string]any{
 			"token":   tok,
 			"expires": time.Now().Add(s.opts.SessionIdle).Unix(),
@@ -389,6 +408,7 @@ func (s *Server) handleAPIToken(w http.ResponseWriter, r *http.Request) {
 		}
 		if tok, _, ok := tokenFrom(r); ok {
 			s.store.Revoke(tok)
+			s.audit.Event("token_revoke", map[string]any{"ip": clientIP(r), "token": tokenPrefix(tok)})
 		}
 		writeJSONStatus(w, http.StatusOK, map[string]any{"ok": true})
 	default:

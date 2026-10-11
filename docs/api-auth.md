@@ -94,8 +94,25 @@ Legacy-запись `write_eeprom` **реализована**: `POST data=[[addr
 - CSRF для cookie-записей из браузера: `SameSite=Lax` + (при необходимости)
   нестандартный заголовок/CSRF-токен; `Bearer` от CSRF свободен.
 - Rate-limit на `/login` и `/api/token` — **не делаем** (согласовано).
-- Логировать `lastUsed`; при желании — счётчик обращений (аудит).
 - UI управления токенами **не делаем**.
+
+### Аудит-журнал (реализовано)
+
+- Модуль `internal/audit`: событие = один JSON-объект (`ts`, `event`, поля),
+  пишется в syslog через `/dev/log` с отдельным тегом
+  (`-audit-tag`, по умолчанию `malina-web-audit`; `-audit` / `MALINA_WEB_AUDIT=0` — выкл.).
+- На внешнем log-хосте (`.253`) используется **существующая универсальная** раскладка
+  rsyslog (разбор по `%PROGRAMNAME%`): наши события попадают в **отдельный файл**
+  `…/malina-<ip>/<category>/malina-web-audit.log`. Доп. настроек ни на log-хосте, ни
+  в системном логировании устройства **не требуется** (используется общий форвард «всего»
+  syslog и её же шаблон). Формат строки — syslog-префикс + JSON-тело.
+- События: `login` (ok/fail), `logout`, `token_issue` (ok/fail), `token_revoke`,
+  `password_change`, `session_expire` (с `idle_since` = `lastUsed`), `system_settings`
+  (host/logging/maptime), `network_settings` (все параметры m1/m2), `service_action`,
+  `reboot`, `map_write`, `eeprom_write`.
+- Секреты не логируются: значения «секретных» ключей (pass/secret/token/cookie/
+  authorization) заменяются на `***`; токен — только 8-hex префикс `sha256`; клиентский
+  IP — из `X-Forwarded-For`.
 - Legacy-чтение остаётся открытым.
 
 ## 9. Порядок внедрения

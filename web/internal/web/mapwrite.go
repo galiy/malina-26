@@ -43,6 +43,7 @@ func controlCall(sock string, req []byte) ([]byte, error) {
 // HTTP-статус по коду.
 func (s *Server) handleAPIMapWrite(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.currentUser(r); !ok {
+		s.audit.Event("map_write", map[string]any{"result": "unauthorized", "ip": clientIP(r)})
 		w.Header().Set("WWW-Authenticate", `Bearer realm="malina", error="invalid_token"`)
 		writeJSONStatus(w, http.StatusUnauthorized, map[string]any{"ok": false, "code": "unauthorized", "error": "unauthorized"})
 		return
@@ -74,6 +75,23 @@ func (s *Server) handleAPIMapWrite(w http.ResponseWriter, r *http.Request) {
 
 	var mr mapWriteResp
 	_ = json.Unmarshal(resp, &mr)
+
+	// Аудит: пишем результат вместе с адресацией (id/gen) и числом операций.
+	id, _ := obj["id"].(float64)
+	gen, _ := obj["gen"].(float64)
+	opsN := 0
+	if ops, ok := obj["ops"].([]any); ok {
+		opsN = len(ops)
+	}
+	res := "ok"
+	if !mr.OK {
+		res = "err"
+	}
+	s.audit.Event("map_write", map[string]any{
+		"id": int(id), "gen": uint64(gen), "ops": opsN,
+		"result": res, "code": mr.Code, "ip": clientIP(r),
+	})
+
 	status := http.StatusOK
 	if !mr.OK {
 		switch mr.Code {

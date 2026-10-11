@@ -65,6 +65,30 @@ func TestPurgeAll(t *testing.T) {
 	}
 }
 
+// TestOnExpire — колбэк истечения вызывается с 8-hex префиксом токена.
+func TestOnExpire(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "auth-shm")
+	s, _ := Open(p, 20*time.Millisecond)
+	defer s.Close()
+
+	var gotPrefix string
+	var called bool
+	s.SetOnExpire(func(prefix string, lastUsed time.Time) { called = true; gotPrefix = prefix })
+
+	tok, _ := NewToken()
+	s.Issue(tok)
+	time.Sleep(40 * time.Millisecond)
+	if s.Touch(tok) {
+		t.Fatal("токен должен протухнуть")
+	}
+	if !called {
+		t.Fatal("onExpire не вызван")
+	}
+	if len(gotPrefix) != 8 {
+		t.Fatalf("префикс=%q (ожидали 8 hex-символов)", gotPrefix)
+	}
+}
+
 // TestPersistAcrossReopen — сессии живут перезапуск процесса (файл в tmpfs).
 func TestPersistAcrossReopen(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "auth-shm")

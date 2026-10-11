@@ -63,6 +63,7 @@ func (s *Server) handleServiceAction(w http.ResponseWriter, r *http.Request) {
 	unit := r.FormValue("unit")
 	action := r.FormValue("action")
 	if err := sysctl.ServiceAction(unit, action); err != nil {
+		s.audit.Event("service_action", map[string]any{"service": unit, "action": action, "result": "err", "ip": clientIP(r)})
 		switch {
 		case errors.Is(err, sysctl.ErrNotManaged):
 			s.redirectServices(w, r, "err=unit")
@@ -73,6 +74,7 @@ func (s *Server) handleServiceAction(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	s.audit.Event("service_action", map[string]any{"service": unit, "action": action, "result": "ok", "ip": clientIP(r)})
 	s.redirectServices(w, r, "ok="+action)
 }
 
@@ -91,6 +93,7 @@ func (s *Server) handleSystemReboot(w http.ResponseWriter, r *http.Request) {
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
+	s.audit.Event("reboot", map[string]any{"ip": clientIP(r)})
 	go func() {
 		time.Sleep(1200 * time.Millisecond)
 		_ = exec.Command("systemctl", "reboot").Run()

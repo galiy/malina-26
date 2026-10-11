@@ -67,6 +67,7 @@ func (s *Server) handleWriteEEPROM(w http.ResponseWriter, r *http.Request) {
 	}
 	user, pass, ok := r.BasicAuth()
 	if !ok || !s.basic.Check(user, pass) {
+		s.audit.Event("eeprom_write", map[string]any{"result": "unauthorized", "ip": clientIP(r)})
 		w.Header().Set("WWW-Authenticate", `Basic realm="malina"`)
 		writeText(w, http.StatusUnauthorized, "error")
 		return
@@ -74,6 +75,7 @@ func (s *Server) handleWriteEEPROM(w http.ResponseWriter, r *http.Request) {
 
 	ops, ok := buildEEPROMOps(r.FormValue("data"))
 	if !ok || len(ops) == 0 {
+		s.audit.Event("eeprom_write", map[string]any{"result": "error", "reason": "data", "ip": clientIP(r)})
 		writeText(w, http.StatusOK, "error")
 		return
 	}
@@ -84,17 +86,21 @@ func (s *Server) handleWriteEEPROM(w http.ResponseWriter, r *http.Request) {
 	select {
 	case s.legacy.cmds <- job:
 	case <-time.After(2 * time.Second):
+		s.audit.Event("eeprom_write", map[string]any{"ops": len(ops), "result": "busy", "ip": clientIP(r)})
 		writeText(w, http.StatusOK, "error")
 		return
 	}
 	select {
 	case ok := <-job.resp:
 		if ok {
+			s.audit.Event("eeprom_write", map[string]any{"ops": len(ops), "result": "ok", "ip": clientIP(r)})
 			writeText(w, http.StatusOK, "Ok")
 		} else {
+			s.audit.Event("eeprom_write", map[string]any{"ops": len(ops), "result": "error", "ip": clientIP(r)})
 			writeText(w, http.StatusOK, "error")
 		}
 	case <-time.After(10 * time.Second):
+		s.audit.Event("eeprom_write", map[string]any{"ops": len(ops), "result": "timeout", "ip": clientIP(r)})
 		writeText(w, http.StatusOK, "error")
 	}
 }

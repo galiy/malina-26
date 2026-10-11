@@ -161,6 +161,7 @@ func (s *Server) handleNetworkSave(w http.ResponseWriter, r *http.Request) {
 		Serve: r.FormValue("m2_serve") != "",
 	}
 	if err := validateNet(m1, m2); err != nil {
+		s.audit.Event("network_settings", map[string]any{"result": "invalid", "error": err.Error(), "ip": clientIP(r)})
 		http.Error(w, "некорректные параметры сети: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -169,7 +170,48 @@ func (s *Server) handleNetworkSave(w http.ResponseWriter, r *http.Request) {
 	_ = netcfg.SetActive(f("mode", netcfg.Active()))
 	// «Сохранить» = сохранить и применить (перезапуск сети).
 	_ = runSystemctl("restart", "--no-block", "malina-net.service")
+	fields := networkAuditFields(m1, m2, f("mode", netcfg.Active()))
+	fields["result"] = "ok"
+	fields["ip"] = clientIP(r)
+	s.audit.Event("network_settings", fields)
 	http.Redirect(w, r, "/network?ok=save", http.StatusSeeOther)
+}
+
+// networkAuditFields — плоский набор параметров сети для аудита; секреты
+// (пароли AP/STA) маскируются уже в audit.MaskFields.
+func networkAuditFields(m1 netcfg.Mode1, m2 netcfg.Mode2, mode string) map[string]any {
+	return map[string]any{
+		"mode":               mode,
+		"m1_ap_ssid":         m1.AP.SSID,
+		"m1_ap_pass":         m1.AP.Passphrase,
+		"m1_ap_country":      m1.AP.Country,
+		"m1_ap_channel":      m1.AP.Channel,
+		"m1_lan_server":      m1.LAN.ServerIP,
+		"m1_lan_mask":        m1.LAN.Mask,
+		"m1_lan_start":       m1.LAN.Start,
+		"m1_lan_end":         m1.LAN.End,
+		"m1_eth_mode":        m1.Eth.Mode,
+		"m1_eth_ip":          m1.Eth.IP,
+		"m1_eth_mask":        m1.Eth.Mask,
+		"m1_eth_gw":          m1.Eth.Gateway,
+		"m1_eth_dns":         strings.Join(m1.Eth.DNS, ","),
+		"m1_nat":             m1.NAT,
+		"m1_portal":          m1.Portal,
+		"m1_wifi_off_on_eth": m1.WifiOffOnEth,
+		"m2_sta_ssid":        m2.STA.SSID,
+		"m2_sta_pass":        m2.STA.Passphrase,
+		"m2_sta_security":    m2.STA.Security,
+		"m2_sta_ipmode":      m2.STA.IPMode,
+		"m2_sta_ip":          m2.STA.IP,
+		"m2_sta_mask":        m2.STA.Mask,
+		"m2_sta_gw":          m2.STA.Gateway,
+		"m2_sta_dns":         strings.Join(m2.STA.DNS, ","),
+		"m2_eth_server":      m2.LAN.ServerIP,
+		"m2_eth_mask":        m2.LAN.Mask,
+		"m2_eth_start":       m2.LAN.Start,
+		"m2_eth_end":         m2.LAN.End,
+		"m2_serve":           m2.Serve,
+	}
 }
 
 func (s *Server) handleNetworkScan(w http.ResponseWriter, r *http.Request) {

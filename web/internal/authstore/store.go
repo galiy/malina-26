@@ -40,7 +40,20 @@ type Store struct {
 	idle      time.Duration
 	done      chan struct{}
 	closeOnce sync.Once
+	// onExpire вызывается при истечении простаивающей записи (для аудита);
+	// задаётся через SetOnExpire до запуска reaper'а.
+	onExpire func(hashPrefix string, lastUsed time.Time)
 }
+
+// SetOnExpire задаёт колбэк истечения записи (hashPrefix — 8 hex-символов
+// sha256 токена, lastUsed — время последнего использования).
+func (s *Store) SetOnExpire(fn func(hashPrefix string, lastUsed time.Time)) {
+	s.mu.Lock()
+	s.onExpire = fn
+	s.mu.Unlock()
+}
+
+func hashPrefix(h [hashLen]byte) string { return hex.EncodeToString(h[:4]) }
 
 // NewToken — случайный токен (64 hex-символа).
 func NewToken() (string, error) {
@@ -156,7 +169,6 @@ func (s *Store) Touch(token string) bool {
 	h := hashOf(token)
 	now := time.Now()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	for i := 0; i < slots; i++ {
 		sl := s.slot(i)
 		if binary.LittleEndian.Uint32(sl[offState:offState+4]) != 1 {
@@ -168,11 +180,18 @@ func (s *Store) Touch(token string) bool {
 		last := int64(binary.LittleEndian.Uint64(sl[offLastUsed : offLastUsed+8]))
 		if now.Sub(time.Unix(0, last)) >= s.idle {
 			binary.LittleEndian.PutUint32(sl[offState:offState+4], 0)
+			fn := s.onExpire
+			s.mu.Unlock()
+			if fn != nil {
+				fn(hashPrefix(h), time.Unix(0, last))
+			}
 			return false
 		}
 		binary.LittleEndian.PutUint64(sl[offLastUsed:offLastUsed+8], uint64(now.UnixNano()))
+		s.mu.Unlock()
 		return true
 	}
+	s.mu.Unlock()
 	return false
 }
 
@@ -210,8 +229,12 @@ func (s *Store) reapLoop() {
 
 func (s *Store) purgeExpired() {
 	now := time.Now()
+	type expired struct {
+		prefix   string
+		lastUsed time.Time
+	}
+	var list []expired
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	for i := 0; i < slots; i++ {
 		sl := s.slot(i)
 		if binary.LittleEndian.Uint32(sl[offState:offState+4]) != 1 {
@@ -220,6 +243,16 @@ func (s *Store) purgeExpired() {
 		last := int64(binary.LittleEndian.Uint64(sl[offLastUsed : offLastUsed+8]))
 		if now.Sub(time.Unix(0, last)) >= s.idle {
 			binary.LittleEndian.PutUint32(sl[offState:offState+4], 0)
+			var h [hashLen]byte
+			copy(h[:], sl[offHash:offHash+hashLen])
+			list = append(list, expired{hashPrefix(h), time.Unix(0, last)})
+		}
+	}
+	fn := s.onExpire
+	s.mu.Unlock()
+	if fn != nil {
+		for _, e := range list {
+			fn(e.prefix, e.lastUsed)
 		}
 	}
 }

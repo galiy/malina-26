@@ -145,6 +145,9 @@ MALINA_WEB_DEV_PASSWORD=secret MALINA_WEB_LISTEN=:8080 go run ./cmd/malina-web
 - `-auth-shm` (`MALINA_WEB_AUTH_SHM`), по умолчанию `/dev/shm/malina-auth`.
 - `-session-idle` — скользящий TTL сессий/токенов (по умолчанию `1h`).
 - `-control-sock` (`MALINA_WEB_CONTROL_SOCK`), по умолчанию `/run/malina-map/control.sock`.
+- `-audit` (`MALINA_WEB_AUDIT=0` — выключить), `-audit-tag` (`MALINA_WEB_AUDIT_TAG`,
+  по умолчанию `malina-web-audit`) — аудит-журнал действий: JSON-события в syslog
+  (`/dev/log`), на log-хосте — отдельный файл по тегу (см. `docs/api-auth.md` §8).
 - `MALINA_WEB_DEV_PASSWORD` — только для разработки.
 
 Сервис обслуживает **корень** своего хоста; базового пути нет. Публикация наружу —

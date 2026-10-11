@@ -25,6 +25,8 @@ func main() {
 	authShm := flag.String("auth-shm", envOr("MALINA_WEB_AUTH_SHM", "/dev/shm/malina-auth"), "auth store (shm) path")
 	sessionIdle := flag.Duration("session-idle", time.Hour, "session/token idle TTL (sliding)")
 	controlSock := flag.String("control-sock", envOr("MALINA_WEB_CONTROL_SOCK", "/run/malina-map/control.sock"), "map-reader control socket")
+	auditOn := flag.Bool("audit", envOr("MALINA_WEB_AUDIT", "1") != "0", "аудит-журнал действий (syslog)")
+	auditTag := flag.String("audit-tag", envOr("MALINA_WEB_AUDIT_TAG", "malina-web-audit"), "syslog-тег аудита")
 	flag.Parse()
 
 	var a auth.Authenticator
@@ -43,6 +45,8 @@ func main() {
 		SessionIdle:   *sessionIdle,
 		AuthStorePath: *authShm,
 		ControlSock:   *controlSock,
+		AuditEnabled:  *auditOn,
+		AuditTag:      *auditTag,
 	})
 	if err != nil {
 		log.Fatalf("init: %v", err)

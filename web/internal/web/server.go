@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/galiy/malina-26/web/internal/audit"
 	"github.com/galiy/malina-26/web/internal/auth"
 	"github.com/galiy/malina-26/web/internal/authstore"
 	"github.com/galiy/malina-26/web/internal/i18n"
@@ -31,6 +32,8 @@ type Options struct {
 	ControlSock    string        // control-сокет map-reader
 	BasicCacheTTL  time.Duration // TTL кэша успешных Basic-проверок (legacy)
 	MapTimeSyncOff string        // флаг-файл отключения синхронизации времени МАП
+	AuditEnabled   bool          // аудит-журнал действий (syslog)
+	AuditTag       string        // syslog-тег аудита (по умолчанию malina-web-audit)
 }
 
 // Server — HTTP-сервер.
@@ -44,6 +47,7 @@ type Server struct {
 	sampler *sysinfo.Sampler
 	initial string
 	legacy  *legacyService
+	audit   *audit.Logger
 }
 
 // ctxKey — ключ контекста «запрос авторизован».
@@ -140,6 +144,15 @@ func New(o Options) (*Server, error) {
 		return nil, err
 	}
 
+	aud := audit.New(o.AuditEnabled, o.AuditTag)
+	// Истечение простаивающих сессий/токенов — в аудит (через reaper/Touch).
+	store.SetOnExpire(func(prefix string, lastUsed time.Time) {
+		aud.Event("session_expire", map[string]any{
+			"token":      prefix,
+			"idle_since": lastUsed.UTC().Format(time.RFC3339),
+		})
+	})
+
 	return &Server{
 		opts:    o,
 		auth:    o.Auth,
@@ -150,6 +163,7 @@ func New(o Options) (*Server, error) {
 		sampler: sysinfo.New(),
 		initial: o.DefaultLang,
 		legacy:  newLegacyService(o.ControlSock),
+		audit:   aud,
 	}, nil
 }
 
