@@ -169,7 +169,7 @@ func (s *Server) handleNetworkSave(w http.ResponseWriter, r *http.Request) {
 	_ = netcfg.SetActive(f("mode", netcfg.Active()))
 	// «Сохранить» = сохранить и применить (перезапуск сети).
 	_ = runSystemctl("restart", "--no-block", "malina-net.service")
-	http.Redirect(w, r, s.base(r)+"/network?ok=save", http.StatusSeeOther)
+	http.Redirect(w, r, "/network?ok=save", http.StatusSeeOther)
 }
 
 func (s *Server) handleNetworkScan(w http.ResponseWriter, r *http.Request) {
@@ -181,7 +181,7 @@ func (s *Server) handleNetworkScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = runSystemctl("start", "--no-block", "malina-net-scan.service")
-	http.Redirect(w, r, s.base(r)+"/network?ok=scan", http.StatusSeeOther)
+	http.Redirect(w, r, "/network?ok=scan", http.StatusSeeOther)
 }
 
 func (s *Server) handleAPIScan(w http.ResponseWriter, r *http.Request) {

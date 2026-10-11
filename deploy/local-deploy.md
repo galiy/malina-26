@@ -338,3 +338,29 @@ sudo dd if=<img> of=/dev/sdX bs=4M conv=fsync status=progress
 # Этап 2:
 deploy/local/stage2.sh /dev/sdX
 ```
+
+---
+
+## Обновления на развёрнутом устройстве (точечно)
+
+`deploy/install.sh` и `stage2.sh` — **только для первичного развёртывания** (полный
+прогон `manifest.tsv`, компиляция `pamcheck` и т.п.). На уже работающем устройстве
+так делать не нужно и не следует: обновляют **только изменившиеся артефакты**.
+
+Пример — обновление веб-сервиса (типовой случай):
+
+```
+make -C web arm
+scp web/dist/malina-web-armv7 malina@<ip>:/tmp/malina-web
+scp system/systemd/malina-web.service malina@<ip>:/tmp/malina-web.service
+ssh malina@<ip> 'sudo mount -o remount,rw / && \
+  sudo install -m0755 /tmp/malina-web /malina/usr/local/bin/malina-web && \
+  sudo install -m0644 /tmp/malina-web.service /etc/systemd/system/malina-web.service && \
+  sudo cp -a /tmp/web-assets/* /malina/usr/local/share/malina/web/ && \
+  sudo systemctl daemon-reload && sudo systemctl restart malina-web && \
+  sudo mount -o remount,ro /'
+```
+
+Для ассетов аналогично копируется содержимое `web/assets/{templates,static,i18n}` в
+`/malina/usr/local/share/malina/web/`. Root-файлы требуют rw-окна (`mount -o
+remount,rw /` … `remount,ro`), каталог `/malina` — уже rw.

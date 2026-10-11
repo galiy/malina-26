@@ -52,16 +52,18 @@
 # образ
 image/build.sh
 
-# веб-сервисы (ARMv7) и установка на устройство
+# веб-сервисы (ARMv7)
 make -C web arm
+
+# ПЕРВИЧНОЕ развёртывание — только один раз, на голое устройство/образ:
 MALINA_PASS=<пароль> deploy/install.sh <user@host>       # + --build для сборки на месте
 
 # локальный деплой на SD (этап 2 после записи образа) — см. deploy/local-deploy.md
 deploy/local/stage2.sh /dev/sdX
 
 # (устаревший SSH-провижининг deploy/provision.sh перенесён в archive/)
-# точечные обновления на загруженном устройстве:
-MALINA_PASS=<пароль> deploy/install.sh <user@host>
+# ОБНОВЛЕНИЯ уже развёрнутого устройства: deploy/install.sh НЕ используется —
+# обновляют точечно (копия бинаря/юнита/ассетов + restart), см. deploy/local-deploy.md
 ```
 
 ## Доступы по умолчанию

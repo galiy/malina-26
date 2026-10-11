@@ -130,8 +130,10 @@ MALINA_WEB_DEV_PASSWORD=secret MALINA_WEB_LISTEN=:8080 go run ./cmd/malina-web
 - Статика: `/malina/usr/local/share/malina/web` (флаг `-assets`).
 - Хелперы: `/malina/usr/local/libexec/malina-pamcheck`, `…/malina-remote-syslog`,
   `/malina/usr/local/sbin/malina-rw`.
-- Юниты/PAM/конфиги — из `system/` по `deploy/manifest.tsv` (установка:
-  `deploy/local/stage2.sh` локально; `deploy/install.sh` по SSH).
+- Юниты/PAM/конфиги — из `system/` по `deploy/manifest.tsv` (**первичное**
+  развёртывание: `deploy/local/stage2.sh` локально; `deploy/install.sh` по SSH).
+- **Обновления** уже развёрнутого устройства — точечно (бинарник + юнит + ассеты +
+  restart), `install.sh` для этого не используется (см. `deploy/local-deploy.md`).
 - Установка требует `MALINA_PASS` (env) или строки `MALINA_PASS=…` в `.kilo/secrets`.
 
 ## Флаги / переменные
@@ -143,11 +145,11 @@ MALINA_WEB_DEV_PASSWORD=secret MALINA_WEB_LISTEN=:8080 go run ./cmd/malina-web
 - `-auth-shm` (`MALINA_WEB_AUTH_SHM`), по умолчанию `/dev/shm/malina-auth`.
 - `-session-idle` — скользящий TTL сессий/токенов (по умолчанию `1h`).
 - `-control-sock` (`MALINA_WEB_CONTROL_SOCK`), по умолчанию `/run/malina-map/control.sock`.
-- `-base` (`MALINA_WEB_BASE`) — базовый путь монтирования (напр. `/malina`), **задавать,
-  если TLS-слой кладёт сайт в подпапку**. Пусто — корень. Все ссылки/редиректы/`fetch`
-  строятся с этим префиксом; входящие с префиксом срезаются (если прокси не срезает),
-  без префикса — принимаются. Авто-вычисления базы нет — только фиксированное значение.
 - `MALINA_WEB_DEV_PASSWORD` — только для разработки.
+
+Сервис обслуживает **корень** своего хоста; базового пути нет. Публикация наружу —
+отдельный hostname на TLS-прокси (см. `docs/`/`deploy/`), проксируется в корень
+устройства.
 
 ## Безопасность
 

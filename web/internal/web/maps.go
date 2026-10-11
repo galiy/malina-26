@@ -27,13 +27,13 @@ func (s *Server) handleMapPage(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(r.URL.Query().Get("id"))
 	m, ok := findMap(id)
 	if !ok {
-		http.Redirect(w, r, s.base(r)+"/", http.StatusSeeOther)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 	// Если задан gen — он должен совпасть (защита от переиспользования слота).
 	if gs := r.URL.Query().Get("gen"); gs != "" {
 		if g, err := strconv.ParseUint(gs, 10, 64); err != nil || g != m.Gen {
-			http.Redirect(w, r, s.base(r)+"/", http.StatusSeeOther)
+			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
 	}

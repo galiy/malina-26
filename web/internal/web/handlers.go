@@ -59,7 +59,6 @@ func (s *Server) baseData(r *http.Request) map[string]any {
 		"Langs":     s.opts.Langs,
 		"LangNames": langNames,
 		"Path":      r.URL.Path,
-		"Base":      s.base(r),
 		"Maps":      loadMapList().Maps,
 	}
 }
@@ -74,7 +73,7 @@ func (s *Server) currentUser(r *http.Request) (string, bool) {
 func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) (string, bool) {
 	user, ok := s.currentUser(r)
 	if !ok {
-		http.Redirect(w, r, s.base(r)+"/login", http.StatusSeeOther)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return "", false
 	}
 	return user, true
@@ -98,7 +97,7 @@ var captiveProbePaths = map[string]bool{
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		if captiveProbePaths[r.URL.Path] {
-			http.Redirect(w, r, s.base(r)+"/", http.StatusFound)
+			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}
 		http.NotFound(w, r)
@@ -109,7 +108,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	// При входе на сайт всегда открываем страницу первого МАП (верхний пункт меню).
 	if ml := loadMapList(); len(ml.Maps) > 0 {
-		http.Redirect(w, r, s.base(r)+"/map?id="+strconv.Itoa(ml.Maps[0].ID), http.StatusSeeOther)
+		http.Redirect(w, r, "/map?id="+strconv.Itoa(ml.Maps[0].ID), http.StatusSeeOther)
 		return
 	}
 	s.renderInfo(w, r)
@@ -156,7 +155,7 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) redirectSystem(w http.ResponseWriter, r *http.Request, key string) {
-	http.Redirect(w, r, s.base(r)+"/system?"+key, http.StatusSeeOther)
+	http.Redirect(w, r, "/system?"+key, http.StatusSeeOther)
 }
 
 // timeSyncEnabled — включена ли синхронизация времени МАП (нет флаг-файла).
@@ -299,7 +298,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		if _, ok := s.currentUser(r); ok {
-			http.Redirect(w, r, s.base(r)+"/", http.StatusSeeOther)
+			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
 		s.render(w, http.StatusOK, "login", s.baseData(r))
@@ -322,7 +321,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		s.store.Issue(tok)
 		s.setSessionCookie(w, tok)
-		http.Redirect(w, r, s.base(r)+"/", http.StatusSeeOther)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -345,7 +344,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 	})
-	http.Redirect(w, r, s.base(r)+"/login", http.StatusSeeOther)
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 // writeJSONStatus пишет JSON-ответ с заданным статусом.
@@ -414,7 +413,7 @@ func (s *Server) handleLang(w http.ResponseWriter, r *http.Request) {
 	if next == "" || next[0] != '/' || strings.HasPrefix(next, "//") || strings.HasPrefix(next, `/\`) {
 		next = "/"
 	}
-	http.Redirect(w, r, s.base(r)+next, http.StatusSeeOther)
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 func (s *Server) handleAPIProcesses(w http.ResponseWriter, r *http.Request) {

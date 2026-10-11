@@ -3,7 +3,6 @@
 <html lang="{{.Lang}}">
 <head>
   <meta charset="utf-8">
-  <base href="{{.Base}}/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{index .T "app.tab_title"}}</title>
   <link rel="icon" type="image/gif" href="{{asset "img/malina_small.gif"}}">
@@ -19,7 +18,7 @@
         <div class="dropdown-menu">
           <div id="mapMenuWrap" {{if not .Maps}}hidden{{end}}>
             <div id="mapMenuItems">
-              {{range .Maps}}<a class="dropdown-sub" href="map?id={{.ID}}&gen={{.Gen}}">{{.MenuLabel}}</a>{{end}}
+              {{range .Maps}}<a class="dropdown-sub" href="/map?id={{.ID}}&gen={{.Gen}}">{{.MenuLabel}}</a>{{end}}
             </div>
           </div>
         </div>
@@ -37,16 +36,16 @@
       <div class="navitem dropdown {{if or (eq .Active "info") (eq .Active "system") (eq .Active "network") (eq .Active "services")}}active{{end}}">
         <span class="navlink">{{index .T "menu.system"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
-          <a href="info" class="{{if eq .Active "info"}}active{{end}}">{{index .T "menu.info"}}</a>
-          <a href="system" class="{{if eq .Active "system"}}active{{end}}">{{index .T "menu.params"}}</a>
-          <a href="network" class="{{if eq .Active "network"}}active{{end}}">{{index .T "menu.network"}}</a>
-          <a href="services" class="{{if eq .Active "services"}}active{{end}}">{{index .T "menu.services"}}</a>
+          <a href="/info" class="{{if eq .Active "info"}}active{{end}}">{{index .T "menu.info"}}</a>
+          <a href="/system" class="{{if eq .Active "system"}}active{{end}}">{{index .T "menu.params"}}</a>
+          <a href="/network" class="{{if eq .Active "network"}}active{{end}}">{{index .T "menu.network"}}</a>
+          <a href="/services" class="{{if eq .Active "services"}}active{{end}}">{{index .T "menu.services"}}</a>
         </div>
       </div>
-      <form method="post" action="logout" class="navform">
+      <form method="post" action="/logout" class="navform">
         <button class="navlink" type="submit">{{index .T "menu.logout"}}</button>
       </form>
-      <form class="lang" method="get" action="lang">
+      <form class="lang" method="get" action="/lang">
         <input type="hidden" name="next" value="{{.Path}}">
         <select name="set" onchange="this.form.submit()">
           {{range .Langs}}
