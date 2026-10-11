@@ -17,7 +17,7 @@ const pollRetries = 3
 // команду (порт занят только этой горутиной, поэтому обмен сериализован), затем
 // возвращается к опросу.
 func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, proto string, baud int, entries []*MapEntry, cmds chan *writeJob) {
-	defer p.close()
+	defer p.Close()
 
 	t := time.NewTicker(cfg.pollInterval)
 	defer t.Stop()

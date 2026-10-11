@@ -86,7 +86,7 @@ func (r *Registry) Touch(e *MapEntry) {
 		LastSeen:     e.lastSeen.Unix(),
 	}
 	r.mu.Unlock()
-	r.shm.Item(e.slotIdx).Publish(meta)
+	publishItem(r.shm.Item(e.slotIdx), meta)
 }
 
 // Model возвращает модель МАП (потокобезопасно).
@@ -171,5 +171,5 @@ type StateDoc struct {
 }
 
 func (r *Registry) doc() StateDoc {
-	return r.shm.ListDoc()
+	return listDoc(r.shm)
 }

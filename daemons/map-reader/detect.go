@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 // speeds — приоритетный порядок скоростей: 115200 первой.
 // 38400 МАП не поддерживает (_LCD_RSBAUD: 2400/9600/19200/57600/115200).
@@ -28,14 +31,19 @@ func probePort(p *Port, cfg *config) (string, int, []detected, error) {
 		if time.Since(start) > probeDeadline {
 			return "", 0, nil, errNoMap
 		}
-		if p.setBaud(baud) != nil {
+		if p.SetBaud(baud) != nil {
 			continue
 		}
-		p.flush()
+		p.Flush()
 		if info, err := probeMicroart(p, baud, cfg.probeEcho, cfg.probeResponse); err == nil {
 			return "microart", baud, []detected{{0, info}}, nil
+		} else if errors.Is(err, errForeignMicroArt) {
+			// Порт занят чужим MicroArt-устройством (например, КЭС/MPPT, _Device==5):
+			// не МАП. Немедленно прекращаем пробу — другие боды и Modbus не трогаем,
+			// порт надо быстро отпустить (см. scanner.setForeignBackoff).
+			return "", 0, nil, errForeignMicroArt
 		} else {
-			cfg.debugf("probe %s: microart@%d: %v", p.path, baud, err)
+			cfg.debugf("probe %s: microart@%d: %v", p.Path(), baud, err)
 		}
 	}
 
@@ -43,13 +51,13 @@ func probePort(p *Port, cfg *config) (string, int, []detected, error) {
 		if time.Since(start) > probeDeadline {
 			return "", 0, nil, errNoMap
 		}
-		if p.setBaud(baud) != nil {
+		if p.SetBaud(baud) != nil {
 			continue
 		}
-		p.flush()
+		p.Flush()
 		info, err := probeModbus(p, 1, cfg.probeResponse)
 		if err != nil {
-			cfg.debugf("probe %s: modbus@%d unit1: %v", p.path, baud, err)
+			cfg.debugf("probe %s: modbus@%d unit1: %v", p.Path(), baud, err)
 			continue
 		}
 		dets := []detected{{1, info}}

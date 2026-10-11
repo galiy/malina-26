@@ -38,7 +38,7 @@ func (a *slotAlloc) alloc() (int, uint64, *Slot, bool) {
 		sl := a.shm.Slot(i)
 		g := a.nextGen()
 		sl.PrepareGen(g)
-		a.shm.Item(i).reset()
+		a.shm.Item(i).Clear()
 		a.used[i] = true
 		return i, g, sl, true
 	}
@@ -57,16 +57,4 @@ func (a *slotAlloc) free(i int) {
 	a.shm.Slot(i).Release()
 	a.shm.Item(i).Release()
 	a.used[i] = false
-}
-
-func (a *slotAlloc) count() int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	n := 0
-	for _, u := range a.used {
-		if u {
-			n++
-		}
-	}
-	return n
 }

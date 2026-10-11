@@ -40,18 +40,18 @@ func interFrameGap(baud int) time.Duration {
 // Возвращает ошибку при кадре исключения, неверном CRC или если устройство
 // вернуло не то число байт, что запрошено.
 func modbusReadRegisters(p *Port, unit int, addr, count uint16, respTO time.Duration) ([]byte, error) {
-	p.flush()                         // сбросить возможный мусор после сбоя
-	time.Sleep(interFrameGap(p.baud)) // межкадровый интервал t3.5 (Modbus-RTU)
+	p.Flush()                           // сбросить возможный мусор после сбоя
+	time.Sleep(interFrameGap(p.Baud())) // межкадровый интервал t3.5 (Modbus-RTU)
 	req := []byte{byte(unit), 0x03, byte(addr >> 8), byte(addr), byte(count >> 8), byte(count)}
 	c := crc16(req)
 	req = append(req, byte(c), byte(c>>8))
-	if err := p.writeAll(req); err != nil {
+	if err := p.WriteAll(req); err != nil {
 		return nil, err
 	}
 	deadline := time.Now().Add(respTO)
 	resp := make([]byte, 0, 4+int(count)*2+2)
 	for len(resp) < 260 && time.Now().Before(deadline) {
-		b, ok := p.readByte(deadline)
+		b, ok := p.ReadOne(deadline)
 		if !ok {
 			break
 		}
@@ -90,22 +90,22 @@ func probeModbus(p *Port, unit int, respTO time.Duration) (*mapInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseCells(data, "modbus", p.baud)
+	return parseCells(data, "modbus", p.Baud())
 }
 
 // modbusWriteExchange отправляет кадр записи и проверяет эхо-ответ.
 // Успешный ответ: тот же fc/адрес; исключение (старший бит fc) — modbusError.
 func modbusWriteExchange(p *Port, req []byte, want int, respTO time.Duration) error {
-	p.flush()
-	time.Sleep(interFrameGap(p.baud))
-	if err := p.writeAll(req); err != nil {
+	p.Flush()
+	time.Sleep(interFrameGap(p.Baud()))
+	if err := p.WriteAll(req); err != nil {
 		return err
 	}
 	unit := req[0]
 	deadline := time.Now().Add(respTO)
 	buf := make([]byte, 0, 16)
 	for len(buf) < 260 && time.Now().Before(deadline) {
-		b, ok := p.readByte(deadline)
+		b, ok := p.ReadOne(deadline)
 		if !ok {
 			break
 		}

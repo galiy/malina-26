@@ -33,9 +33,14 @@ const (
 	defScanActive    = time.Minute
 	defBackoffIdle   = 30 * time.Second
 	defBackoffActive = 10 * time.Minute
-	defMaxMaps       = 9
-	defProbeResp     = 200 * time.Millisecond
-	defProbeEcho     = 50 * time.Millisecond
+
+	// defBackoffForeign — пауза для порта, где найден валидный MicroArt, но НЕ МАП
+	// (например, КЭС/MPPT, _Device==5): чужое устройство не трогаем и не долбим.
+	defBackoffForeign = 10 * time.Minute
+
+	defMaxMaps   = 9
+	defProbeResp = 200 * time.Millisecond
+	defProbeEcho = 50 * time.Millisecond
 
 	defWriteRetries = 5                      // попыток записи на одну операцию
 	defWritePause   = 500 * time.Millisecond // пауза между попытками записи
@@ -57,8 +62,9 @@ type config struct {
 	scanIdle   time.Duration // цикл сканирования, когда МАП ещё нет
 	scanActive time.Duration // цикл сканирования, когда есть хотя бы один МАП
 
-	backoffIdle   time.Duration // пауза для «пустого» порта, когда МАП нет
-	backoffActive time.Duration // пауза для «пустого» порта, когда МАП есть
+	backoffIdle    time.Duration // пауза для «пустого» порта, когда МАП нет
+	backoffActive  time.Duration // пауза для «пустого» порта, когда МАП есть
+	backoffForeign time.Duration // пауза для порта с чужим MicroArt-устройством (не МАП)
 
 	maxMaps int // максимум одновременно опрашиваемых МАП
 
@@ -113,20 +119,21 @@ func newConfig(debug bool) *config {
 		off = v
 	}
 	return &config{
-		shmPath:       defSHMPath,
-		sockPath:      defSockPath,
-		paths:         splitComma(defaultPathsStr),
-		pollInterval:  defPoll,
-		maxMiss:       defMaxMiss,
-		scanIdle:      defScanIdle,
-		scanActive:    defScanActive,
-		backoffIdle:   defBackoffIdle,
-		backoffActive: defBackoffActive,
-		maxMaps:       defMaxMaps,
-		probeResponse: defProbeResp,
-		probeEcho:     defProbeEcho,
-		writeRetries:  defWriteRetries,
-		writePause:    defWritePause,
+		shmPath:        defSHMPath,
+		sockPath:       defSockPath,
+		paths:          splitComma(defaultPathsStr),
+		pollInterval:   defPoll,
+		maxMiss:        defMaxMiss,
+		scanIdle:       defScanIdle,
+		scanActive:     defScanActive,
+		backoffIdle:    defBackoffIdle,
+		backoffActive:  defBackoffActive,
+		backoffForeign: defBackoffForeign,
+		maxMaps:        defMaxMaps,
+		probeResponse:  defProbeResp,
+		probeEcho:      defProbeEcho,
+		writeRetries:   defWriteRetries,
+		writePause:     defWritePause,
 
 		timeSyncOff:       off,
 		timeSyncWindow:    defTimeSyncWindow,
@@ -186,11 +193,11 @@ func main() {
 		newControl(cfg, reg, stop).serve()
 	}()
 
-	scanner := newScanner(cfg, reg, stop, &wg)
+	scn := newScanner(cfg, reg, stop, &wg)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		scanner.run()
+		scn.Run()
 	}()
 
 	sig := make(chan os.Signal, 1)

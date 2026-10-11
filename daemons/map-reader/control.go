@@ -1,16 +1,14 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
-	"log"
-	"net"
-	"os"
 	"time"
+
+	controllib "github.com/galiy/malina-26/daemons/lib/control"
 )
 
 // control — синхронные команды через Unix domain socket (запрос → ответ):
-// ping, list, write (запись в МАП).
+// ping, list, write (запись в МАП). Каркас сокета/JSON — lib/control.
 type control struct {
 	cfg  *config
 	reg  *Registry
@@ -37,75 +35,26 @@ func newControl(cfg *config, reg *Registry, stop chan struct{}) *control {
 }
 
 func (c *control) serve() {
-	_ = os.Remove(c.cfg.sockPath)
-	ln, err := net.Listen("unix", c.cfg.sockPath)
-	if err != nil {
-		log.Printf("control socket: %v (команды отключены)", err)
-		return
-	}
-	defer ln.Close()
-	_ = os.Chmod(c.cfg.sockPath, 0o660)
-	log.Printf("control socket: %s", c.cfg.sockPath)
-
-	// При остановке закрываем листенер, чтобы Accept вернулся; done — чтобы
-	// горутина не висла, если serve завершится сам.
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-c.stop:
-			ln.Close()
-		case <-done:
-		}
-	}()
-
-	sem := make(chan struct{}, 16) // ограничение параллельных соединений
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			return
-		}
-		select {
-		case sem <- struct{}{}:
-			go func() {
-				defer func() { <-sem }()
-				c.handle(conn)
-			}()
-		default:
-			conn.Close() // перегрузка — не копим горутины
-		}
-	}
+	controllib.Serve(c.cfg.sockPath, c.stop, c.handleLine)
 }
 
-func (c *control) handle(conn net.Conn) {
-	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
-	r := bufio.NewReader(conn)
-	line, err := r.ReadBytes('\n')
-	if err != nil && len(line) == 0 {
-		return
-	}
+// handleLine разбирает одну JSON-строку запроса и возвращает ответ.
+func (c *control) handleLine(line []byte) any {
 	var req ctlRequest
 	if err := json.Unmarshal(line, &req); err != nil {
-		writeJSON(conn, ctlResponse{OK: false, Code: "bad_request", Error: "bad request"})
-		return
+		return ctlResponse{OK: false, Code: "bad_request", Error: "bad request"}
 	}
-	var resp any
 	switch req.Cmd {
 	case "ping":
-		resp = ctlResponse{OK: true}
+		return ctlResponse{OK: true}
 	case "list":
 		d := c.reg.doc()
-		resp = ctlResponse{OK: true, State: &d}
+		return ctlResponse{OK: true, State: &d}
 	case "write":
-		resp = c.dispatchWrite(writeRequest{Cmd: "write", ID: req.ID, Gen: req.Gen, NoFrame: req.NoFrame, Ops: req.Ops})
+		return c.dispatchWrite(writeRequest{Cmd: "write", ID: req.ID, Gen: req.Gen, NoFrame: req.NoFrame, Ops: req.Ops})
 	default:
-		resp = ctlResponse{OK: false, Code: "bad_request", Error: "unknown command"}
+		return ctlResponse{OK: false, Code: "bad_request", Error: "unknown command"}
 	}
-	// Дедлайн на запись ответа ставим после обработки: команда записи в МАП
-	// может выполняться заметно дольше 3 с (несколько операций × попытки).
-	_ = conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
-	writeJSON(conn, resp)
 }
 
 // dispatchWrite находит устройство по (id, gen) и передаёт команду пулеру порта,
@@ -130,10 +79,4 @@ func (c *control) dispatchWrite(wr writeRequest) writeResponse {
 	case <-time.After(120 * time.Second):
 		return fail("internal", "таймаут выполнения записи")
 	}
-}
-
-func writeJSON(conn net.Conn, v any) {
-	b, _ := json.Marshal(v)
-	b = append(b, '\n')
-	_, _ = conn.Write(b)
 }

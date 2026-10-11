@@ -39,7 +39,7 @@ func TestWriteRoundtripNative(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openPort: %v", err)
 	}
-	defer p.close()
+	defer p.Close()
 
 	// Повышенные таймауты: на загруженной машине эхо PTY-эмулятора иногда
 	// приходит позже «боевых» 50 мс.
@@ -225,7 +225,7 @@ func startFakeMap(t *testing.T) *Port {
 // долетают; ошибка МАП (ErrRS_NoEEWR) не ретраится и возвращается как mapError.
 func TestExecuteSequenceNative(t *testing.T) {
 	p := startFakeMap(t)
-	defer p.close()
+	defer p.Close()
 	cfg := &config{probeEcho: 300 * time.Millisecond, probeResponse: 800 * time.Millisecond,
 		writeRetries: 5, writePause: 50 * time.Millisecond}
 

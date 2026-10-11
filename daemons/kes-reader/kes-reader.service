@@ -1,0 +1,19 @@
+[Unit]
+Description=Malina KES reader (MPPT/MicroArt poll daemon)
+After=local-fs.target rsyslog.service network.target
+Wants=rsyslog.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/malina/usr/local/sbin/kes-reader
+# Приоритет опроса над UI/прочей нагрузкой при конкуренции за CPU:
+# больший вес CFS (Nice) и вес cgroup (CPUWeight). Только CFS — без RT.
+Nice=-5
+CPUWeight=1000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
