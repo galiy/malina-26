@@ -40,10 +40,9 @@
 
 <div class="email-instr">
   <h3>{{index .T "email.instr_title"}}</h3>
-  <div class="instr" data-prov="mailru" {{if ne .Cfg.Provider "mailru"}}hidden{{end}}>{{index .T "email.instr_mailru" | safeHTML}}</div>
-  <div class="instr" data-prov="yandex" {{if ne .Cfg.Provider "yandex"}}hidden{{end}}>{{index .T "email.instr_yandex" | safeHTML}}</div>
-  <div class="instr" data-prov="gmail" {{if ne .Cfg.Provider "gmail"}}hidden{{end}}>{{index .T "email.instr_gmail" | safeHTML}}</div>
-  <div class="instr" data-prov="custom" {{if ne .Cfg.Provider "custom"}}hidden{{end}}>{{index .T "email.instr_custom" | safeHTML}}</div>
+  {{range .Providers}}
+  <div class="instr" data-prov="{{.Key}}" {{if ne .Key $.Cfg.Provider}}hidden{{end}}>{{index $.T (printf "email.instr_%s" .Key) | safeHTML}}</div>
+  {{end}}
 </div>
 
 <h3>{{index .T "email.outbox"}}</h3>
