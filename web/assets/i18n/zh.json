@@ -1159,5 +1159,6 @@
   "events.act_relay3_off": "继电器3关",
   "events.cancel": "取消",
   "p1.mode9_prefix": "MAP 开启。直通 + 充电。模式",
-  "events.mode9": "MAP 开启。直通 + 充电。其他模式"
+  "events.mode9": "MAP 开启。直通 + 充电。其他模式",
+  "events.err_empty": "列表为空——清空所有规则需确认"
 }

@@ -2,7 +2,10 @@ package events
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,13 +41,28 @@ type Actions interface {
 // LogFn — запись в лог (отдельный лог менеджера событий).
 type LogFn func(result string, fields map[string]any)
 
+// DefaultStatePath — состояние правил в tmpfs (переживает рестарт сервиса).
+const DefaultStatePath = "/dev/shm/malina-events/state.json"
+
+// DefaultInterval — период оценки правил.
+const DefaultInterval = 30 * time.Second
+
+// persistedState — сериализуемое состояние правила.
+type persistedState struct {
+	Trigger   bool   `json:"trigger"`
+	LastFire  int64  `json:"last_fire"` // UnixNano
+	FiredText string `json:"fired_text"`
+	Sig       string `json:"sig"`
+}
+
 // Engine — движок правил.
 type Engine struct {
-	path     string
-	prov     Provider
-	act      Actions
-	log      LogFn
-	interval time.Duration
+	path      string
+	statePath string
+	prov      Provider
+	act       Actions
+	log       LogFn
+	interval  time.Duration
 
 	// Тексты режима (задаются из web, зависят от языка):
 	//   ModeLabel(code)            — статический текст по номеру (для настройки/списка; 9 → «Прочие режимы»)
@@ -71,12 +89,76 @@ func signature(r *Event) string {
 		r.Action, r.Target.Kind, r.Target.Serial, r.Recipient, r.TrapHost)
 }
 
-// New создаёт движок (interval<=0 → 2 c).
+// New создаёт движок (interval<=0 → DefaultInterval).
 func New(path string, prov Provider, act Actions, log LogFn) *Engine {
 	if path == "" {
 		path = DefaultPath
 	}
-	return &Engine{path: path, prov: prov, act: act, log: log, interval: 2 * time.Second, state: map[string]*ruleState{}}
+	e := &Engine{path: path, statePath: DefaultStatePath, prov: prov, act: act, log: log,
+		interval: DefaultInterval, state: map[string]*ruleState{}}
+	e.loadState()
+	return e
+}
+
+// SetStatePath — путь файла состояния (пусто → DefaultStatePath). Для тестов/конфига.
+func (e *Engine) SetStatePath(p string) {
+	e.mu.Lock()
+	e.statePath = p
+	e.mu.Unlock()
+	e.loadState()
+}
+
+// loadState читает состояние из tmpfs в память.
+func (e *Engine) loadState() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.statePath == "" {
+		return
+	}
+	b, err := os.ReadFile(e.statePath)
+	if err != nil {
+		return
+	}
+	var m map[string]persistedState
+	if json.Unmarshal(b, &m) != nil {
+		return
+	}
+	for id, ps := range m {
+		st := &ruleState{trigger: ps.Trigger, firedText: ps.FiredText, sig: ps.Sig}
+		if ps.LastFire != 0 {
+			st.lastFire = time.Unix(0, ps.LastFire)
+		}
+		e.state[id] = st
+	}
+}
+
+// saveState пишет состояние в tmpfs (атомарно). Вызывается при изменениях.
+func (e *Engine) saveState() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.statePath == "" {
+		return
+	}
+	m := make(map[string]persistedState, len(e.state))
+	for id, st := range e.state {
+		var lf int64
+		if !st.lastFire.IsZero() {
+			lf = st.lastFire.UnixNano()
+		}
+		m[id] = persistedState{Trigger: st.trigger, LastFire: lf, FiredText: st.firedText, Sig: st.sig}
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(e.statePath), 0o755); err != nil {
+		return
+	}
+	tmp := e.statePath + ".tmp"
+	if os.WriteFile(tmp, b, 0o600) != nil {
+		return
+	}
+	_ = os.Rename(tmp, e.statePath)
 }
 
 // Run — цикл оценки (останавливается по ctx).
@@ -104,12 +186,17 @@ func (e *Engine) tick(now time.Time) {
 		alive[cfg.Events[i].ID] = true
 	}
 	e.mu.Lock()
+	pruned := false
 	for id := range e.state {
 		if !alive[id] {
 			delete(e.state, id)
+			pruned = true
 		}
 	}
 	e.mu.Unlock()
+	if pruned {
+		e.saveState()
+	}
 
 	for i := range cfg.Events {
 		e.evalOne(&cfg.Events[i], now)
@@ -125,8 +212,11 @@ func (e *Engine) evalOne(r *Event, now time.Time) {
 		// Как в legacy: «стоп генерации» стартует с trigger=1 (не сработать сразу).
 		st = &ruleState{trigger: r.Type == "time" || r.Action == "mac_stop_gen", sig: sig}
 		e.state[r.ID] = st
+		e.mu.Unlock()
+		e.saveState()
+	} else {
+		e.mu.Unlock()
 	}
-	e.mu.Unlock()
 
 	if !r.Enabled {
 		return
@@ -157,11 +247,13 @@ func (e *Engine) evalOne(r *Event, now time.Time) {
 			st.lastFire = now
 			st.firedText = e.curText(r, val, sc)
 			e.fire(r, val, st.firedText)
+			e.saveState()
 		}
 	} else if st.trigger {
 		e.ok(r, val, sc, st.firedText)
 		st.trigger = false
 		st.firedText = ""
+		e.saveState()
 	}
 }
 

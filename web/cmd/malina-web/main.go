@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/galiy/malina-26/web/internal/auth"
+	"github.com/galiy/malina-26/web/internal/events"
 	"github.com/galiy/malina-26/web/internal/mailer"
 	"github.com/galiy/malina-26/web/internal/masternode"
 	"github.com/galiy/malina-26/web/internal/web"
@@ -34,6 +35,7 @@ func main() {
 	emailConfig := flag.String("email-config", envOr("MALINA_WEB_EMAIL_CONFIG", mailer.DefaultConfigPath), "путь к email.json")
 	emailKey := flag.String("email-key", envOr("MALINA_WEB_EMAIL_KEY", mailer.DefaultKeyPath), "путь к ключу шифрования секрета")
 	emailOutbox := flag.String("email-outbox", envOr("MALINA_WEB_EMAIL_OUTBOX", mailer.DefaultOutboxDir), "каталог аутбокса")
+	eventsState := flag.String("events-state", envOr("MALINA_WEB_EVENTS_STATE", events.DefaultStatePath), "путь к состоянию правил (tmpfs)")
 	flag.Parse()
 
 	var a auth.Authenticator
@@ -61,6 +63,8 @@ func main() {
 		EmailConfigPath: *emailConfig,
 		EmailKeyPath:    *emailKey,
 		EmailOutboxDir:  *emailOutbox,
+
+		EventsStatePath: *eventsState,
 	})
 	if err != nil {
 		log.Fatalf("init: %v", err)

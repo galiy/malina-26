@@ -54,6 +54,7 @@ func (s *Server) eventsData(r *http.Request) map[string]any {
 		"act_start": s.tr(lang, "events.act_start"), "act_snmp": s.tr(lang, "events.act_snmp"),
 		"yes": s.tr(lang, "events.yes"), "no": s.tr(lang, "events.no"),
 		"serial_ph": s.tr(lang, "events.serial_ph"), "del": s.tr(lang, "events.del"),
+		"confirm_clear": s.tr(lang, "events.confirm_clear"),
 	}
 	// Списки для JS-шаблона новой строки.
 	params := make([][2]string, 0, len(events.Params))
@@ -106,6 +107,14 @@ func (s *Server) handleEventsSave(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 
 	cfg := events.Config{Version: 1, Events: parseEventsForm(r)}
+	// Пустой список сохраняем только с явным подтверждением (кнопка «Очистить»
+	// в UI выставляет allow_empty=1). Пустая форма по API/скрипту отбивается.
+	if len(cfg.Events) == 0 && r.FormValue("allow_empty") != "1" {
+		data := s.eventsData(r)
+		data["Err"] = s.tr(s.lang(r), "events.err_empty")
+		s.render(w, http.StatusOK, "events", data)
+		return
+	}
 	if err := events.Save(s.eventsPath, cfg); err != nil {
 		data := s.eventsData(r)
 		data["Events"] = cfg.Events

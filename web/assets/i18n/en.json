@@ -1159,5 +1159,6 @@
   "events.act_relay3_off": "Relay 3 off",
   "events.cancel": "Cancel",
   "p1.mode9_prefix": "MAP on. Pass-through + charge. Mode",
-  "events.mode9": "MAP on. Pass-through + charge. Other modes"
+  "events.mode9": "MAP on. Pass-through + charge. Other modes",
+  "events.err_empty": "List is empty — confirm to clear all rules"
 }

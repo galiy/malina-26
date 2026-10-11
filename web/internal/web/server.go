@@ -45,6 +45,7 @@ type Options struct {
 	EmailKeyPath     string        // путь к ключу шифрования секрета
 	EmailOutboxDir   string        // каталог аутбокса (tmpfs)
 	EventsConfigPath string        // путь к events.json (менеджер событий)
+	EventsStatePath  string        // путь к состоянию правил (tmpfs)
 	EventsLogTag     string        // syslog-тег лога менеджера событий
 }
 
@@ -136,6 +137,9 @@ func New(o Options) (*Server, error) {
 	}
 	if o.EventsLogTag == "" {
 		o.EventsLogTag = "malina-events"
+	}
+	if o.EventsStatePath == "" {
+		o.EventsStatePath = events.DefaultStatePath
 	}
 	// Источник строк — русский; недостающие ключи добираются из него.
 	bundle, err := i18n.Load(os.DirFS(o.AssetsDir), "i18n", "ru", o.Langs)
@@ -251,6 +255,7 @@ func (s *Server) startEvents() {
 		&mapEventsProvider{s: s}, &eventsActions{s: s},
 		func(result string, fields map[string]any) { evLog.Event(result, fields) },
 	)
+	s.eventsEngine.SetStatePath(s.opts.EventsStatePath)
 	lang := s.opts.DefaultLang
 	s.eventsEngine.ModeLabel = func(code uint32) string { return s.modeLabelStatic(lang, code) }
 	s.eventsEngine.ModeText = func(code, statusCh uint32) string { return s.modeTextDynamic(lang, code, statusCh) }

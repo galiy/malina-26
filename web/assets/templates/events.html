@@ -45,7 +45,7 @@
           </span>
           <span class="ev-time" {{if ne .Type "time"}}hidden{{end}}><input name="time" type="time" value="{{$e.Value}}"></span>
           <span class="ev-mode" {{if ne .Type "mode"}}hidden{{end}}>
-            <select name="mode">{{range $.Modes}}<option value="{{.}}" {{if eq (printf "%d" .) $e.Value}}selected{{end}}>{{index $.T (printf "p1.mode%d" .)}}</option>{{end}}</select>
+            <select name="mode">{{range $.Modes}}<option value="{{index . 0}}" {{if eq (index . 0) $e.Value}}selected{{end}}>{{index . 1}}</option>{{end}}</select>
           </span>
         </td>
         <td><select name="action" class="ev-action">

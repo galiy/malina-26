@@ -118,6 +118,14 @@
     return h;
   }
 
+  if (form) {
+    form.addEventListener("submit", function (e) {
+      if (tbody.querySelectorAll(".ev-row").length === 0) {
+        if (!confirm(L.confirm_clear || "?")) { e.preventDefault(); return; }
+        var h = document.createElement("input"); h.type = "hidden"; h.name = "allow_empty"; h.value = "1"; form.appendChild(h);
+      }
+    });
+  }
   add.addEventListener("click", function () {
     var tr = document.createElement("tr");
     tr.className = "ev-row";

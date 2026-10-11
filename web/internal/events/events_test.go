@@ -67,6 +67,7 @@ func TestEngineParamFrontOkCooldown(t *testing.T) {
 	prov := fakeProv{s: Snapshot{Serial: "1", Kind: "map", OK: true, Fields: map[string]uint32{"UNET": 0}}}
 	act := &fakeAct{}
 	e := New(path, prov, act, nil)
+	e.SetStatePath(filepath.Join(t.TempDir(), "state.json"))
 	t0 := time.Now()
 	e.tick(t0) // нет сети → unet=0 ≤100 → сработало
 	if act.emails != 1 {
@@ -90,6 +91,7 @@ func TestEngineModeNoOk(t *testing.T) {
 	prov := fakeProv{s: Snapshot{Serial: "1", Kind: "map", OK: true, Fields: map[string]uint32{"MODE_RAM": 0}}}
 	act := &fakeAct{}
 	e := New(path, prov, act, nil)
+	e.SetStatePath(filepath.Join(t.TempDir(), "state.json"))
 	t0 := time.Now()
 	e.tick(t0)
 	if act.emails != 1 {
@@ -108,6 +110,7 @@ func TestEngineTimeInitialTrigger(t *testing.T) {
 		Source: Device{Kind: "map", Serial: "1"}, Value: "12:00", Action: "email"})
 	act := &fakeAct{}
 	e := New(path, fakeProv{s: Snapshot{Serial: "1", Kind: "map", OK: true}}, act, nil)
+	e.SetStatePath(filepath.Join(t.TempDir(), "state.json"))
 	at := time.Date(2026, 10, 11, 12, 0, 0, 0, time.Local)
 	e.tick(at) // на старте trigger=1 → не срабатывает
 	if act.emails != 0 {
@@ -123,6 +126,7 @@ func TestEngineStopGenInitialTrigger(t *testing.T) {
 	prov := fakeProv{s: Snapshot{Serial: "1", Kind: "map", OK: true, Fields: map[string]uint32{"UNET": 0}}}
 	act := &fakeAct{}
 	e := New(path, prov, act, nil)
+	e.SetStatePath(filepath.Join(t.TempDir(), "state.json"))
 	t0 := time.Now()
 	e.tick(t0)
 	if act.macs != 0 {
@@ -149,6 +153,7 @@ func TestEngineResetOnChangeAndPrune(t *testing.T) {
 	prov := fakeProv{s: Snapshot{Serial: "1", Kind: "map", OK: true, Fields: map[string]uint32{"UNET": 0}}}
 	act := &fakeAct{}
 	e := New(path, prov, act, nil)
+	e.SetStatePath(filepath.Join(t.TempDir(), "state.json"))
 	t0 := time.Now()
 	e.tick(t0)
 	if act.emails != 1 {
