@@ -722,6 +722,19 @@ a.dropdown-sub { padding-left: 22px; }
 .map-isolated { max-width: 1100px; margin: 0 auto; }
 .legacy-frame { width: 100%; max-width: 1100px; height: 300px; border: 1px solid var(--line, #d6d6d6);
   border-radius: 6px; background: #fff; display: block; margin: 0 auto; }
+/* Меню «МАСТЕР-УЗЕЛ»: двустрочный пункт (вторая строка — мелким курсивом). */
+.navlink.navlink-2l { text-align: center; line-height: 1.05; }
+.navlink.navlink-2l .nav-sub { display: block; font-size: 8px; font-weight: normal; opacity: .7; }
+/* Мастер-Узел: один общий iframe на страницу «Отобразить». */
+.master-frame { width: 100%; max-width: 1400px; height: calc(100vh - 170px); min-height: 400px;
+  border: 1px solid var(--line, #d6d6d6); border-radius: 6px; background: #eef1f4; display: block; margin: 0 auto; }
+/* Мастер-Узел: форма «Настройка». */
+.mn-tbl { width: 100%; max-width: 900px; margin: 12px auto; border-collapse: collapse; }
+.mn-tbl th, .mn-tbl td { padding: 4px 6px; border-bottom: 1px solid var(--line, #e3e3e3); text-align: left; }
+.mn-tbl input, .mn-tbl select { width: 100%; box-sizing: border-box; }
+.mn-tbl input[name="port"] { width: 90px; }
+.mn-actions { max-width: 900px; margin: 0 auto; display: flex; gap: 8px; }
+.mn-del { cursor: pointer; }
 #panel2 { border: 1px dashed #bbb; border-radius: 6px; padding: 24px; color: #888; }
 
 /* Термометры панели 1 (SVG) */

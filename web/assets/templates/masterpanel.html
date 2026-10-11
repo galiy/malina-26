@@ -1,0 +1,176 @@
+{{define "masterpanel"}}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>МАСТЕР-УЗЕЛ</title>
+  <link href="/static/legacy/css/glyphicons.css" rel="stylesheet" media="screen">
+  <link href="/static/legacy/css/glyphicons-bootstrap.css" rel="stylesheet" media="screen">
+  <link href="/static/legacy/css/bootstrap.min.css" rel="stylesheet" media="screen">
+  <link href="/static/legacy/css/mystyles.css" rel="stylesheet" media="screen">
+</head>
+<body>
+<div class="container">
+  <br><h3 class="text-muted">МАСТЕР-УЗЕЛ</h3><br>
+  {{if not .Nodes}}<p class="text-muted">Узлы не настроены — добавьте на странице «Настройка».</p>{{end}}
+  {{range $i, $n := .Nodes}}
+  <div class="panel panel-primary">
+    <div class="panel-heading" style="font-weight:bold;">
+      <div class="row">
+        <div class="col-sm-3 col-md-3 col-lg-3">
+          <span class="glyphicons glyphicons-multiple-displays" id="{{$i}}_icon"></span>
+          &thinsp;{{$n.Host}}&nbsp;({{$n.Name}})
+        </div>
+        <div class="col-sm-4 col-md-4 col-lg-4" style="background-color:ivory; color:black; font-size:100%; font-weight:bold; text-align:center;" id="{{$i}}_map_mode">
+          MAC MODE
+        </div>
+        <div class="col-sm-2 col-md-2 col-lg-2">
+          <div id="{{$i}}_map_load" style="margin-left:10px;float:left;"></div>
+        </div>
+        <div class="col-sm-3 col-md-3 col-lg-3">
+          <div style="display:inline-block; float:left;">
+            <span class="glyphicons glyphicons-battery-full drop"></span>
+          </div>
+          <div id="{{$i}}_map_bat_h" style="margin-left:10px;float:left;">&nbsp</div>
+          <div style="display:inline-block; float:left; color:lightgreen;">
+            &nbsp;<span class="glyphicons glyphicons-leaf drop"></span>
+          </div>
+          <div id="{{$i}}_alt_e" style="margin-left:10px;float:left;">н/д kWh</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="container" style="position:relative; min-height:15em;">
+        <div class="col-md-2 col-sm-2 col-lg-2 map" id="{{$i}}_map">
+          <div class="value" style="font-weight:normal;top:2px;right:3px;">МАП</div>
+          <div style="position:absolute; width:auto;height:auto;bottom:0;right:0">
+            <div id="{{$i}}_map_relay2" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+            <div id="{{$i}}_map_relay1" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+          </div>
+          <div class="value" style="top:70%;left:3%; color:#346FA1; font-size:80%;" id="{{$i}}_map_t">&nbsp;-&deg;C</div>
+          <div class="value" style="top:30%;left:1%;" id="{{$i}}_map_input">&#10102;</div>
+        </div>
+        <div class="col-md-2 col-sm-2 col-lg-2 battery">
+          <div style="position:absolute;top:0;left:2px;;width:auto;height:auto;font-weight:bolder;">
+            <span class="glyphicons glyphicons-battery-full" id="{{$i}}_bat"></span>
+          </div>
+          <div class="value" style="top:1%;left:30%;" id="{{$i}}_bat_v">&nbsp;- V</div>
+          <div class="value" style="top:30%;left:30%;" id="{{$i}}_bat_100">&nbsp;-%</div>
+          <div class="value" style="top:70%;left:3%;color:#346FA1; font-size:80%;" id="{{$i}}_bat_t">&nbsp;-&deg;C</div>
+        </div>
+        <div class="col-md-2 col-sm-2 col-lg-2 charger" id="{{$i}}_charger">
+          <div style="position:absolute;top:2px;left:2px;width:auto;height:auto;font-weight:bolder;">
+            <span class="glyphicons glyphicons-charging-station" id="{{$i}}_charger_icon"></span>
+          </div>
+        </div>
+        <div class="col-md-2 col-sm-2 col-lg-2 mppt" id="{{$i}}_mppt1">
+          <div style="position:absolute;top:0;right:0;width:auto;height:auto;font-weight:bolder;">&#9312;</div>
+          <div style="position:absolute;top:2px;left:2px;width:auto;height:auto;font-weight:bolder;color:yellow;">
+            <span class="glyphicons glyphicons-sun" id="{{$i}}_1_sun"></span>
+          </div>
+          <div class="value" style="top:70%;left:3%;color:#f9f9f9; font-size:80%;" id="{{$i}}_mppt1_t">&nbsp;-&deg;C</div>
+          <div style="position:absolute; width:auto;height:auto;bottom:0;right:0">
+            <div id="{{$i}}_mppt1_relay3" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+            <div id="{{$i}}_mppt1_relay2" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+            <div id="{{$i}}_mppt1_relay1" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+          </div>
+          <div class="value" style="top:1%;left:25%; color:#f9f9f9;" id="{{$i}}_mppt1_vpv">0</div>
+          <div class="value" style="top:30%;left:25%; color:#f9f9f9;" id="{{$i}}_mppt1_pout">0</div>
+        </div>
+        <div class="col-md-2 col-sm-2 col-lg-2 mppt" style="right:29%" id="{{$i}}_mppt2">
+          <div style="position:absolute;top:0;right:0;width:auto;height:auto;font-weight:bolder;">&#9313;</div>
+          <div style="position:absolute;top:2px;left:2px;width:auto;height:auto;font-weight:bolder;color:yellow;">
+            <span class="glyphicons glyphicons-sun" id="{{$i}}_2_sun"></span>
+          </div>
+          <div class="value" style="top:70%;left:3%;color:#f9f9f9; font-size:80%;" id="{{$i}}_mppt2_t">&nbsp;-&deg;C</div>
+          <div style="position:absolute; width:auto;height:auto;bottom:0;right:0">
+            <div id="{{$i}}_mppt2_relay3" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+            <div id="{{$i}}_mppt2_relay2" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+            <div id="{{$i}}_mppt2_relay1" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+          </div>
+          <div class="value" style="top:1%;left:25%; color:#f9f9f9;" id="{{$i}}_mppt2_vpv">0</div>
+          <div class="value" style="top:30%;left:25%; color:#f9f9f9;" id="{{$i}}_mppt2_pout">0</div>
+        </div>
+        <div class="col-md-2 col-sm-2 col-lg-2 mppt" style="right:18%" id="{{$i}}_mppt3">
+          <div style="position:absolute;top:0;right:0;width:auto;height:auto;font-weight:bolder;">&#9314;</div>
+          <div style="position:absolute;top:2px;left:2px;width:auto;height:auto;font-weight:bolder;color:yellow;">
+            <span class="glyphicons glyphicons-sun" id="{{$i}}_3_sun"></span>
+          </div>
+          <div class="value" style="top:70%;left:3%;color:#f9f9f9; font-size:80%;" id="{{$i}}_mppt3_t">&nbsp;-&deg;C</div>
+          <div style="position:absolute; width:auto;height:auto;bottom:0;right:0">
+            <div id="{{$i}}_mppt3_relay3" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+            <div id="{{$i}}_mppt3_relay2" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+            <div id="{{$i}}_mppt3_relay1" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+          </div>
+          <div class="value" style="top:1%;left:25%; color:#f9f9f9;" id="{{$i}}_mppt3_vpv">0</div>
+          <div class="value" style="top:30%;left:25%; color:#f9f9f9;" id="{{$i}}_mppt3_pout">0</div>
+        </div>
+        <div class="col-md-2 col-sm-2 col-lg-2 mppt" style="right:7%" id="{{$i}}_mppt4">
+          <div style="position:absolute;top:0;right:0;width:auto;height:auto;font-weight:bolder;">&#9315;</div>
+          <div style="position:absolute;top:2px;;left:2px;width:auto;height:auto;font-weight:bolder;color:yellow;">
+            <span class="glyphicons glyphicons-sun" id="{{$i}}_4_sun"></span>
+          </div>
+          <div class="value" style="top:70%;left:3%;color:#f9f9f9; font-size:80%;" id="{{$i}}_mppt4_t">&nbsp;-&deg;C</div>
+          <div style="position:absolute; width:auto;height:auto;bottom:0;right:0">
+            <div id="{{$i}}_mppt4_relay3" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+            <div id="{{$i}}_mppt4_relay2" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+            <div id="{{$i}}_mppt4_relay1" class="relay_in"><span class="glyphicons glyphicons-power drop"></span></div>
+          </div>
+          <div class="value" style="top:1%;left:25%; color:#f9f9f9;" id="{{$i}}_mppt4_vpv">0</div>
+          <div class="value" style="top:30%;left:25%; color:#f9f9f9;" id="{{$i}}_mppt4_pout">0</div>
+        </div>
+        <div class="progress-bar progress-bar-warning progress-bar-striped" style="position:absolute; top: 16%; height: 6%; width:20%; left:10%;" id="{{$i}}_ac_map"></div>
+        <div class="progress-bar progress-bar-info progress-bar-striped reverse" style="position:absolute; top: 16%; height: 6%; width:10%; left:40%;" id="{{$i}}_ac_home"></div>
+        <div class="progress-bar progress-bar progress-bar-striped" style="position:absolute; bottom: 16%; height: 6%; width:20%; left:20%;" id="{{$i}}_dc_charger"></div>
+        <div class="progress-bar progress-bar-success progress-bar-striped" style="position:absolute; bottom: 16%; height: 6%; width:20%; left:30%;" id="{{$i}}_dc_mppt"></div>
+        <div class="progress-bar progress-bar progress-bar-striped" style="position:absolute; bottom: 16%; height: 50%; width:15px; left:34%;" id="{{$i}}_dc_map"></div>
+        <div style="position:absolute;top:10%;left:6.5%;width:2%;height:auto;font-size:200%;color:darkblue;">
+          <span class="glyphicons glyphicons-electrical-plug drop" id="{{$i}}_map_plug"></span>
+        </div>
+        <div style="position:absolute;top:75%;left:6.5%;width:2%;height:auto;font-size:200%;color:darkblue;">
+          <span class="glyphicons glyphicons-electrical-plug drop" id="{{$i}}_charger_plug"></span>
+        </div>
+        <div style="position:absolute;top:10%;right:47%;width:2%;height:auto;font-size:200%;color:black;">
+          <span class="glyphicons glyphicons-home drop" id="{{$i}}_home"></span>
+        </div>
+        <div class="info_1" style="position:absolute;top:5%;right:7%;width:32%;height:45%;font-weight:bolder;background-color:#f9f9f9;">
+          <div style="position:absolute;top:2px;right:2px;width:auto;height:auto;font-weight:bolder;color:#428bca;">
+            <span class="glyphicons glyphicons-info-sign drop" id="{{$i}}_info_icon"></span>
+          </div>
+          <div style="position:absolute;top:2px;right:2px;width:95%;height:95%;overflow:auto;font-weight:normal;color:black; text-align:left;" id="{{$i}}_info"></div>
+        </div>
+        <div class="value" style="top:13%;left:1%" id="{{$i}}_mac_vin"></div>
+        <div class="value" style="top:13%;left:55%" id="{{$i}}_mac_vout"></div>
+        <div class="value" style="top:8%;left:12%" id="{{$i}}_mac_iac"></div>
+        <div class="value" style="top:8%;left:41%" id="{{$i}}_mac_i_out_ac"></div>
+        <div class="value" style="top:23%;left:41%" id="{{$i}}_mac_p_out_ac"></div>
+        <div class="value" style="top:45%;left:36%" id="{{$i}}_mac_dc"></div>
+        <div class="value" style="top:75%;left:1%" id="{{$i}}_charger_vin"></div>
+        <div class="value" style="top:70%;left:21%" id="{{$i}}_charger_iac"></div>
+        <div class="value" style="top:85%;left:21%" id="{{$i}}_charger_pac"></div>
+        <div class="value" style="top:70%;left:41%" id="{{$i}}_mppts_idc"></div>
+        <div class="value" style="top:85%;left:41%" id="{{$i}}_mppts_pdc"></div>
+      </div>
+    </div>
+  </div>
+  {{end}}
+</div>
+<script>
+var loc = { V: 'В', W: 'Вт', kVA: 'кВА', kW: 'кВт', kWh: 'кВтч', na: 'н/д', MAC: 'МАП', MPPT: 'MPPT', error: 'ошибка' };
+var map_mode = [
+  "МАП выключен и нет сети на входе", "МАП выключен. Сеть на входе",
+  "МАП включен. Генерация от АКБ. Нет сети.", "МАП включен и транслирует сеть",
+  "МАП включен. Трансляция + заряд", "", "", "", "", "",
+  "Принудительная генерация", "Тарифная сеть. максимальный тариф. принудительная генерация",
+  "Тарифная сеть. минимальный тариф", "Трансляция + эко-подкачка",
+  "Трансляция + продажа в сеть", "Ожидание внешнего полного заряда",
+  "Тарифная сеть. трансляция+эко-подкачка", "Тарифная сеть. трансляция+продажа в сеть",
+  "Подкачка Pmax"
+];
+var nodes = [{{range $i, $n := .Nodes}}{{if $i}},{{end}}{malina_ip:"{{$n.Host}}", malina_port:{{$n.Port}}, malina_name:"{{$n.Name}}", id:"{{$n.ID}}"}{{end}}];
+</script>
+<script src="/static/legacy/js/jquery.js"></script>
+<script src="/static/masterpanel.js"></script>
+</body>
+</html>
+{{end}}

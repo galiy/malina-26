@@ -9,31 +9,36 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/galiy/malina-26/web/internal/audit"
 	"github.com/galiy/malina-26/web/internal/auth"
 	"github.com/galiy/malina-26/web/internal/authstore"
 	"github.com/galiy/malina-26/web/internal/i18n"
+	"github.com/galiy/malina-26/web/internal/masternode"
 	"github.com/galiy/malina-26/web/internal/session"
 	"github.com/galiy/malina-26/web/internal/sysinfo"
 )
 
 // Options задаёт параметры сервера.
 type Options struct {
-	Addr           string
-	AssetsDir      string
-	Auth           auth.Authenticator
-	User           string
-	Langs          []string
-	DefaultLang    string
-	SessionIdle    time.Duration // скользящий TTL сессий/токенов
-	AuthStorePath  string        // /dev/shm/malina-auth
-	ControlSock    string        // control-сокет map-reader
-	BasicCacheTTL  time.Duration // TTL кэша успешных Basic-проверок (legacy)
-	MapTimeSyncOff string        // флаг-файл отключения синхронизации времени МАП
-	AuditEnabled   bool          // аудит-журнал действий (syslog)
-	AuditTag       string        // syslog-тег аудита (по умолчанию malina-web-audit)
+	Addr             string
+	AssetsDir        string
+	Auth             auth.Authenticator
+	User             string
+	Langs            []string
+	DefaultLang      string
+	SessionIdle      time.Duration // скользящий TTL сессий/токенов
+	AuthStorePath    string        // /dev/shm/malina-auth
+	ControlSock      string        // control-сокет map-reader
+	BasicCacheTTL    time.Duration // TTL кэша успешных Basic-проверок (legacy)
+	MapTimeSyncOff   string        // флаг-файл отключения синхронизации времени МАП
+	AuditEnabled     bool          // аудит-журнал действий (syslog)
+	AuditTag         string        // syslog-тег аудита (по умолчанию malina-web-audit)
+	MasterConfigPath string        // путь к nodes.json (мастер-узел)
+	MasterCacheDir   string        // каталог кэша мастер-узла (tmpfs)
+	MasterTTL        time.Duration // TTL кэша мастер-узла (по умолчанию 5s)
 }
 
 // Server — HTTP-сервер.
@@ -48,6 +53,15 @@ type Server struct {
 	initial string
 	legacy  *legacyService
 	audit   *audit.Logger
+
+	masterPath  string
+	masterProxy *masternode.Proxy
+	// Кэш конфига узлов (перечитываем только при изменении файла).
+	masterMu      sync.Mutex
+	masterCfg     masternode.Config
+	masterCfgMod  time.Time
+	masterCfgSize int64
+	masterCfgOK   bool
 }
 
 // ctxKey — ключ контекста «запрос авторизован».
@@ -90,6 +104,12 @@ func New(o Options) (*Server, error) {
 	if o.AssetsDir == "" {
 		o.AssetsDir = "/malina/usr/local/share/malina/web"
 	}
+	if o.MasterConfigPath == "" {
+		o.MasterConfigPath = masternode.DefaultPath
+	}
+	if o.MasterCacheDir == "" {
+		o.MasterCacheDir = masternode.DefaultCacheDir
+	}
 	// Источник строк — русский; недостающие ключи добираются из него.
 	bundle, err := i18n.Load(os.DirFS(o.AssetsDir), "i18n", "ru", o.Langs)
 	if err != nil {
@@ -117,13 +137,15 @@ func New(o Options) (*Server, error) {
 
 	sets := map[string]*template.Template{}
 	for name, page := range map[string]string{
-		"info":     "info.html",
-		"system":   "system.html",
-		"logs":     "logs.html",
-		"network":  "network.html",
-		"services": "services.html",
-		"map":      "map.html",
-		"reboot":   "reboot.html",
+		"info":            "info.html",
+		"system":          "system.html",
+		"logs":            "logs.html",
+		"network":         "network.html",
+		"services":        "services.html",
+		"map":             "map.html",
+		"reboot":          "reboot.html",
+		"master":          "master.html",
+		"master_settings": "master_settings.html",
 	} {
 		t, err := template.New("").Funcs(funcs).
 			ParseFiles(layout, filepath.Join(tplDir, page))
@@ -138,6 +160,14 @@ func New(o Options) (*Server, error) {
 		return nil, err
 	}
 	sets["login"] = login
+
+	// iframe-содержимое мастер-узла — standalone-шаблон без layout.
+	panel, err := template.New("").Funcs(funcs).
+		ParseFiles(filepath.Join(tplDir, "masterpanel.html"))
+	if err != nil {
+		return nil, err
+	}
+	sets["masterpanel"] = panel
 
 	store, err := authstore.Open(o.AuthStorePath, o.SessionIdle)
 	if err != nil {
@@ -164,6 +194,9 @@ func New(o Options) (*Server, error) {
 		initial: o.DefaultLang,
 		legacy:  newLegacyService(o.ControlSock),
 		audit:   aud,
+
+		masterPath:  o.MasterConfigPath,
+		masterProxy: masternode.NewProxy(o.MasterCacheDir, o.MasterTTL),
 	}, nil
 }
 
@@ -191,6 +224,11 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/system/reboot", s.handleSystemReboot)
 	mux.HandleFunc("/logs", s.handleLogs)
 	mux.HandleFunc("/api/scan", s.handleAPIScan)
+	mux.HandleFunc("/master", s.handleMaster)
+	mux.HandleFunc("/master/panel", s.handleMasterPanel)
+	mux.HandleFunc("/master/settings", s.handleMasterSettings)
+	mux.HandleFunc("/api/master/check_daemons", s.handleAPIMasterCheckDaemons)
+	mux.HandleFunc("/api/master/read_json", s.handleAPIMasterReadJSON)
 	mux.HandleFunc("/network", s.handleNetwork)
 	mux.HandleFunc("/network/save", s.handleNetworkSave)
 	mux.HandleFunc("/network/scan", s.handleNetworkScan)

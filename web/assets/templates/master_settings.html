@@ -1,0 +1,36 @@
+{{define "content"}}
+<div class="map-head">
+  <h1 class="map-title">Мастер-Узел — настройка</h1>
+  <div class="map-headctl">
+    <a class="btn" href="/master">Отобразить</a>
+  </div>
+</div>
+{{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
+{{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
+<form method="post" action="/master/settings">
+  <table class="mn-tbl">
+    <thead>
+      <tr><th>Имя</th><th>Схема</th><th>Хост / IP</th><th>Порт</th><th></th></tr>
+    </thead>
+    <tbody id="mnRows">
+    {{range .Nodes}}
+      <tr>
+        <td><input name="name" value="{{.Name}}" maxlength="32"></td>
+        <td><select name="scheme">
+          <option value="http" {{if eq .Scheme "http"}}selected{{end}}>http</option>
+          <option value="https" {{if eq .Scheme "https"}}selected{{end}}>https</option>
+        </select></td>
+        <td><input name="host" value="{{.Host}}"></td>
+        <td><input name="port" type="number" min="1" max="65535" value="{{.Port}}"></td>
+        <td><input type="hidden" name="id" value="{{.ID}}"><button type="button" class="mn-del" title="Удалить">✕</button></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <div class="mn-actions">
+    <button type="button" id="mnAdd">Добавить узел</button>
+    <button type="submit">Сохранить</button>
+  </div>
+</form>
+<script src="{{asset "master_settings.js"}}"></script>
+{{end}}

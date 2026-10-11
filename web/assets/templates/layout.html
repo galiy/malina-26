@@ -30,6 +30,13 @@
           <a href="#">{{index .T "menu.agg"}}</a>
         </div>
       </div>
+      <div class="navitem dropdown {{if or (eq .Active "master") (eq .Active "master_settings")}}active{{end}}">
+        <span class="navlink navlink-2l">МАСТЕР-УЗЕЛ <span class="caret">▾</span><span class="nav-sub">(legacy)</span></span>
+        <div class="dropdown-menu">
+          <a href="/master" class="{{if eq .Active "master"}}active{{end}}">Отобразить</a>
+          <a href="/master/settings" class="{{if eq .Active "master_settings"}}active{{end}}">Настройка</a>
+        </div>
+      </div>
     </nav>
 
     <div class="topbar-right">

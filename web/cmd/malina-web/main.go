@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/galiy/malina-26/web/internal/auth"
+	"github.com/galiy/malina-26/web/internal/masternode"
 	"github.com/galiy/malina-26/web/internal/web"
 )
 
@@ -27,6 +28,8 @@ func main() {
 	controlSock := flag.String("control-sock", envOr("MALINA_WEB_CONTROL_SOCK", "/run/malina-map/control.sock"), "map-reader control socket")
 	auditOn := flag.Bool("audit", envOr("MALINA_WEB_AUDIT", "1") != "0", "аудит-журнал действий (syslog)")
 	auditTag := flag.String("audit-tag", envOr("MALINA_WEB_AUDIT_TAG", "malina-web-audit"), "syslog-тег аудита")
+	masterConfig := flag.String("master-config", envOr("MALINA_WEB_MASTER_CONFIG", masternode.DefaultPath), "путь к nodes.json мастер-узла")
+	masterCache := flag.String("master-cache", envOr("MALINA_WEB_MASTER_CACHE", masternode.DefaultCacheDir), "каталог кэша мастер-узла")
 	flag.Parse()
 
 	var a auth.Authenticator
@@ -47,6 +50,9 @@ func main() {
 		ControlSock:   *controlSock,
 		AuditEnabled:  *auditOn,
 		AuditTag:      *auditTag,
+
+		MasterConfigPath: *masterConfig,
+		MasterCacheDir:   *masterCache,
 	})
 	if err != nil {
 		log.Fatalf("init: %v", err)

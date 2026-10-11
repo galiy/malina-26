@@ -118,4 +118,13 @@
 
 ## 9. Статус
 
-Открытых вопросов нет — требования согласованы. Реализация не начата.
+**Реализовано (первый срез):**
+- `internal/masternode`: конфиг `nodes.json` (load/save/валидация/id) и ленивый
+  кэширующий прокси (tmpfs, TTL 5 c, single-flight, кэш ошибок, https без проверки серта).
+- `internal/web/master.go`: `/master`, `/master/panel`, `/master/settings`,
+  `/api/master/check_daemons`, `/api/master/read_json` (cookie-сессия).
+- UI: меню «МАСТЕР-УЗЕЛ ▾», один общий iframe на «Отобразить», форма на «Настройка»,
+  панель узлов в legacy-стиле (изолированный iframe, только русский).
+- Тесты: `internal/masternode` (конфиг, кэш/TTL/no_data/invalidate).
+
+Открытых вопросов нет.
