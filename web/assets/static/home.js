@@ -115,43 +115,46 @@
   }
   // Значение с заданным числом знаков (dec) и единицей измерения (field).
   // v.v — сырое значение в единых физ. единицах; dec задаёт округление.
+  // Строка таблицы колонки: [наименование влево][значение вправо][единицы влево].
   function valueHTML(v, field, dec, color) {
     if (v && v.nd) {
       return '<span class="home-cell-v c-gray">' + esc(t("home.nd")) + "</span>";
     }
     var cls = color ? (" c-" + color) : "";
     var val = (v && typeof v.v === "number") ? fmt(v.v, dec) : "\u2014";
-    var unit = UNIT[field] || "";
-    var u = unit ? (' <span class="home-unit">' + esc(unit) + "</span>") : "";
-    return '<span class="home-cell-v' + cls + '">' + val + u + "</span>";
+    return '<span class="home-cell-v' + cls + '">' + val + "</span>";
   }
   function cellHTML(label, v, field, dec, kind, soc) {
     var color = (v && !v.nd) ? fieldColor(kind, field, v.v, soc) : "";
-    return '<div class="home-cell"><span class="home-cell-l">' + esc(label) +
-      "</span>" + valueHTML(v, field, dec, color) + "</div>";
+    return '<tr><td class="home-cell-l">' + esc(label) + "</td>" +
+      '<td class="home-cell-v-wrap">' + valueHTML(v, field, dec, color) + "</td>" +
+      '<td class="home-cell-u">' + esc(UNIT[field] || "") + "</td></tr>";
   }
-  // SOC — отдельная ячейка колонки АКБ (корень плитки, не блок).
+  // SOC — отдельная строка колонки АКБ (корень плитки, не блок).
   function socHTML(soc) {
     var lab = esc(t("home.cell.soc"));
     if (soc === null || soc === undefined) {
-      return '<div class="home-cell"><span class="home-cell-l">' + lab +
-        '</span><span class="home-cell-v c-gray">' + esc(t("home.nd")) + "</span></div>";
+      return '<tr><td class="home-cell-l">' + lab +
+        '</td><td class="home-cell-v-wrap"><span class="home-cell-v c-gray">' +
+        esc(t("home.nd")) + "</span></td><td class=\"home-cell-u\"></td></tr>";
     }
     var cls = " c-" + colorSoc(soc);
-    return '<div class="home-cell"><span class="home-cell-l">' + lab +
-      '</span><span class="home-cell-v' + cls + '">' + Math.round(soc) + " %</span></div>";
+    return '<tr><td class="home-cell-l">' + lab +
+      '</td><td class="home-cell-v-wrap"><span class="home-cell-v' + cls + '">' +
+      Math.round(soc) + "</span></td><td class=\"home-cell-u\">%</td></tr>";
   }
 
   // Колонка из перечня [labelKey, fieldKey, decimals] по блоку mainBlock.
   // Мощность — целое (0 знаков); ток АКБ — 2 знака; остальное — 1 знак.
   // (десятичные задаются в items конкретной колонки).
   function colHTML(title, block, items, kind, soc) {
-    var h = '<div class="home-col"><div class="home-col-title">' + esc(title) + "</div>";
+    var h = '<div class="home-col"><div class="home-col-title">' + esc(title) +
+      '</div><table class="home-cols-table"><tbody>';
     items.forEach(function (it) {
       if (it[1] === "soc") { h += socHTML(soc); return; }
       h += cellHTML(t(it[0]), block[it[1]], it[1], it[2], kind, soc);
     });
-    return h + "</div>";
+    return h + "</tbody></table></div>";
   }
 
   function cardHTML(d, isKes) {

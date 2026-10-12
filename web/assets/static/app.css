@@ -1085,22 +1085,35 @@ tr.ctl-changed { background: #fff8e1; }
   letter-spacing: .04em;
   margin-bottom: .3rem;
 }
-.home-cell {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: .9rem;
-  padding: .1rem 0;
+/* Колонка — таблица выравнивания (без заголовка и границ):
+   [наименование влево][значение вправо][единицы влево]. */
+.home-cols-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.home-cols-table td {
+  vertical-align: baseline;
   white-space: nowrap;
+  padding: .1rem 0;
+  border: 0;
 }
-.home-cell-l { color: #b7cec0; font-size: .72rem; }
+.home-cols-table .home-cell-l {
+  color: #b7cec0;
+  font-size: .72rem;
+  text-align: left;
+}
+.home-cols-table .home-cell-v-wrap { text-align: right; width: 1%; }
+.home-cols-table .home-cell-u {
+  color: #b7cec0;
+  font-size: .62rem;
+  font-weight: 500;
+  text-align: left;
+  width: 1%;
+  padding-left: .45rem;
+}
 .home-cell-v {
   color: #eef6f0;
   font-size: 1.15rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.home-cell-v .home-unit { font-size: .62em; font-weight: 500; color: #b7cec0; margin-left: .15em; }
 .home-cell-v.c-green { color: #7ee36f; }
 .home-cell-v.c-red { color: #e8837f; }
 .home-cell-v.c-blue { color: #5bc0de; }
