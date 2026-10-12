@@ -823,7 +823,7 @@ a.dropdown-sub { padding-left: 22px; }
 
 /* Градиентная полоса + скользящее значение */
 .p1-bar { position: relative; height: 28px; margin-top: 8px;
-  background: linear-gradient(to left, #5f9e73 0%, #a7c57f 22%, #ecd98a 40%, #ecd98a 60%, #d59a63 80%, #ad5f4a 100%);
+  background: linear-gradient(to right, #5f9e73 0%, #a7c57f 22%, #ecd98a 40%, #ecd98a 60%, #d59a63 80%, #ad5f4a 100%);
   border: 1px solid #b7c9bd; border-radius: 3px; }
 .p1-slider { position: absolute; top: -3px; transform: translateX(-50%); white-space: nowrap;
   background: #fff; border: 1px solid #20242b; border-radius: 3px; padding: 3px 8px;
