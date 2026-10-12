@@ -351,13 +351,19 @@ func (s *Server) handleReadBat(w http.ResponseWriter, r *http.Request) {
 	ts := time.Now().Unix()
 	now := time.Now().Format("15:04:05")
 	dayWh := kesEnergyWh()
+	// Оценка заряда АКБ по OCV из снимка МАП (с приоритетом аппаратному SoC).
+	// Если данных нет — остаётся 0.0 (батареи на узле нет). См. docs/legacy/batmon-api.md.
+	soc := 0.0
+	if v, ok := batSocPercent(); ok {
+		soc = v
+	}
 	slot0 := fmt.Sprintf(
 		`{"timestamp":"%d","time":"%s","C20":"0.0","C20_t":"0.0","Uacc_avg":"0.00",`+
-			`"Iavg":"0.00","C_Ah_remain":"0.0","C_100_remain":"0.0","C(I)":"0.0",`+
+			`"Iavg":"0.00","C_Ah_remain":"0.0","C_100_remain":"%.1f","C(I)":"0.0",`+
 			`"TTG":"0","mppt_day_E":"%d","low_V":"0.0","hi_V":"0.0","cycles":"0",`+
 			`"LD":"0.0","DD":"0.0","AD":"0.0","Esum_from_bat":"0","Esum_to_bat":"0",`+
-			`"No_async":"0","est_soc":"0.0","cons_Ah":"0.0","E_wind_day":"0"}`,
-		ts, now, dayWh)
+			`"No_async":"0","est_soc":"%.1f","cons_Ah":"0.0","E_wind_day":"0"}`,
+		ts, now, soc, dayWh, soc)
 	slot1 := fmt.Sprintf(
 		`{"timestamp":"%d","time":"%s","dCdt":"0.0000","dEdt":"0.0000","Isumm":"0.000",`+
 			`"IntegralC_0_t":"0.0000","Integral_E_0_t":"0.0000","t_bat":"0","Ah_user":"0.0",`+
