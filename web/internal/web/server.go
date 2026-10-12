@@ -90,12 +90,16 @@ var langNames = map[string]string{
 	"be": "Беларуская",
 	"zh": "中文",
 	"en": "English",
+	"ka": "ქართული",
+	"kk": "Қазақша",
+	"uz": "O'zbekcha",
+	"tg": "Тоҷикӣ",
 }
 
 // New собирает сервер, загружая шаблоны/i18n из AssetsDir.
 func New(o Options) (*Server, error) {
 	if o.Langs == nil {
-		o.Langs = []string{"ru", "be", "zh", "en"}
+		o.Langs = []string{"ru", "be", "zh", "en", "ka", "kk", "uz", "tg"}
 	}
 	if o.DefaultLang == "" {
 		o.DefaultLang = "en"

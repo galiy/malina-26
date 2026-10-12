@@ -3,7 +3,7 @@
 > Статус: **реализовано**. Серверный эндпоинт `GET /api/mainlist`
 > (`web/internal/web/mainlist.go`), SOC-ядро `socEstimated` (`ocv.go`),
 > клиент (`web/assets/templates/home.html`, `web/assets/static/home.js`,
-> CSS в `app.css`), локали ru/be/zh/en и юнит-тесты `mainlist_test.go`
+> CSS в `app.css`), локали ru/be/zh/en/ka/kk/uz/tg и юнит-тесты `mainlist_test.go`
 > (без обращения к shm). Документ самодостаточен для изменения/регресса.
 
 ---
@@ -51,12 +51,12 @@
 
 | Файл | Что здесь |
 |---|---|
-| `web/assets/templates/home.html` | главная — СЕЙЧАС пустая (`<div class="home-empty">`) |
+| `web/assets/templates/home.html` | главная — живая сводка (разделы `#homeMaps`/`#homeKes`, подключает `home.js`) |
 | `web/assets/templates/layout.html` | общий каркас, `{{.Active}}`, `{{.T}}`, подключаемые скрипты |
 | `web/assets/static/map.js` | панель 1 — **референс формул** (НЕ трогаем) |
 | `web/assets/static/masterpanel.js` | мастер-панель — **референс отрисовки плиток/статуса** |
 | `web/assets/static/nav.js` | динамическое меню **«МАП» и «КЭС»** (списки `/api/*/devices`, ссылки на страницу устройства) |
-| `web/assets/i18n/{ru,be,zh,en}.json` | локали |
+| `web/assets/i18n/{ru,be,zh,en,ka,kk,uz,tg}.json` | локали |
 
 ---
 
@@ -581,7 +581,6 @@ func kesModeString(f *kesFields) string {
 ```html
 {{define "content"}}
 <div class="home-wrap">
-  <h1 class="home-title">{{index .T "home.title"}}</h1>
   <div class="home-error flash err" id="homeErr" hidden></div>
   <section class="home-section" id="homeMaps" hidden>
     <h2>{{index .T "home.sec_map"}}</h2>
@@ -600,8 +599,9 @@ func kesModeString(f *kesFields) string {
 ```
 
 - `{{asset "home.js"}}` — новый файл `web/assets/static/home.js`.
-- Добавить ключи `home.title`, `home.sec_map`, `home.sec_kes` в
-  `web/assets/i18n/{ru,be,zh,en}.json`.
+- Заголовок страницы (`<h1>`) не выводится; разделы подписаны ключами
+  `home.sec_map`/`home.sec_kes`. Весь набор ключей `home.*` — во **всех** локалях
+  `web/assets/i18n/*.json` (ru/be/zh/en/ka/kk/uz/tg).
 
 ### 10.2 `home.js` — логика клиента
 
@@ -671,11 +671,10 @@ func kesModeString(f *kesFields) string {
 
 ## 11. i18n (ключи для добавления)
 
-В `web/assets/i18n/*.json` (ru/be/zh/en), по аналогии с существующими ключами:
+В `web/assets/i18n/*.json` (ru/be/zh/en/ka/kk/uz/tg), по аналогии с существующими ключами:
 
 | Ключ | ru (пример) |
 |---|---|
-| `home.title` | `Сводка по устройствам` |
 | `home.sec_map` | `МАП` |
 | `home.sec_kes` | `КЭС` |
 | `home.nd` | `н/д` |
@@ -686,9 +685,10 @@ func kesModeString(f *kesFields) string {
 | `home.status.lost` / `.stale` | подписи «тумана» (потерян/устарел) |
 | `kes.title` | заголовок страницы `/kes` («КЭС s/n %s порт %s») |
 | `kes.gone` / `kes.connection_lost` | сообщения страницы КЭС |
+| `kes.dev` | префикс метки КЭС в меню/заголовке плитки («КЭС»); fallback — «КЭС» |
 
 > `p1.modeN` уже есть во всех языках — используется без изменений (через `modeText`).
-> Все ключи обязаны присутствовать в **четырёх** локалях (ru/be/zh/en).
+> Все ключи обязаны присутствовать во **всех** локалях (ru/be/zh/en/ka/kk/uz/tg).
 
 ---
 
@@ -722,7 +722,7 @@ func kesModeString(f *kesFields) string {
    `buildKesTile`, `colorRange`, хелперы `mainValue`.
 3. Зарегистрировать `/api/mainlist` в `server.go`.
 4. Написать `mainlist_test.go` (юнит, без shm).
-5. `home.html` + `home.js` + CSS + i18n-ключи (ru/be/zh/en).
+5. `home.html` + `home.js` + CSS + i18n-ключи (все локали).
 6. Сборка/тесты: `cd web && go build ./... && go vet ./... && go test ./...`
    (из корня — `go build ./web/... ./daemons/...`).
 7. При изменении референсов (если менялась логика) — обновить
@@ -734,5 +734,5 @@ func kesModeString(f *kesFields) string {
 
 Код считается готовым, когда синхронно обновлены: серверный эндпоинт, тесты,
 документация (`docs/mainpage.md` актуализировать «статус: реализовано»),
-локали (ru/be/zh/en), `web/README.md` (упомянуть `/api/mainlist`), при изменении
+локали (ru/be/zh/en/ka/kk/uz/tg), `web/README.md` (упомянуть `/api/mainlist`), при изменении
 контрактов — `docs/map-contract.md` / `docs/kes-contract.md`.
