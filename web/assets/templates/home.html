@@ -1,4 +1,21 @@
 {{define "content"}}
-{{/* Главная страница. Пока пустая — без редиректа и без контента. */}}
-<div class="home-empty"></div>
+{{/* Главная страница: живая сводка по всем устройствам (МАП + КЭС).
+    Данные — GET /api/mainlist (см. web/internal/web/mainlist.go).
+    Клиент НЕ тащит бинарные контракты и НЕ считает производные величины. */}}
+<div class="home-wrap">
+  <h1 class="home-title">{{index .T "home.title"}}</h1>
+  <div class="home-error flash err" id="homeErr" hidden></div>
+  <section class="home-section" id="homeMaps" hidden>
+    <h2>{{index .T "home.sec_map"}}</h2>
+    <div class="home-tiles" id="homeMapTiles"></div>
+  </section>
+  <section class="home-section" id="homeKes" hidden>
+    <h2>{{index .T "home.sec_kes"}}</h2>
+    <div class="home-tiles" id="homeKesTiles"></div>
+  </section>
+</div>
+<script>
+  window.I18N = {{json .T}};
+</script>
+<script src="{{asset "home.js"}}"></script>
 {{end}}

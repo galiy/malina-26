@@ -13,12 +13,28 @@
     <div class="brand"><img src="{{asset "img/malina_small.gif"}}" alt="Malina"> {{index .T "app.title"}}</div>
 
     <nav class="mainnav">
+      <div class="navitem {{if eq .Active "home"}}active{{end}}">
+        <a class="navlink" href="/">
+          <svg class="navicon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3L12 3z"/></svg>
+          {{index .T "menu.home"}}
+        </a>
+      </div>
       <div class="navitem dropdown {{if eq .Active "map"}}active{{end}}">
         <span class="navlink">{{index .T "menu.map"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
           <div id="mapMenuWrap" {{if not .Maps}}hidden{{end}}>
             <div id="mapMenuItems">
               {{range .Maps}}<a class="dropdown-sub" href="/map?id={{.ID}}&gen={{.Gen}}">{{.MenuLabel}}</a>{{end}}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="navitem dropdown {{if eq .Active "kes"}}active{{end}}">
+        <span class="navlink">{{index .T "menu.kes"}} <span class="caret">▾</span></span>
+        <div class="dropdown-menu">
+          <div id="kesMenuWrap" {{if not .Kes}}hidden{{end}}>
+            <div id="kesMenuItems">
+              {{range .Kes}}<a class="dropdown-sub" href="/kes?id={{.ID}}&gen={{.Gen}}">{{.MenuLabel}}</a>{{end}}
             </div>
           </div>
         </div>
@@ -31,7 +47,7 @@
         </div>
       </div>
       <div class="navitem dropdown {{if or (eq .Active "master") (eq .Active "master_settings")}}active{{end}}">
-        <span class="navlink navlink-2l">МАСТЕР-УЗЕЛ <span class="caret">▾</span><span class="nav-sub">(legacy)</span></span>
+        <span class="navlink navlink-2l">МАСТЕР-УЗЕЛ <span class="caret">▾</span><span class="nav-sub">{{index .T "menu.legacy"}}</span></span>
         <div class="dropdown-menu">
           <a href="/master" class="{{if eq .Active "master"}}active{{end}}">Отобразить</a>
           <a href="/master/settings" class="{{if eq .Active "master_settings"}}active{{end}}">Настройка</a>

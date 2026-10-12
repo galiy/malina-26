@@ -13,7 +13,7 @@ import (
 // ожидаем найденное устройство на какой-то скорости из kesSpeeds.
 func TestProbeKesPortPTY(t *testing.T) {
 	f := &fakeKes{}
-	f.img[0x0000] = 5 // _Device = КЭС
+	f.eep[0x0000] = 5 // _Device = КЭС (EEPROM, devAddr < 0x400)
 
 	master, slave := openPTYPair(t)
 	defer master.Close()
@@ -43,7 +43,7 @@ func TestProbeKesPortPTY(t *testing.T) {
 // вернуться с errForeignMap, чтобы порт сразу отдавали соседнему демону.
 func TestProbeKesPortForeign(t *testing.T) {
 	f := &fakeKes{}
-	f.img[0x0000] = 3 // _Device = МАП (чужое)
+	f.eep[0x0000] = 3 // _Device = МАП (чужое, EEPROM)
 
 	master, slave := openPTYPair(t)
 	defer master.Close()

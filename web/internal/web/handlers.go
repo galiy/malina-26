@@ -60,6 +60,7 @@ func (s *Server) baseData(r *http.Request) map[string]any {
 		"LangNames": langNames,
 		"Path":      r.URL.Path,
 		"Maps":      loadMapList().Maps,
+		"Kes":       loadKesList().Kes, // для меню «КЭС» (как у «МАП»)
 	}
 }
 
@@ -106,8 +107,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
-	// Главная — пока пустая страница (без редиректа на МАП/инфо).
-	s.render(w, http.StatusOK, "home", s.baseData(r))
+	data := s.baseData(r)
+	data["Active"] = "home" // подсветить пункт меню «ДОМОЙ»
+	s.render(w, http.StatusOK, "home", data)
 }
 
 // handleInfo — явная страница «Информация» (/info), доступна из меню.

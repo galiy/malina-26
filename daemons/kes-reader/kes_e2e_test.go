@@ -49,15 +49,18 @@ func openPTYPair(t *testing.T) (*os.File, string) {
 	return m, slave
 }
 
-// fakeKes — виртуальный КЭС поверх образа [2048]byte с отображением dev→RAM
-// (dev≥0x1F0 → dev−0x1F0, иначе dev), как у kes-emu.
-type fakeKes struct{ img [0x1080]byte }
+// fakeKes — виртуальный КЭС поверх образа с разделением EEPROM/RAM, как у kes-emu:
+// devAddr < 0x400 → EEPROM «как есть»; devAddr >= 0x400 → RAM (адрес devAddr-0x1F0).
+type fakeKes struct {
+	eep [0x400]byte  // EEPROM: индекс = адрес как есть
+	img [0x1080]byte // RAM: индекс = RAM-адрес
+}
 
 func (f *fakeKes) at(dev uint16) byte {
-	if dev >= 0x1F0 {
+	if dev >= 0x400 {
 		return f.img[dev-0x1F0]
 	}
-	return f.img[dev]
+	return f.eep[dev]
 }
 
 // serve обслуживает master в протоколе Микроарт: эхо запроса + ответ на '\n'.
@@ -111,25 +114,28 @@ func (f *fakeKes) serve(master io.ReadWriteCloser, stop <-chan struct{}) {
 // payload (KESE+KESR+KESS) из виртуального КЭС на PTY.
 func TestReadAndPublishE2E(t *testing.T) {
 	f := &fakeKes{}
-	// Заполняем те же ячейки, что читает контракт (RAM-индексы).
+	// ID/паспорт и серийник живут в EEPROM (devAddr < 0x400 → индекс «как есть»).
+	eset := func(addr uint16, v byte) { f.eep[addr] = v }
+	eset(0x0000, 5)    // _Device = КЭС
+	eset(0x0001, 0x02) // Pow
+	eset(0x0002, 0xA8) // FW
+	eset(0x0005, 0x32) // ModelPow (×100)
+	eset(0x009B, 0x04) // ModelVolt (×12 → 48В)
+	eset(0x000C, 0x01) // Pic
+	eset(0x000D, 0x01) // Net
+	eset(0x2C9, 0x34)  // Serial мл.
+	eset(0x2CA, 0x12)  // Serial ст. = 0x1234
+	// Измерения/настройки — в RAM (devAddr >= 0x400 → индекс devAddr-0x1F0).
 	set := func(ram uint16, v byte) { f.img[ram] = v }
 	put16 := func(ram uint16, v uint16) { set(ram, byte(v)); set(ram+1, byte(v>>8)) }
-	set(0x0000, 5)       // _Device = КЭС
-	set(0x0001, 0x02)    // Pow
-	set(0x0002, 0xA8)    // FW
-	set(0x0005, 0x32)    // ModelPow (×100)
-	set(0x009B, 0x04)    // ModelVolt (×12 → 48В)
-	set(0x000C, 0x01)    // Pic
-	set(0x000D, 0x01)    // Net
-	put16(0x2C9, 0x1234) // Serial
-	put16(0x2D9, 1234)   // VcPV
-	put16(0x2E5, 567)    // VBat
-	set(0x31D, 0x5A)     // TempInt
-	set(0x3E3, 0x05)     // RelayC
-	set(0x3B6, 0x02)     // RSErrSis
-	set(0x210, 0x04)     // настройка Roll_H_Speed
-	put16(0x250, 3)      // настройка Bat_K_Temp (2 байта)
-	set(0xD5A, 0x07)     // I2C_Err
+	put16(0x2D9, 1234) // VcPV
+	put16(0x2E5, 567)  // VBat
+	set(0x31D, 0x5A)   // TempInt
+	set(0x3E3, 0x05)   // RelayC
+	set(0x3B6, 0x02)   // RSErrSis
+	set(0x210, 0x04)   // настройка Roll_H_Speed
+	put16(0x250, 3)    // настройка Bat_K_Temp (2 байта)
+	set(0xD5A, 0x07)   // I2C_Err
 
 	master, slave := openPTYPair(t)
 	defer master.Close()
@@ -155,6 +161,9 @@ func TestReadAndPublishE2E(t *testing.T) {
 	d := parseData(img)
 	if info.Serial != 0x1234 || info.Device != 5 {
 		t.Fatalf("parseKes: %+v", info)
+	}
+	if d.Serial != 0x1234 {
+		t.Fatalf("parseData.Serial=%#x, ждали 0x1234 (EEPROM-серийник)", d.Serial)
 	}
 	if d.VcPV != 1234 || d.VBat != 567 || d.RelayC != 0x05 || d.RSErrSis != 0x02 || d.TempInt != 0x5A {
 		t.Fatalf("parseData измерения: %+v", d)

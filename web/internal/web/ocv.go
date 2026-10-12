@@ -114,7 +114,54 @@ func batSocPercent() (float64, bool) {
 	return batSocFromFields(f)
 }
 
+// batInput — параметризованные входные данные для оценки SoC, не зависящие от
+// имён полей конкретного источника (МАП или КЭС). Напряжение — уже
+// компенсированного (OCV-подобного) источника; компенсацию делают вызывающие.
+type batInput struct {
+	AccType    int     // тип АКБ (0..5), см. accType*
+	NominalV   float64 // номинальное напряжение сборки, В
+	Voltage    float64 // измеренное напряжение АКБ, В
+	Current    float64 // ток, А (знак: «+» заряд)
+	Charging   bool    // сейчас заряд
+	CapacityAh float64 // ёмкость АКБ, Ач (0 → без поправки на ток)
+}
+
+// socEstimated — единая функция оценки SoC по OCV-кривым (общая для МАП и КЭС).
+// Порядок: заряд смещает измеренное напряжение вверх, разряд — вниз, поэтому
+// поправка вычитает (ток/ёмкость) при заряде и прибавляет при разряде — ток
+// здесь знаковый («+» заряд). Возвращает значение, ограниченное 0..100.
+func socEstimated(in batInput) float64 {
+	if in.AccType == accTypeLiyp39 || in.AccType == accTypeLiyp37 {
+		// Литий: число ячеек по номиналу сборки LFP (12В=4S, 24В=8S, 48В=16S, 96В=32S).
+		ns := liCellsForNom(in.NominalV)
+		if ns <= 0 {
+			return 0
+		}
+		uCell := in.Voltage / float64(ns)
+		if in.CapacityAh > 0 {
+			uCell -= ocvKLiCell * (in.Current / in.CapacityAh)
+		}
+		return clampSoc(socFromOCV(liFePO4OCV, uCell))
+	}
+
+	// Свинцовые/гель: число 12-В батарей из номинала.
+	blocks := in.NominalV / 12
+	if blocks <= 0 {
+		blocks = 1
+	}
+	u12 := in.Voltage / blocks
+	tbl := leadOCV12
+	if in.AccType == accTypeGelAGM || in.AccType == accTypeAGMShoto {
+		tbl = gelOCV12
+	}
+	if in.CapacityAh > 0 {
+		u12 -= ocvKLead12 * (in.Current / in.CapacityAh)
+	}
+	return clampSoc(socFromOCV(tbl, u12))
+}
+
 // batSocFromFields — оценка заряда по распакованным полям снимка МАП.
+// Фасад: строит batInput из полей МАП и вызывает socEstimated.
 // Отдельная (чистая) функция — для юнит-тестов без обращений к shm.
 func batSocFromFields(f map[string]uint32) (float64, bool) {
 	// Приоритет: аппаратный SoC (id 235, 0x718). 255 = «нет данных».
@@ -122,7 +169,7 @@ func batSocFromFields(f map[string]uint32) (float64, bool) {
 		return float64(soc), true
 	}
 
-	accType, okType := f["LCD_AccType"]
+	accType, _ := f["LCD_AccType"]
 	uacc, okU := uaccFromFields(f)
 	if !okU {
 		return 0, false
@@ -147,47 +194,25 @@ func batSocFromFields(f map[string]uint32) (float64, bool) {
 	// Ёмкость АКБ (Ач) — настройка «полной ёмкости» МАП, формула РОДНОГО UI
 	// (map.js: cacc = (LCD_CAcc*25) >> UACC). Узел .60: LCD_CAcc=80, UACC=2 →
 	// (80*25)>>2 = 500 Ач. 0 → поправка на ток не применяется.
-	ah := float64((f["LCD_CAcc"]*25) >> sh)
+	ah := float64((f["LCD_CAcc"] * 25) >> sh)
 
-	if accType == accTypeLiyp39 || accType == accTypeLiyp37 {
-		// Литий: число ячеек по номиналу сборки LFP (12В=4S, 24В=8S, 48В=16S, 96В=32S);
-		// банки BMS не используем (фейковые).
-		ns := liCellsForNom(nom)
-		if ns <= 0 {
-			return 0, false
-		}
-		uCell := uacc / float64(ns)
-		if ah > 0 {
-			uCell -= ocvKLiCell * (iBat / ah)
-		}
-		if !okType {
-			return 0, false
-		}
-		return clampSoc(socFromOCV(liFePO4OCV, uCell)), true
-	}
-
-	// Свинцовые/гель: число 12-В батарей из номинала МАП.
-	blocks := nom / 12
-	if blocks <= 0 {
-		blocks = 1
-	}
-	u12 := uacc / blocks
-	tbl := leadOCV12
-	if accType == accTypeGelAGM || accType == accTypeAGMShoto {
-		tbl = gelOCV12
-	}
-	if ah > 0 {
-		u12 -= ocvKLead12 * (iBat / ah)
-	}
-	return clampSoc(socFromOCV(tbl, u12)), true
+	return socEstimated(batInput{
+		AccType:    int(accType),
+		NominalV:   nom,
+		Voltage:    uacc,
+		Current:    iBat,
+		Charging:   charging,
+		CapacityAh: ah,
+	}), true
 }
 
 // uaccFromFields — измеренное напряжение АКБ (В) с приоритетом наиболее точного
 // (OCV-подобного) источника:
-//   1) UAcc_Optim_VL/VH (0x520/0x521, ×0,1) — «среднее между измеренным и не
-//      учитывающим нагрузку»: ближайшее к OCV, компенсирует падение под нагрузкой;
-//   2) UAcc_med_VS_100 (0x522/0x523, ×0,01) — то же напряжение, точность ×100;
-//   3) UAcc_med_VH/VL (0x405/0x406, ×0,1) — измеренное среднее.
+//  1. UAcc_Optim_VL/VH (0x520/0x521, ×0,1) — «среднее между измеренным и не
+//     учитывающим нагрузку»: ближайшее к OCV, компенсирует падение под нагрузкой;
+//  2. UAcc_med_VS_100 (0x522/0x523, ×0,01) — то же напряжение, точность ×100;
+//  3. UAcc_med_VH/VL (0x405/0x406, ×0,1) — измеренное среднее.
+//
 // Возвращает (В, ok). ok=false при отсутствии/нулевом значении всех источников.
 func uaccFromFields(f map[string]uint32) (float64, bool) {
 	if h, ok := f["UAcc_Optim_VH"]; ok {

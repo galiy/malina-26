@@ -1,0 +1,29 @@
+{{define "content"}}
+<div class="map-head">
+  <h1 class="map-title">{{.Title}}</h1>
+  <div class="map-headctl">
+    <label class="map-pause"><input type="checkbox" id="kesPause"> {{index .T "map.disable_update"}}</label>
+  </div>
+</div>
+
+<div class="flash err" id="kesErr" hidden></div>
+
+<div class="map-tabs">
+  <button type="button" class="map-tab active" data-tab="monitor">{{index .T "map.tab_monitor"}}</button>
+  <button type="button" class="map-tab" data-tab="info">{{index .T "map.tab_info"}}</button>
+  <button type="button" class="map-tab" data-tab="control">{{index .T "map.tab_control"}}</button>
+</div>
+
+<div class="map-tabpane" id="tab-monitor"></div>
+<div class="map-tabpane" id="tab-info" hidden></div>
+<div class="map-tabpane" id="tab-control" hidden></div>
+
+<pre class="map-json" id="kesJson"></pre>
+
+<script>
+window.I18N = {{json .T}};
+window.KES_ID = {{.ID}};
+window.KES_GEN = {{.Gen}};
+</script>
+<script src="{{asset "kes.js"}}"></script>
+{{end}}

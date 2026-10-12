@@ -111,6 +111,8 @@ a:hover { color: var(--accent-dark); text-decoration: underline; }
 }
 .navlink:hover { background: #ececec; color: var(--accent-dark); text-decoration: none; }
 .navitem.active > .navlink { background: var(--accent); color: #fff; }
+/* Иконка пункта «ДОМОЙ» — по базовой линии текста */
+.navlink .navicon { vertical-align: -2px; margin-right: 5px; display: inline-block; }
 .dropdown { position: relative; }
 .dropdown .caret { font-size: 10px; }
 .dropdown-menu {
@@ -1018,3 +1020,115 @@ tr.ctl-changed { background: #fff8e1; }
   .ctl-act .ctl-btn { width: 100%; margin-top: 4px; }
   .ctl-pop { max-width: 92vw; }
 }
+
+/* ===== Главная страница: сводка по устройствам (/api/mainlist) ===== */
+.home-wrap { padding: 1.2rem 1.4rem; }
+.home-title {
+  color: #0d5637;
+  font-size: 1.25rem;
+  margin: 0 0 .6rem;
+}
+.home-error { max-width: 720px; }
+.home-section { margin-bottom: 1.4rem; }
+.home-section h2 {
+  color: #0d5637;
+  font-size: .95rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin: 0 0 .6rem;
+  border-bottom: 1px solid #e2e8e4;
+  padding-bottom: .3rem;
+}
+.home-tiles { display: flex; flex-wrap: wrap; gap: 1rem; }
+
+.home-tile {
+  position: relative;
+  background: #0d5637;
+  border: 2px solid #cbd7d0;
+  border-radius: 12px;
+  padding: .6rem .8rem;
+  min-width: 360px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
+  overflow: hidden;
+}
+/* Кликабельная плашка: ссылка на страницу устройства (МАП/КЭС) */
+.home-tile-link { display: block; color: inherit; text-decoration: none; }
+.home-tile-link:hover .home-card { outline: 1px solid #ffd07a; outline-offset: -1px; border-radius: 8px; }
+/* Плашка в «тумане» (lost/stale) НЕ кликабельна */
+.home-tile.nolink .home-tile-link { pointer-events: none; cursor: default; }
+.home-tile.nolink .home-tile-link:hover .home-card { outline: none; }
+/* Заголовок плитки — скоуп, чтобы не конфликтовать со страничным h1.home-title */
+.home-tile .home-title {
+  color: #fff;
+  font-size: .95rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+}
+.home-status {
+  color: #cfe3d6;
+  border-bottom: 1px solid #000;
+  padding: .25rem 0 .4rem;
+  margin-bottom: .45rem;
+  font-size: .78rem;
+}
+.home-cols { display: flex; }
+.home-col { padding: 0 .7rem; }
+.home-col:first-child { padding-left: 0; }
+.home-col:last-child { padding-right: 0; }
+.home-col + .home-col { border-left: 1px solid #000; }
+.home-col-title {
+  color: #ffd07a;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: .3rem;
+}
+.home-cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .9rem;
+  padding: .1rem 0;
+  white-space: nowrap;
+}
+.home-cell-l { color: #b7cec0; font-size: .72rem; }
+.home-cell-v {
+  color: #eef6f0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.home-cell-v .home-unit { font-size: .62em; font-weight: 500; color: #b7cec0; margin-left: .15em; }
+.home-cell-v.c-green { color: #7ee36f; }
+.home-cell-v.c-red { color: #e8837f; }
+.home-cell-v.c-blue { color: #5bc0de; }
+.home-cell-v.c-darkblue { color: #2f6ea3; }
+.home-cell-v.c-orange { color: #e0902f; }
+.home-cell-v.c-beige { color: #f5debc; }
+.home-cell-v.c-gray { color: #999999; }
+
+/* «Туман» над устаревшим/потерянным устройством */
+.home-fog {
+  position: absolute;
+  inset: 0;
+  background: rgba(150, 160, 155, .55);
+  backdrop-filter: blur(2px);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* display:flex перекрывает UA-стиль [hidden]{display:none} — гасим явно,
+   иначе «туман» виден даже у online-устройств. */
+.home-fog[hidden] { display: none; }
+.home-fog-text {
+  color: #fff;
+  font-size: .85rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+}
+.home-tile.fogged-stale, .home-tile.fogged-lost { opacity: .82; }

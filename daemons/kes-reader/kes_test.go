@@ -14,8 +14,8 @@ import (
 func TestWindowsCover(t *testing.T) {
 	need := map[uint16]bool{
 		0x0000: true, 0x0001: true, 0x0002: true, 0x0005: true, 0x000C: true, 0x000D: true,
-		0x009B: true,              // параметры устройства
-		0x2C9:  true, 0x2CA: true, // Serial
+		0x009B:          true,                            // параметры устройства
+		kesSerialImgKey: true, kesSerialImgKey + 1: true, // Serial (EEPROM 0x2C9)
 		0x2D9: true, 0x2DF: true, 0x2E5: true, 0x2EB: true, 0x2ED: true, 0x2F5: true,
 		0x2F9: true, 0x2FB: true, 0x2FF: true, 0x31D: true, 0x31E: true, 0x39F: true,
 		0x3A1: true, 0x3B6: true, 0x3E3: true, 0x404: true, 0x405: true, 0x406: true,
@@ -67,8 +67,8 @@ func TestParseKesAndData(t *testing.T) {
 	img[0x009B] = 0x04 // напряжение модели (×12 → 48В)
 	img[0x000C] = 0x01 // Pic/Модель
 	img[0x000D] = 0x05 // Net
-	img[0x2C9] = 0x34
-	img[0x2CA] = 0x12 // Serial = 0x1234
+	img[kesSerialImgKey] = 0x34
+	img[kesSerialImgKey+1] = 0x12 // Serial = 0x1234 (EEPROM)
 	// Измерения.
 	put16(0x2D9, 1234) // Vc_PV
 	put16(0x2E5, 567)  // V_Bat
@@ -100,6 +100,11 @@ func TestParseKesAndData(t *testing.T) {
 	}
 	if d.VcPV != 1234 || d.VBat != 567 || d.RelayC != 0x05 || d.RSErrSis != 0x02 {
 		t.Fatalf("parseData: %+v", d)
+	}
+	// Серийник в RAM-образе должен читаться из kesSerialImgKey (EEPROM), а НЕ из
+	// RAM 0x2C9 (перекрыта окном измерений) — иначе вернётся 0/мусор (Task1).
+	if d.Serial != 0x1234 {
+		t.Fatalf("parseData.Serial=%#x, ждали 0x1234 (EEPROM, не RAM 0x2C9)", d.Serial)
 	}
 	if d.TempInt != 0x5A || d.TempBat != 0x64 {
 		t.Fatalf("температуры (байты): %+v", d)
