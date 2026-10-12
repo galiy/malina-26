@@ -30,6 +30,16 @@ func (s *Server) tr(lang, key string) string {
 	return s.bundle.Translations(lang)[key]
 }
 
+// trFor — перевод для запроса r по языку страницы; при отсутствии бандла
+// (юнит-тесты с &Server{}) возвращает nil → переводимые подписи используют
+// русский fallback (MenuLabel/mapModelFull).
+func (s *Server) trFor(r *http.Request) map[string]string {
+	if s.bundle == nil {
+		return nil
+	}
+	return s.bundle.Translations(s.lang(r))
+}
+
 func (s *Server) render(w http.ResponseWriter, status int, name string, data map[string]any) {
 	set := s.tmpl[name]
 	if set == nil {

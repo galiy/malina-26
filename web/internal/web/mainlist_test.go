@@ -225,7 +225,7 @@ func TestKesTileFields(t *testing.T) {
 	}
 	kf.Settings[33] = 100 // Bat_Cap = 100 Ач
 	k := KesInfo{ID: 0, Serial: 2670, Port: "ttyUSB1", Baud: 115200, LastSeen: nowSec()}
-	tile := buildKesTile(k, kf)
+	tile := buildKesTile(testTr(), k, kf)
 
 	// Панели
 	if tile.Panel.U.V != 125.8 || tile.Panel.U.ND {
@@ -269,12 +269,12 @@ func TestKesTileFields(t *testing.T) {
 	// Копия ЗНАЧЕНИЯ (не указателя), чтобы не мутировать общий kf.
 	z := *kf
 	z.VBat = 0
-	if got := buildKesTile(k, &z); got.Soc != nil {
+	if got := buildKesTile(testTr(), k, &z); got.Soc != nil {
 		t.Fatalf("soc=%v при VBat=0, ожидался nil", got.Soc)
 	}
 	z = *kf
 	z.ModelVolt = 0
-	if got := buildKesTile(k, &z); got.Soc != nil {
+	if got := buildKesTile(testTr(), k, &z); got.Soc != nil {
 		t.Fatalf("soc=%v при ModelVolt=0, ожидался nil", got.Soc)
 	}
 }

@@ -425,7 +425,7 @@ func (s *Server) handleReadBMS(w http.ResponseWriter, r *http.Request) {
 	if len(ml.Maps) > 0 {
 		if payload := mapRawPayload(ml.Maps[0].ID); payload != nil {
 			if f, ok := decodeLegacy(payload); ok {
-				model := mapModelFull(ml.Maps[0].Model)
+				model := mapModelFull(nil, ml.Maps[0].Model)
 				body = renderBMS(f, f.meta.LastSeen, model, ml.Maps[0].Port)
 			}
 		}

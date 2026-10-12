@@ -94,7 +94,7 @@ a:hover { color: var(--accent-dark); text-decoration: underline; }
   background: var(--navbar-bg);
   border-bottom: 1px solid var(--navbar-border);
 }
-.brand { display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--muted); }
+a.brand { display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--muted); text-decoration: none; cursor: pointer; }
 .brand img { height: 28px; }
 .mainnav { display: flex; align-items: center; gap: 4px; }
 .navform { margin: 0; }
@@ -372,7 +372,7 @@ a:hover { color: var(--accent-dark); }
 
 /* шапка */
 .topbar { background: #0d5637; border-bottom: 2px solid rgba(254,198,120,.25); }
-.brand { color: #fff; }
+a.brand { color: #fff; }
 .navlink {
   color: #fff; border-radius: 0; position: relative;
   text-transform: uppercase; font-family: "Open Sans Condensed","Open Sans",sans-serif;
@@ -1023,11 +1023,6 @@ tr.ctl-changed { background: #fff8e1; }
 
 /* ===== Главная страница: сводка по устройствам (/api/mainlist) ===== */
 .home-wrap { padding: 1.2rem 1.4rem; }
-.home-title {
-  color: #0d5637;
-  font-size: 1.25rem;
-  margin: 0 0 .6rem;
-}
 .home-error { max-width: 720px; }
 .home-section { margin-bottom: 1.4rem; }
 .home-section h2 {
@@ -1066,12 +1061,23 @@ tr.ctl-changed { background: #fff8e1; }
   margin: 0;
 }
 .home-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .6rem;
   color: #cfe3d6;
   border-bottom: 1px solid #000;
   padding: .25rem 0 .4rem;
   margin-bottom: .45rem;
   font-size: .78rem;
 }
+.home-status-mode { text-align: left; }
+.home-status-soc {
+  text-align: right;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.home-status-soc-l { color: #b7cec0; font-weight: 500; font-size: .72rem; }
 .home-cols { display: flex; }
 .home-col { padding: 0 .7rem; }
 .home-col:first-child { padding-left: 0; }

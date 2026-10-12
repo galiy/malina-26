@@ -46,7 +46,8 @@ func (m MapInfo) SerialLabel() string {
 	return s
 }
 
-// modelNames — человекочитаемые имена моделей МАП по букве (см. docs/map.md).
+// modelNames — имена моделей МАП по-русски (fallback, см. docs/map.md).
+// Локализованный вариант — key `model.<буква>` из перевода (tr["model."+code]).
 var modelNames = map[string]string{
 	"T": "Титанатор",
 	"D": "Доминатор",
@@ -54,10 +55,23 @@ var modelNames = map[string]string{
 	"P": "Pro",
 }
 
+// modelName — локализованное имя модели МАП по букве; при отсутствии перевода
+// или tr==nil — русский fallback modelNames. Неизвестная буква — "" (без префикса).
+func modelName(tr map[string]string, code string) string {
+	if tr != nil {
+		if n := tr["model."+code]; n != "" {
+			return n
+		}
+	}
+	return modelNames[code]
+}
+
 // MenuLabel — имя подпункта меню: имя модели + серийник + порт + скорость.
-func (m MapInfo) MenuLabel() string {
+// Имя модели берётся из перевода tr (язык страницы), чтобы меню и заголовки
+// плиток МАП отображались на языке клиента.
+func (m MapInfo) MenuLabel(tr map[string]string) string {
 	base := m.SerialLabel() + " · " + m.Port + " · " + strconv.FormatUint(uint64(m.Baud), 10)
-	if n := modelNames[m.Model]; n != "" {
+	if n := modelName(tr, m.Model); n != "" {
 		return n + " · " + base
 	}
 	return base

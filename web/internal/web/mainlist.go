@@ -54,12 +54,12 @@ type mainMapTile struct {
 // mainKesTile — плитка КЭС.
 type mainKesTile struct {
 	ID     int       `json:"id"`
-	Gen    uint64    `json:"gen"`     // поколение слота (для ссылки /kes?id&gen)
-	Title  string    `json:"title"`   // строка устройства (§5.1)
-	Mode   string    `json:"mode"`    // строка режима (§5.4)
-	Soc    *float64  `json:"soc"`     // % (nullable)
-	Panel  mainBlock `json:"panel"`   // колонка «Панели» (U/I/P/T, без F)
-	Batt   mainBlock `json:"batt"`    // колонка «АКБ» (U/I/P/T, без F)
+	Gen    uint64    `json:"gen"`   // поколение слота (для ссылки /kes?id&gen)
+	Title  string    `json:"title"` // строка устройства (§5.1)
+	Mode   string    `json:"mode"`  // строка режима (§5.4)
+	Soc    *float64  `json:"soc"`   // % (nullable)
+	Panel  mainBlock `json:"panel"` // колонка «Панели» (U/I/P/T, без F)
+	Batt   mainBlock `json:"batt"`  // колонка «АКБ» (U/I/P/T, без F)
 	Online bool      `json:"online"`
 }
 
@@ -106,7 +106,7 @@ func (s *Server) handleAPIMainList(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		resp.Kes = append(resp.Kes, buildKesTile(k, kf))
+		resp.Kes = append(resp.Kes, buildKesTile(tr, k, kf))
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -134,7 +134,7 @@ func buildMapTile(tr map[string]string, m MapInfo, f map[string]uint32) mainMapT
 	tile := mainMapTile{
 		ID:     m.ID,
 		Gen:    m.Gen,
-		Title:  m.MenuLabel(),
+		Title:  m.MenuLabel(tr),
 		Online: time.Since(time.Unix(m.LastSeen, 0)) <= mainOnlineWindow,
 	}
 
@@ -354,11 +354,11 @@ func kesModeString(f *kesFields) string {
 }
 
 // buildKesTile собирает плитку КЭС из записи списка и распакованных полей слота.
-func buildKesTile(k KesInfo, kf *kesFields) mainKesTile {
+func buildKesTile(tr map[string]string, k KesInfo, kf *kesFields) mainKesTile {
 	tile := mainKesTile{
 		ID:     k.ID,
 		Gen:    k.Gen,
-		Title:  k.MenuLabel(), // единый источник подписи (серийник+порт+скорость)
+		Title:  k.MenuLabel(tr), // единый источник подписи (КЭС+серийник+порт+скорость)
 		Mode:   kesModeString(kf),
 		Online: time.Since(time.Unix(k.LastSeen, 0)) <= mainOnlineWindow,
 	}

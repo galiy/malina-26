@@ -112,17 +112,23 @@ func TestWriteEEPROMAuth(t *testing.T) {
 }
 
 func TestMenuLabel(t *testing.T) {
+	ru := map[string]string{"model.D": "Доминатор", "model.T": "Титанатор"}
 	d := MapInfo{ID: 0, Model: "D", Baud: 115200, Port: "/dev/ttyUSB0", Serial: 37005, SerialLetter: "c"}
-	if got := d.MenuLabel(); !strings.HasPrefix(got, "Доминатор · ") {
+	if got := d.MenuLabel(ru); !strings.HasPrefix(got, "Доминатор · ") {
 		t.Fatalf("метка Доминатора: %q", got)
 	}
 	tt := MapInfo{ID: 1, Model: "T", Baud: 115200, Port: "/dev/ttyAMA0", Serial: 51510, SerialLetter: "a"}
-	if got := tt.MenuLabel(); !strings.HasPrefix(got, "Титанатор · ") {
+	if got := tt.MenuLabel(ru); !strings.HasPrefix(got, "Титанатор · ") {
 		t.Fatalf("метка Титанатора: %q", got)
+	}
+	// Локализация: английский перевод модели подменяет русский fallback.
+	en := map[string]string{"model.T": "Titanator"}
+	if got := tt.MenuLabel(en); !strings.HasPrefix(got, "Titanator · ") {
+		t.Fatalf("метка Титанатора (en): %q", got)
 	}
 	// Неизвестная модель — без префикса.
 	u := MapInfo{Model: "?", Baud: 9600, Port: "/dev/ttyS0", Serial: 1}
-	if strings.HasPrefix(u.MenuLabel(), " · ") || !strings.HasPrefix(u.MenuLabel(), "1") {
-		t.Fatalf("метка неизвестной модели: %q", u.MenuLabel())
+	if strings.HasPrefix(u.MenuLabel(ru), " · ") || !strings.HasPrefix(u.MenuLabel(ru), "1") {
+		t.Fatalf("метка неизвестной модели: %q", u.MenuLabel(ru))
 	}
 }

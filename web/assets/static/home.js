@@ -157,17 +157,30 @@
     return h + "</tbody></table></div>";
   }
 
+  // SOC на строке статуса (КЭС): вправо, по цвету §8.3.
+  function statusSocHTML(soc) {
+    var lab = '<span class="home-status-soc-l">' + esc(t("home.cell.soc")) + "</span> ";
+    if (soc === null || soc === undefined) {
+      return '<span class="home-status-soc c-gray">' + lab + esc(t("home.nd")) + "</span>";
+    }
+    var cls = " c-" + colorSoc(soc);
+    return '<span class="home-status-soc' + cls + '">' + lab + Math.round(soc) + " %</span>";
+  }
+
   function cardHTML(d, isKes) {
     var h = '<div class="home-title">' + esc(d.title) + "</div>" +
-      '<div class="home-status">' + esc(d.mode || "\u2014") + "</div>" +
+      '<div class="home-status"><span class="home-status-mode">' + esc(d.mode || "\u2014") + "</span>";
+    // SOC КЭС — на строку статуса, прижат вправо (у МАП остаётся в колонке «АКБ»).
+    if (isKes) { h += statusSocHTML(d.soc); }
+    h += "</div>" +
       '<div class="home-cols">';
     if (isKes) {
       h += colHTML(t("home.col.panel"), d.panel, [
         ["home.cell.u", "u"], ["home.cell.i", "i"], ["home.cell.p", "p", 0], ["home.cell.t", "t"]
       ], "panel", d.soc);
-      // Ток АКБ — 2 знака; u/i/p бежевые, t — по темпу АКБ; SOC — как у МАП.
+      // Ток АКБ — 2 знака; u/i/p бежевые, t — по темпу АКБ (SOC — на строке статуса).
       h += colHTML(t("home.col.batt"), d.batt, [
-        ["home.cell.u", "u"], ["home.cell.soc", "soc"], ["home.cell.i", "i", 2],
+        ["home.cell.u", "u"], ["home.cell.i", "i", 2],
         ["home.cell.p", "p", 0], ["home.cell.t", "t"]
       ], "batt-kes", d.soc);
     } else {

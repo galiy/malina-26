@@ -34,8 +34,9 @@ func (s *Server) handleAPIKesDevices(w http.ResponseWriter, r *http.Request) {
 		Label string `json:"label"`
 	}
 	out := make([]device, 0, 8)
+	tr := s.trFor(r)
 	for _, k := range loadKesList().Kes {
-		out = append(out, device{Type: "kes", ID: k.ID, Gen: k.Gen, Label: k.MenuLabel()})
+		out = append(out, device{Type: "kes", ID: k.ID, Gen: k.Gen, Label: k.MenuLabel(tr)})
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -157,6 +158,13 @@ func findKes(id int) (KesInfo, bool) {
 }
 
 // MenuLabel — подпись КЭС для меню/инвентаря: серийник + порт + скорость.
-func (k KesInfo) MenuLabel() string {
-	return fmt.Sprintf("КЭС · %s · %s · %d", k.SerialLabel(), k.Port, k.Baud)
+// Префикс «КЭС» берётся из перевода tr (язык страницы), fallback — «КЭС».
+func (k KesInfo) MenuLabel(tr map[string]string) string {
+	dev := "КЭС"
+	if tr != nil {
+		if d := tr["kes.dev"]; d != "" {
+			dev = d
+		}
+	}
+	return fmt.Sprintf("%s · %s · %s · %d", dev, k.SerialLabel(), k.Port, k.Baud)
 }

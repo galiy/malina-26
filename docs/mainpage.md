@@ -33,11 +33,11 @@
 
 | Файл | Что здесь |
 |---|---|
-| `web/internal/web/kesapi.go` | `KesInfo`, `MenuLabel()`, `findKes` |
+| `web/internal/web/kesapi.go` | `KesInfo`, `MenuLabel(tr)`, `findKes` |
 | `web/internal/web/kesstate.go` | `KesList`, `loadKesList()`, `kesRawPayload(id)` |
 | `web/internal/web/kesmem.go` | `parseKesPayload(payload) (*kesFields, bool)`, поля КЭС, `charField` |
 | `web/internal/web/maps.go` | `handleMapPage`, `handleAPIMapDevices` |
-| `web/internal/web/mapstate.go` | `MapInfo`, `MenuLabel()`, `loadMapList()`, `mapRawPayload(id)` |
+| `web/internal/web/mapstate.go` | `MapInfo`, `MenuLabel(tr)`, `modelName`, `loadMapList()`, `mapRawPayload(id)` |
 | `web/internal/web/mapfields.go` | `mapFieldNames` (id→имя поля снимка МАП) |
 | `web/internal/web/events_provider.go:114` | `decodeMapFields(payload) map[string]uint32` |
 | `web/internal/web/ocv.go` | `batSocFromFields(f)`, OCV-кривые, типы АКБ — **базовая SOC-функция** |
@@ -209,14 +209,18 @@ func mvND() mainValue                   // нет данных (nd=true)
 
 Тот же источник, что и пункт меню:
 
-- **МАП** — `m.MenuLabel()` (`web/internal/web/mapstate.go:58`):
-  `Модель · серийник · порт · скорость` (модель из `modelNames`: `T`→«Титанатор»,
-  `D`→«Доминатор», `H`→«Гибрид», `P`→«Pro»; серийник = `SerialLabel()` =
-  «число + буква»).
-- **КЭС** — `k.MenuLabel()` (`web/internal/web/kesapi.go:163`):
-  `КЭС · серийник · порт · скорость`.
+- **МАП** — `m.MenuLabel(tr)` (`web/internal/web/mapstate.go:58`):
+  `Модель · серийник · порт · скорость`. Имя модели берётся из перевода `tr`
+  (ключ `model.<буква>`: `T`→«Титанатор»/Titanator, `D`→«Доминатор»/Dominator,
+  `H`→«Гибрид»/Hybrid, `P`→Pro; fallback — русский `modelNames`); серийник =
+  `SerialLabel()` = «число + буква». `tr` — переводы языка страницы (`s.trFor(r)`
+  / `s.bundle.Translations(s.lang(r))`).
+- **КЭС** — `k.MenuLabel(tr)` (`web/internal/web/kesapi.go:160`):
+  `КЭС · серийник · порт · скорость`, где «КЭС» — ключ `kes.dev` из перевода
+  (fallback — «КЭС»).
 
-**Реализация:** `tile.Title = m.MenuLabel()` / `k.MenuLabel()`.
+**Реализация:** `tile.Title = m.MenuLabel(tr)` / `k.MenuLabel(tr)`, где `tr` —
+переводы языка клиента (локаль страницы).
 
 ### 5.2 Строка статуса МАП (как на панели 1)
 
@@ -230,8 +234,8 @@ func mvND() mainValue                   // нет данных (nd=true)
   - `StatusCh` — `f["StatusCh"]` (для МАП).
 - Язык для `mainlist` — **`s.lang(r)`** (кука `lang`, см. `handlers.go:lang`):
   сервер отдаёт готовые тексты `Mode`/`Title` на языке клиента. Вариант «отдать
-  код + ключ, собирает клиент» — отвергнут (дублирует логику). `MenuLabel()` (без
-  перевода) используется как есть — приемлемо.
+  код + ключ, собирает клиент» — отвергнут (дублирует логику). `MenuLabel(tr)` /
+  `mapModelFull(tr, code)` переводятся по языку страницы (см. §5.1).
 
 > Конкретика для сборщика: функция `modeText(tr map[string]string, code, statusCh uint32) string`
 > (`mainlist.go:117`); при отсутствии ключа `p1.mode<code>` возвращает `"?"`.
@@ -533,8 +537,8 @@ func kesModeString(f *kesFields) string {
    отображение в кВт — 1 знак после запятой. Токи: сети и панелей — **1 знак**,
    АКБ — **2 знака**; напряжение/частота — 1 знак. Точные пороги форматирования
    §8.2.
-9. **Заголовок КЭС** — `MenuLabel()` как есть («КЭС · серийник · порт · скорость»);
-   префикс «КЭС» оставляем.
+9. **Заголовок КЭС** — `MenuLabel(tr)` («КЭС · серийник · порт · скорость»,
+   префикс «КЭС» — ключ `kes.dev` перевода, fallback «КЭС»).
 
 ### 9.1 Уточнено (решения зафиксированы)
 

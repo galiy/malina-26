@@ -7,9 +7,11 @@ import (
 	"strconv"
 )
 
-// mapModelFull — имя модели для заголовка (единый источник с меню — modelNames).
-func mapModelFull(code string) string {
-	if n := modelNames[code]; n != "" {
+// mapModelFull — локализованное имя модели для заголовка (единый источник с
+// меню — tr["model."+code]; fallback русский modelNames, англ./прочие при
+// отсутствии перевода — как код модели).
+func mapModelFull(tr map[string]string, code string) string {
+	if n := modelName(tr, code); n != "" {
 		return n
 	}
 	return code
@@ -44,7 +46,7 @@ func (s *Server) handleMapPage(w http.ResponseWriter, r *http.Request) {
 	data["FieldNames"] = mapFieldNames
 	data["SerialLabel"] = m.SerialLabel()
 	// Заголовок: "MAP <модель> s/n <sn> порт <port>" (шаблон локализуется).
-	data["Title"] = fmt.Sprintf(s.tr(s.lang(r), "map.title"), mapModelFull(m.Model), m.SerialLabel(), m.Port)
+	data["Title"] = fmt.Sprintf(s.tr(s.lang(r), "map.title"), mapModelFull(s.trFor(r), m.Model), m.SerialLabel(), m.Port)
 	s.render(w, http.StatusOK, "map", data)
 }
 
@@ -95,8 +97,9 @@ func (s *Server) handleAPIMapDevices(w http.ResponseWriter, r *http.Request) {
 		Label string `json:"label"`
 	}
 	out := make([]device, 0, 8)
+	tr := s.trFor(r)
 	for _, m := range loadMapList().Maps {
-		out = append(out, device{Type: "map", ID: m.ID, Gen: m.Gen, Label: m.MenuLabel()})
+		out = append(out, device{Type: "map", ID: m.ID, Gen: m.Gen, Label: m.MenuLabel(tr)})
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
