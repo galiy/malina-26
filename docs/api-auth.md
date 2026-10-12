@@ -13,7 +13,8 @@ TLS — **внешний слой**, нам не принадлежит и не 
 | Эндпоинт | Тип | Авторизация |
 |---|---|---|
 | `/read_json.php`, `/read_memory.php`, `/check_daemons.php` | legacy чтение | **без авторизации** (как сейчас) |
-| `/write_eeprom.php` | legacy запись | **HTTP Basic** (пароль → PAM, кэш 5 мин) |
+| `/read_json.php?device=mppt`, `/read_sec.php` | legacy чтение КЭС | **без авторизации** (как map-чтение) |
+| `/write_eeprom.php`, `/write_sec.php` | legacy запись | **HTTP Basic** (пароль → PAM, кэш 5 мин) |
 | `/api/map/devices` | чтение (тип map) | cookie-сессия **или** `Bearer` |
 | `/api/map/raw` | чтение (тип map) | cookie-сессия **или** `Bearer` |
 | `/api/map/write` | запись (тип map) | cookie-сессия **или** `Bearer` |

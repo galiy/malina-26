@@ -102,12 +102,60 @@ data=[[438,77],[1099,4]]
 на однородные запросы). Ограничение на одну заявку к `map-reader` — **≤64 операций**
 (длинные серии регистров режутся на несколько заявок автоматически).
 
-## 7. КЭС (план)
+## 7. КЭС (реализуемые ручки)
 
-Legacy-API КЭС (`read_sec.php`, `write_sec.php`, `read_json.php?device=mppt`,
-`get_mppt_e.php`, `mppt_errors*.php`, `wind_mppts_set.php`, `devices.php`,
-`find_devices.php`) — к реализации вместе с `kes-reader`. Спека совместимости:
-`docs/kes-reader.md` §4.2; разбор legacy — `docs/legacy/kes-legacy-malina2.md`.
+Из всего legacy-API КЭС реализуются **только три** ручки:
+
+| Ручка | Метод | Авторизация |
+|---|---|---|
+| `/read_json.php?device=mppt` | GET | **без авторизации** (read открыт, как map) |
+| `/read_sec.php?id=&offset=&count=` | GET | **без авторизации** (read открыт, как map) |
+| `/write_sec.php?id=&relay=&mode=` / `?id=&data=` | GET | **HTTP Basic + PAM** (как `write_eeprom`) |
+
+Остальные КЭС-ручки (`get_mppt_e.php`, `mppt_errors*.php`, `mppt_counters_history.php`,
+`wind_mppts_set.php`, `devices.php`, `find_devices.php`, `write_eeprom.php`,
+`get_eeprom_state.php`) **не переносятся**.
+
+Политика авторизации КЭС согласована: чтение (снимок/ячейки) — открыто, запись —
+Basic+PAM; это повторяет МАП-политику (`docs/api-auth.md` §1).
+
+### 7.1 Контракт ручек (legacy-совместимость)
+
+Разбор legacy-исходников — `docs/legacy/kes-legacy-malina2.md` (§1c, §3, §4);
+живое подтверждение формата на `.68` — в том же доке §1b.
+
+**`GET /read_json.php?device=mppt`** — возвращает JSON-массив снимков КЭС (`mpptd`
+пишет в shm 2016 — 4 слота по 1024 Б, каждый объект терминирован `#EOF`):
+```json
+[{"timestamp":"…","time":"…","UID":"…","Vc_PV":"…", … "R1":"…","R2":"…","R3":"…"}]
+```
+- Значения — **строки** (как в legacy).
+- Полный список полей → `docs/legacy/kes-legacy-malina2.md` §1b.
+- Пустые слоты (длина ≤ 10) отбрасываются.
+- `?device!=mppt` → `error`.
+
+**`GET /read_sec.php?id=N&offset=A&count=C`** — сырые ячейки КЭС из образа:
+байты `id*2048 + offset .. +count`, возврат JSON-массив десятичных (`A<2048`, `C≥1`,
+`A+C≤2048`); вне диапазона или без `id/offset` → `error`. `id` — 1..N.
+
+**`GET /write_sec.php?id=N&relay=R&mode=on|off|1|0`** — реле КЭС:
+- `R` = 1..3; текущее состояние читается из `0x3E3` (`Relay_C`, биты 0/1/2 = реле 1/2/3);
+- если реле уже в требуемом состоянии — **ранний `Ok`** (без записи);
+- иначе RMW битов → запись байта состояния в командную ячейку **`0x0E3D` (3645)**;
+- ответ — текст `Ok`/`error`/`unread`.
+
+**`GET /write_sec.php?id=N&data=[[cell,val],…]`** — запись произвольных ячеек
+(десятичные), приоритет у `relay` (если передан — `data` игнорируется).
+
+### 7.2 Индекс `id` и источник данных
+
+- В legacy `id` — 1..N; внутри ручек `$id-1` (0-based) — индекс в списке КЭС.
+- Источник снимков `read_json`/`read_sec`/`write_sec` — **`kes-list` и payload слотов
+  `kes-reader`** (`/dev/shm/malina-kes-state`, контракт — `docs/kes-reader.md` §4).
+- Спека совместимости формата — `docs/kes-reader.md` §4.2; реализация индекса/
+  серийника — как в §4 того же дока.
+
+Спека совместимости: `docs/kes-reader.md` §4.2; разбор legacy — `docs/legacy/kes-legacy-malina2.md`.
 
 ## 8. Ссылки
 
