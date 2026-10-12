@@ -174,6 +174,7 @@ func New(o Options) (*Server, error) {
 
 	sets := map[string]*template.Template{}
 	for name, page := range map[string]string{
+		"home":            "home.html",
 		"info":            "info.html",
 		"system":          "system.html",
 		"logs":            "logs.html",
@@ -311,6 +312,9 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/api/map/devices", s.handleAPIMapDevices)
 	mux.HandleFunc("/api/map/raw", s.handleAPIMapRaw)
 	mux.HandleFunc("/api/map/write", s.handleAPIMapWrite)
+	mux.HandleFunc("/api/kes/devices", s.handleAPIKesDevices)
+	mux.HandleFunc("/api/kes/raw", s.handleAPIKesRaw)
+	mux.HandleFunc("/api/kes/write", s.handleAPIKesWrite)
 	mux.HandleFunc("/api/token", s.handleAPIToken)
 	mux.HandleFunc("/read_json.php", s.handleReadJSON)
 	mux.HandleFunc("/write_eeprom.php", s.handleWriteEEPROM)

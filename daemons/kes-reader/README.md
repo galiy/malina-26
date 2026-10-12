@@ -8,8 +8,9 @@
 Демон не поднимает HTTP и не ходит по сети: обмен — только локальный
 (shm + unix-сокет). Общий код — в `daemons/lib` (см. `docs/daemons-shared.md`).
 
-Родственные документы: `docs/kes-reader.md` (контракт), `docs/kes-memory.md`
-(карта регистров/настроек), `docs/legacy/kes-legacy-malina2.md` (разбор legacy КЭС).
+Родственные документы: `docs/kes-reader.md` (требования/протокол), `docs/kes-contract.md`
+(бинарный контракт shm), `docs/kes-memory.md` (карта регистров/настроек),
+`docs/legacy/kes-legacy-malina2.md` (разбор legacy КЭС).
 
 ## Как работает
 

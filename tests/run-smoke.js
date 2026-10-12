@@ -33,12 +33,18 @@ function assert(cond, msg) {
   await page.fill('input[name="password"]', PASS);
   await page.click('button[type="submit"]');
   await page.waitForLoadState("networkidle");
-  assert(/\/map(\?|$)/.test(page.url()), "login ok -> /map (" + page.url() + ")");
+  assert(new URL(page.url()).pathname === "/", "login ok -> / (" + page.url() + ")");
 
-  // Меню
-  const html = await page.content();
-  assert(/Сеть|Network|Настройка сети/.test(html), "menu present");
-  assert(/Информация о системе|System information/.test(html), "info menu present");
+  // Главная: пустая, но меню на месте.
+  const home = await page.content();
+  assert(/Сеть|Network|Настройка сети/.test(home), "menu present");
+  assert(/Информация о системе|System information/.test(home), "info menu present");
+
+  // /info: страница «Информация о системе».
+  await page.goto(BASE + "/info", { waitUntil: "domcontentloaded" });
+  assert(new URL(page.url()).pathname === "/info", "info page at /info (" + page.url() + ")");
+  const infoHtml = await page.content();
+  assert(infoHtml.includes('id="sysinfo"') && infoHtml.includes('id="autoref"'), "/info has sysinfo block");
 
   // /api/system (через fetch в контексте, с cookie)
   const api = await page.evaluate(async () => {

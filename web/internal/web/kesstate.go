@@ -9,7 +9,7 @@ import (
 )
 
 // Чтение бинарного контракта kes-reader из POSIX shared memory.
-// Формат — docs/kes-reader.md §4 (синхронизирован с daemons/kes-reader/shm.go,
+// Формат — docs/kes-contract.md (синхронизирован с daemons/kes-reader/shm.go,
 // kes.go: контракт kes-list и слота KESE/KESR/KESS).
 const (
 	kesShmMagic    = 0x3153454B // "KES1"

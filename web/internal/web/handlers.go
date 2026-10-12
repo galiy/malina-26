@@ -106,12 +106,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
-	// При входе на сайт всегда открываем страницу первого МАП (верхний пункт меню).
-	if ml := loadMapList(); len(ml.Maps) > 0 {
-		http.Redirect(w, r, "/map?id="+strconv.Itoa(ml.Maps[0].ID), http.StatusSeeOther)
-		return
-	}
-	s.renderInfo(w, r)
+	// Главная — пока пустая страница (без редиректа на МАП/инфо).
+	s.render(w, http.StatusOK, "home", s.baseData(r))
 }
 
 // handleInfo — явная страница «Информация» (/info), доступна из меню.

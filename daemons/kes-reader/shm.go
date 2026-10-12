@@ -8,9 +8,9 @@ import (
 	"github.com/galiy/malina-26/daemons/lib/shm"
 )
 
-// shm: раскладка kes-reader. Механика — lib/shm; контракт kes-list/payload —
-// provisional (см. docs/kes-reader.md §4) — читается/пишется в этом же модуле и
-// зафиксирован тестом (см. kes_test.go, golden-тест контракта).
+// shm: раскладка kes-reader. Механика — lib/shm; байтовый контракт kes-list/payload
+// — docs/kes-contract.md (кратко: docs/kes-reader.md §4) — читается/пишется в этом же
+// модуле и зафиксирован тестом (см. kes_test.go, golden-тест контракта).
 const (
 	kesShmMagic     = 0x3153454B // "KES1"
 	kesShmVersion   = 1
