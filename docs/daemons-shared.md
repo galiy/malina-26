@@ -22,7 +22,7 @@ daemons/
 │  └─ device/                  # ✅ коды _Device (3/5/7/9) + Name()
 ├─ map-reader/                 # package main (без своего go.mod)
 ├─ kes-reader/                 # package main — каркас (сканирование/проба/опрос/shm/control/kes-list)
-└─ kes-emu/                    # ✅ package main — «живой» эмулятор КЭС (3 PTY → /dev/ttyKES0..2), читает/пишет/команды
+└─ kes-emu/                    # ✅ package main — «живой» эмулятор КЭС (3 PTY → /dev/ttyUSB9..11), читает/пишет/команды
 ```
 
 Сборка не меняется: `cd daemons/map-reader && go build .` (модуль находится в
@@ -57,7 +57,8 @@ daemons/
   `modbus.go` (МАП-специфика Modbus), `timesync.go`, MAP-команды `control`,
   `probePort` (порядок скоростей/`foreign`-логика), `sim.go` (временный → удалить).
 - **`kes-reader`** (план): свой контракт/payload, `kes`-ячейки/настройки, свой
-  парсер/probe (`_Device==5`), запись реле (`0x0E3D`), JSON-формат; использует
+  парсер/probe (`_Device==5`), запись ячеек (`op=reg`; реле — ячейкой `0x0E3D`, без
+  команд и отдельной операции реле), JSON-формат; использует
   `lib/{transport,microart,scanner,shm,control}`.
 - **`kes-emu`** (план): `lib/transport` + `lib/microart` со стороны устройства.
 
@@ -88,7 +89,8 @@ daemons/
 **`kes-reader`** (второй потребитель, каркас): использует `lib/{transport,microart,
 scanner,shm,control,ports,device}`; архитектура повторяет `map-reader` (сканирование →
 проба `_Device==5` → опрос окон → публикация в shm/`kes-list` → control-сокет, запись
-ячеек/команд/реле). Готов к тестированию на железе (не тестировался — нет устройства).
+ячеек (`op=reg`; реле — ячейкой `0x0E3D`)). Готов к тестированию на железе (не тестировался —
+нет устройства).
 
 ## 5. Открытые вопросы
 

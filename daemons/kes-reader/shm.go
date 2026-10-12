@@ -9,16 +9,27 @@ import (
 )
 
 // shm: раскладка kes-reader. Механика — lib/shm; контракт kes-list/payload —
-// provisional (см. docs/kes-reader.md §4, docs/kes-contract.md — план).
+// provisional (см. docs/kes-reader.md §4) — читается/пишется в этом же модуле и
+// зафиксирован тестом (см. kes_test.go, golden-тест контракта).
 const (
 	kesShmMagic     = 0x3153454B // "KES1"
 	kesShmVersion   = 1
 	kesShmHeader    = shm.Header
-	kesSlots        = 9
+	kesSlots        = 32
 	kesListItemSize = 72
 	kesSlotData     = 16384
 
 	contractPortSize = 32
+)
+
+// Смещения записи kes-list (72 Б) — зафиксированы, чтобы код/тесты не расходились
+// с docs/kes-reader.md §4 и golden-тестом (защита от дрейфа, «H2» ревью).
+const (
+	listGenOff      = 16 // uint64 LE
+	listBaudOff     = 24 // uint32 LE
+	listSerialOff   = 28 // uint16 LE
+	listPortOff     = 32 // string[contractPortSize] (NUL)
+	listLastSeenOff = 64 // int64 LE
 )
 
 type (
@@ -43,17 +54,14 @@ func shmOpen(path string, slots int) (*Shm, error) {
 // contractMeta — мета контракта КЭС (слот).
 type contractMeta struct {
 	Port     string
-	Model    string
-	UID      uint16
+	Serial   uint16
 	Gen      uint64
 	LastSeen time.Time
 }
 
 // listMeta — запись kes-list (компактно, itemSize=72).
 type listMeta struct {
-	Model    byte
-	Protocol uint8
-	UID      uint16
+	Serial   uint16
 	Baud     uint32
 	Gen      uint64
 	Port     string
@@ -62,13 +70,11 @@ type listMeta struct {
 
 func publishItem(it *ListItem, m listMeta) {
 	it.Publish(func(b []byte) {
-		b[4] = m.Model
-		b[5] = m.Protocol
-		binary.LittleEndian.PutUint64(b[16:24], m.Gen)
-		binary.LittleEndian.PutUint32(b[24:28], m.Baud)
-		binary.LittleEndian.PutUint16(b[28:30], m.UID)
-		copy(b[32:32+contractPortSize], []byte(m.Port))
-		binary.LittleEndian.PutUint64(b[64:72], uint64(m.LastSeen))
+		binary.LittleEndian.PutUint64(b[listGenOff:listGenOff+8], m.Gen)
+		binary.LittleEndian.PutUint32(b[listBaudOff:listBaudOff+4], m.Baud)
+		binary.LittleEndian.PutUint16(b[listSerialOff:listSerialOff+2], m.Serial)
+		copy(b[listPortOff:listPortOff+contractPortSize], []byte(m.Port))
+		binary.LittleEndian.PutUint64(b[listLastSeenOff:listLastSeenOff+8], uint64(m.LastSeen))
 	})
 }
 
@@ -77,11 +83,8 @@ type KesView struct {
 	ID       int    `json:"id"`
 	Gen      uint64 `json:"gen"`
 	Port     string `json:"port"`
-	Protocol string `json:"protocol"`
 	Baud     int    `json:"baud"`
-	Model    string `json:"model"`
-	UID      uint16 `json:"uid"`
-	State    string `json:"state"`
+	Serial   uint16 `json:"serial"`
 	LastSeen int64  `json:"last_seen"`
 }
 
@@ -104,14 +107,11 @@ func listDoc(s *Shm) StateDoc {
 		}
 		d.Kes = append(d.Kes, KesView{
 			ID:       i,
-			Gen:      binary.LittleEndian.Uint64(b[16:24]),
-			Protocol: "microart",
-			Baud:     int(binary.LittleEndian.Uint32(b[24:28])),
-			Model:    string([]byte{b[4]}),
-			UID:      binary.LittleEndian.Uint16(b[28:30]),
-			Port:     trimZero(b[32 : 32+contractPortSize]),
-			State:    "online",
-			LastSeen: int64(binary.LittleEndian.Uint64(b[64:72])),
+			Gen:      binary.LittleEndian.Uint64(b[listGenOff : listGenOff+8]),
+			Baud:     int(binary.LittleEndian.Uint32(b[listBaudOff : listBaudOff+4])),
+			Serial:   binary.LittleEndian.Uint16(b[listSerialOff : listSerialOff+2]),
+			Port:     trimZero(b[listPortOff : listPortOff+contractPortSize]),
+			LastSeen: int64(binary.LittleEndian.Uint64(b[listLastSeenOff : listLastSeenOff+8])),
 		})
 	}
 	d.Count = len(d.Kes)

@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -22,9 +24,10 @@ const (
 	defBackoffIdle    = 30 * time.Second
 	defBackoffActive  = 10 * time.Minute
 	defBackoffForeign = 10 * time.Minute
-	defMaxKes         = 4
+	defMaxKes         = 32
 	defProbeResp      = 200 * time.Millisecond
 	defProbeEcho      = 50 * time.Millisecond
+	defProbeDeadline  = 2 * time.Second
 
 	defWriteRetries = 5
 	defWritePause   = 500 * time.Millisecond
@@ -50,6 +53,7 @@ type config struct {
 
 	probeResponse time.Duration
 	probeEcho     time.Duration
+	probeDeadline time.Duration
 
 	writeRetries int
 	writePause   time.Duration
@@ -67,7 +71,7 @@ func newConfig(debug bool) *config {
 	return &config{
 		shmPath:        defSHMPath,
 		sockPath:       defSockPath,
-		paths:          splitComma(defaultPathsStr),
+		paths:          strings.Split(defaultPathsStr, ","),
 		pollInterval:   defPoll,
 		maxMiss:        defMaxMiss,
 		scanIdle:       defScanIdle,
@@ -78,38 +82,11 @@ func newConfig(debug bool) *config {
 		maxKes:         defMaxKes,
 		probeResponse:  defProbeResp,
 		probeEcho:      defProbeEcho,
+		probeDeadline:  defProbeDeadline,
 		writeRetries:   defWriteRetries,
 		writePause:     defWritePause,
 		debug:          debug,
 	}
-}
-
-func splitComma(s string) []string {
-	var out []string
-	cur := ""
-	for _, r := range s {
-		if r == ',' {
-			if cur != "" {
-				out = append(out, cur)
-			}
-			cur = ""
-			continue
-		}
-		cur += string(r)
-	}
-	if cur != "" {
-		out = append(out, cur)
-	}
-	return out
-}
-
-func dirOf(p string) string {
-	for i := len(p) - 1; i >= 0; i-- {
-		if p[i] == '/' {
-			return p[:i]
-		}
-	}
-	return "."
 }
 
 func main() {
@@ -124,11 +101,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("shm: %v", err)
 	}
+	defer shm.Close()
 	log.Printf("shm ready: %s (%d слотов)", cfg.shmPath, kesSlots)
 
 	reg := newRegistry(newSlotAlloc(shm), shm)
 
-	if err := os.MkdirAll(dirOf(cfg.sockPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(cfg.sockPath), 0o755); err != nil {
 		log.Printf("mkdir control dir: %v", err)
 	}
 

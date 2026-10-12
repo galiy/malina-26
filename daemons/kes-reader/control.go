@@ -8,7 +8,7 @@ import (
 )
 
 // control — синхронные команды через Unix-сокет (каркас — lib/control):
-// ping, list, write (запись ячеек/команд/реле КЭС).
+// ping, list, write (запись ячеек КЭС; реле — ячейкой 0x0E3D, см. docs/kes-reader.md §4.2).
 type control struct {
 	cfg  *config
 	reg  *Registry
@@ -57,7 +57,7 @@ func (c *control) handleLine(line []byte) any {
 // dispatchWrite находит устройство по (id, gen) и передаёт команду пулеру порта,
 // ожидая результат.
 func (c *control) dispatchWrite(wr writeRequest) writeResponse {
-	if _, err := validateWrite(wr); err != nil {
+	if err := validateWrite(wr); err != nil {
 		return fail("bad_request", err.Error())
 	}
 	e, ok := c.reg.Find(wr.ID, wr.Gen)

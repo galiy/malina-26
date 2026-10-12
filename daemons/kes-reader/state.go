@@ -62,9 +62,7 @@ func (r *Registry) Touch(e *kesEntry) {
 	r.mu.Lock()
 	e.lastSeen = time.Now()
 	meta := listMeta{
-		Model:    modelCode(e.info.Model),
-		Protocol: 0,
-		UID:      r.effectiveUID(e),
+		Serial:   r.effectiveSerial(e),
 		Baud:     uint32(e.baud),
 		Gen:      e.gen,
 		Port:     e.port,
@@ -88,10 +86,10 @@ func (r *Registry) CmdOf(e *kesEntry) chan *writeJob {
 	return e.cmd
 }
 
-// effectiveUID — UID с подстановкой idx+1 при нулевом значении (legacy, §1b).
-func (r *Registry) effectiveUID(e *kesEntry) uint16 {
-	if e.info != nil && e.info.UID != 0 {
-		return e.info.UID
+// effectiveSerial — серийник с подстановкой idx+1 при нулевом значении (legacy, §1b).
+func (r *Registry) effectiveSerial(e *kesEntry) uint16 {
+	if e.info != nil && e.info.Serial != 0 {
+		return e.info.Serial
 	}
 	return uint16(e.slotIdx + 1)
 }
@@ -100,7 +98,7 @@ func (r *Registry) effectiveUID(e *kesEntry) uint16 {
 func (r *Registry) Meta(e *kesEntry) contractMeta {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return contractMeta{Port: e.port, Model: e.info.Model, UID: r.effectiveUID(e), Gen: e.gen, LastSeen: e.lastSeen}
+	return contractMeta{Port: e.port, Serial: r.effectiveSerial(e), Gen: e.gen, LastSeen: e.lastSeen}
 }
 
 func (r *Registry) Count() int {
@@ -137,20 +135,6 @@ func (r *Registry) ReleaseAll() {
 }
 
 func (r *Registry) doc() StateDoc { return listDoc(r.shm) }
-
-// modelCode — однобайтовый код модели для kes-list (provisional).
-func modelCode(model string) byte {
-	switch model {
-	case "200/100":
-		return '1'
-	case "200/60":
-		return '2'
-	case "250/60":
-		return '3'
-	default:
-		return 'K'
-	}
-}
 
 // slotAlloc — аллокатор слотов (один писатель-процесс).
 type slotAlloc struct {

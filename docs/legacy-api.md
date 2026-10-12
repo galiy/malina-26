@@ -107,7 +107,7 @@ data=[[438,77],[1099,4]]
 Legacy-API КЭС (`read_sec.php`, `write_sec.php`, `read_json.php?device=mppt`,
 `get_mppt_e.php`, `mppt_errors*.php`, `wind_mppts_set.php`, `devices.php`,
 `find_devices.php`) — к реализации вместе с `kes-reader`. Спека совместимости:
-`docs/kes-reader.md` §4.3; разбор legacy — `docs/legacy/kes-legacy-malina2.md`.
+`docs/kes-reader.md` §4.2; разбор legacy — `docs/legacy/kes-legacy-malina2.md`.
 
 ## 8. Ссылки
 

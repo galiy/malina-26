@@ -125,8 +125,9 @@ make arm      # dist/map-reader-armv7 (Linux/armv7, статический)
 **Эмулятор КЭС/BMS (стенд):** включён **на постоянную** — drop-in
 `system/systemd/map-reader.service.d/sim.conf` ставится из `deploy/manifest.tsv`
 в `/etc/systemd/system/map-reader.service.d/` и активирует
-`Environment=MALINA_SIM_KES_BMS=1`. Удалим в
-конце проекта.
+`Environment=MALINA_SIM_KES_BMS=1`. Уберём, когда `kes-reader` станет **реальным
+источником** данных КЭС/BMS для веб-карт/UI (сейчас `kes-reader` существует, но
+потребитель его данных в `web/` ещё не подключён — см. `docs/kes-reader.md` §6).
 
 > Запись в МАП выполняется командой `write` по control-сокету (обрамление
 > служебными командами, ретраи, контрольное чтение) — см. `docs/map-write.md` и

@@ -47,15 +47,12 @@ func isRetryable(err error) bool {
 	return true
 }
 
-// --- Внешний контракт (совместим с map-reader/legacy) ---
+// --- Внешний контракт (целевой: только op=reg, см. docs/kes-reader.md §4.2) ---
 
 type writeOp struct {
-	Op    string `json:"op"`
-	Addr  string `json:"addr,omitempty"`  // hex без префикса, напр. "E3D"
-	Data  string `json:"data,omitempty"`  // hex-строка, 2 символа на байт
-	Code  string `json:"code,omitempty"`  // hex без префикса (команда)
-	Relay int    `json:"relay,omitempty"` // 1..3 (op=relay)
-	Mode  string `json:"mode,omitempty"`  // "on"/"off" (op=relay)
+	Op   string `json:"op"`
+	Addr string `json:"addr,omitempty"` // hex без префикса, напр. "1B6"
+	Data string `json:"data,omitempty"` // hex-строка, 2 символа на байт
 }
 
 func parseHexUint(s string, bits int) (int, error) {
@@ -98,91 +95,36 @@ type writeResponse struct {
 
 func fail(code, msg string) writeResponse { return writeResponse{OK: false, Code: code, Error: msg} }
 
-type kind int
-
-const (
-	kindReg kind = iota
-	kindCmd
-	kindRelay
-)
-
 // validateWrite — чистая проверка контракта (без обращения к устройству).
-// Разрешение: либо операции с ячейками (RAM/EEPROM), либо одна команда, либо одна
-// relay-операция. Смешивать нельзя.
-func validateWrite(wr writeRequest) (kind, error) {
+// Целевая запись КЭС — только ячейки (op=reg); команд (op=cmd) и отдельной операции
+// реле (op=relay) нет — реле пишется ячейкой 0x0E3D (см. docs/kes-reader.md §4.2).
+func validateWrite(wr writeRequest) error {
 	if len(wr.Ops) == 0 {
-		return 0, errors.New("пустой список операций")
+		return errors.New("пустой список операций")
 	}
 	if len(wr.Ops) > maxOps {
-		return 0, fmt.Errorf("слишком много операций (максимум %d)", maxOps)
+		return fmt.Errorf("слишком много операций (максимум %d)", maxOps)
 	}
-	nCmd, nReg, nRelay := 0, 0, 0
 	for _, op := range wr.Ops {
-		switch op.Op {
-		case "cmd":
-			nCmd++
-			c, err := parseHexUint(op.Code, 8)
-			if err != nil {
-				return 0, fmt.Errorf("cmd code: %v", err)
-			}
-			if c < 1 || c > 9 {
-				return 0, errors.New("команда вне диапазона 1..9")
-			}
-		case "reg":
-			nReg++
-			a, err := parseHexUint(op.Addr, 16)
-			if err != nil {
-				return 0, fmt.Errorf("reg addr: %v", err)
-			}
-			d, err := parseHexBytes(op.Data)
-			if err != nil {
-				return 0, err
-			}
-			if len(d) < 1 || len(d) > 256 {
-				return 0, errors.New("размер блока должен быть 1..256 байт")
-			}
-			if a+len(d)-1 > 0xFFFF {
-				return 0, errors.New("адрес вне области 0x0000..0xFFFF")
-			}
-		case "relay":
-			nRelay++
-			if op.Relay < 1 || op.Relay > 3 {
-				return 0, errors.New("реле должно быть 1..3")
-			}
-			if op.Mode != "on" && op.Mode != "off" && op.Mode != "1" && op.Mode != "0" {
-				return 0, errors.New("режим реле: on/off/1/0")
-			}
-		default:
-			return 0, fmt.Errorf("неизвестная операция %q", op.Op)
+		if op.Op != "reg" {
+			return fmt.Errorf("неизвестная операция %q (допустима только op=reg)", op.Op)
+		}
+		a, err := parseHexUint(op.Addr, 16)
+		if err != nil {
+			return fmt.Errorf("reg addr: %v", err)
+		}
+		d, err := parseHexBytes(op.Data)
+		if err != nil {
+			return err
+		}
+		if len(d) < 1 || len(d) > 256 {
+			return errors.New("размер блока должен быть 1..256 байт")
+		}
+		if a+len(d)-1 > 0xFFFF {
+			return errors.New("адрес вне области 0x0000..0xFFFF")
 		}
 	}
-	total := 0
-	if nCmd > 0 {
-		total++
-	}
-	if nReg > 0 {
-		total++
-	}
-	if nRelay > 0 {
-		total++
-	}
-	if total != 1 {
-		return 0, errors.New("смешение сущностей reg/cmd/relay в одном запросе")
-	}
-	if nCmd > 1 {
-		return 0, errors.New("допустима ровно одна cmd-операция")
-	}
-	if nRelay > 1 {
-		return 0, errors.New("допустима ровно одна relay-операция")
-	}
-	switch {
-	case nCmd == 1:
-		return kindCmd, nil
-	case nRelay == 1:
-		return kindRelay, nil
-	default:
-		return kindReg, nil
-	}
+	return nil
 }
 
 type element struct {
@@ -196,11 +138,10 @@ type element struct {
 // buildSequence — последовательность посылок. Запись ячеек: перед каждой посылкой
 // — команда разрешения записи (ComMAP_EEPromWR=3), затем блок по адресу «как есть»
 // (без +0x1F0). Post-команды (7) у КЭС нет (legacy mpptd, docs/legacy/…§1c).
-func buildSequence(wr writeRequest, k kind) []element {
-	if k == kindCmd {
-		c, _ := parseHexUint(wr.Ops[0].Code, 8)
-		return []element{{opIdx: 0, isCmd: true, code: c}}
-	}
+// no_frame — «сырой» отладочный режим: пред-команда 3 НЕ шлётся, поэтому для
+// EEPROM/RAM КЭС запись почти гарантированно вернёт ошибку 0x10 (ErrRS_NoEEWR);
+// использовать только для диагностики транспорта (см. docs/kes-reader.md §4.2.3).
+func buildSequence(wr writeRequest) []element {
 	var seq []element
 	for i, op := range wr.Ops {
 		if !wr.NoFrame {
@@ -224,8 +165,7 @@ func findEntry(entries []*kesEntry, id int, gen uint64) *kesEntry {
 
 // executeWrite выполняется в горутине пулера порта (порт занят только ею).
 func executeWrite(cfg *config, reg *Registry, p *Port, entries []*kesEntry, wr writeRequest) writeResponse {
-	k, err := validateWrite(wr)
-	if err != nil {
+	if err := validateWrite(wr); err != nil {
 		return fail("bad_request", err.Error())
 	}
 	e := findEntry(entries, wr.ID, wr.Gen)
@@ -233,16 +173,7 @@ func executeWrite(cfg *config, reg *Registry, p *Port, entries []*kesEntry, wr w
 		return fail("no_device", "устройство не найдено (несовпадение id/gen)")
 	}
 
-	if k == kindRelay {
-		lastErr := writeRelay(cfg, p, wr.Ops[0])
-		publishAfterWrite(cfg, reg, p, e)
-		if lastErr == nil {
-			return writeResponse{OK: true}
-		}
-		return writeErrResp(lastErr, -1)
-	}
-
-	seq := buildSequence(wr, k)
+	seq := buildSequence(wr)
 	var lastErr error
 	lastOp := -1
 	for _, el := range seq {
@@ -277,6 +208,9 @@ func writeErrResp(err error, lastOp int) writeResponse {
 
 // execElement — операция с ретраями.
 func execElement(cfg *config, p *Port, el element) error {
+	if cfg.writeRetries < 1 {
+		return errors.New("нет попыток записи (writeRetries < 1)")
+	}
 	var last error
 	for attempt := 0; attempt < cfg.writeRetries; attempt++ {
 		if el.isCmd {
@@ -297,38 +231,10 @@ func execElement(cfg *config, p *Port, el element) error {
 	return last
 }
 
-// Адреса реле КЭС (docs/kes-reader.md §4.3, §7.7):
-//
-//	состояние (RAM) 0x3E3 → адрес устройства 0x5D3 (+0x1F0);
-//	команда (legacy) 0x0E3D — уточнить на железе.
-const (
-	kesRelayStateAddr = 0x05D3
-	kesRelayCmdAddr   = 0x0E3D
-)
-
-// writeRelay — RMW состояния реле: читаем Relay_C, меняем бит, пишем команду.
-func writeRelay(cfg *config, p *Port, op writeOp) error {
-	data, err := microartRead(p, kesRelayStateAddr, 0, cfg.probeEcho, cfg.probeResponse)
-	if err != nil {
-		return err
-	}
-	if len(data) == 0 {
-		return errors.New("нет ответа при чтении состояния реле")
-	}
-	cur := data[0]
-	bit := byte(1) << uint(op.Relay-1)
-	on := op.Mode == "on" || op.Mode == "1"
-	if on {
-		cur |= bit
-	} else {
-		cur &^= bit
-	}
-	cmd := []byte{cur}
-	if err := microartWrite(p, 0x0000, []byte{3}, cfg.probeEcho, cfg.probeResponse); err != nil {
-		return err
-	}
-	return microartWrite(p, kesRelayCmdAddr, cmd, cfg.probeEcho, cfg.probeResponse)
-}
+// Адреса реле КЭС (docs/kes-reader.md §4.2.5, §7.7): состояние (RAM) 0x3E3 → адрес
+// устройства 0x5D3 (+0x1F0); командная ячейка 0x0E3D — write-only, вне 0x000..0x7FF.
+// Реле пишется как обычная ячейка: op=reg {addr:"E3D", data:<маска>}; RMW — на стороне
+// клиента. Сама запись — по общему пути, поэтому спец-функций/констант в демоне нет.
 
 // publishAfterWrite — контрольный цикл чтения и публикация (best-effort).
 func publishAfterWrite(cfg *config, reg *Registry, p *Port, e *kesEntry) {

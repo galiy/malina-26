@@ -23,9 +23,14 @@ type foundKes struct {
 	baud int
 }
 
-// probeKesPort перебирает скорости и определяет КЭС по _Device==5.
-func probeKesPort(p *transport.Port, echoTO, respTO time.Duration) (*kesInfo, int, error) {
+// probeKesPort перебирает скорости и определяет КЭС по _Device==5. Общий бюджет
+// пробы — deadline (порт не удерживаем дольше, чем пробует map-reader).
+func probeKesPort(p *transport.Port, echoTO, respTO, deadline time.Duration) (*kesInfo, int, error) {
+	start := time.Now()
 	for _, b := range kesSpeeds {
+		if time.Since(start) > deadline {
+			return nil, 0, errNoKes
+		}
 		if err := p.SetBaud(b); err != nil {
 			continue
 		}
@@ -56,7 +61,7 @@ func newScanner(cfg *config, reg *Registry, stop chan struct{}, wg *sync.WaitGro
 		Count:          reg.Count,
 		HasPath:        reg.Has,
 		Probe: func(p *transport.Port) (scanner.Result, error) {
-			info, baud, err := probeKesPort(p, cfg.probeEcho, cfg.probeResponse)
+			info, baud, err := probeKesPort(p, cfg.probeEcho, cfg.probeResponse, cfg.probeDeadline)
 			if err != nil {
 				if errors.Is(err, errForeignMap) {
 					return scanner.Result{Kind: scanner.Foreign}, nil
@@ -72,7 +77,9 @@ func newScanner(cfg *config, reg *Registry, stop chan struct{}, wg *sync.WaitGro
 			if !ok {
 				return false
 			}
-			log.Printf("КЭС найден: %s baud=%d UID=%d (слот %d)", p.Path(), fd.baud, fd.info.UID, e.slotIdx)
+			// Серийник заполняется на первом успешном опросе (readAllWindows/parseKes);
+			// в момент пробы известен только _Device, поэтому в логе его не выводим.
+			log.Printf("КЭС найден: %s baud=%d (слот %d)", p.Path(), fd.baud, e.slotIdx)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()

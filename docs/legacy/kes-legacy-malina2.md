@@ -394,7 +394,7 @@ P_Out, P_Load, P_curr, I_Ch, I_Out, Temp_Int, Temp_Bat, P_EXTS0, P_EXTS1, windsp
 - `Enapter/marketplace : battery_inverters/microart_mac_titanator/firmware.lua` — интеграция
   Enapter; читает **`GET /read_json.php?device=map`**, который отдаёт **3 строки JSON**:
   (1) объект МАП, (2) массив I2C-MPPT, (3) массив ячеек BMS. **Важная деталь legacy API**
-  (учтём в §4.3 `docs/kes-reader.md`). Адресов ячеек нет.
+  (учтём в §4.2 `docs/kes-reader.md`). Адресов ячеек нет.
 - `Jabber-se/ha-microart` — см. выше (только legacy HTTP API).
 
 **SourceForge.** По запросам `microart` / `mppt protocol` — **пусто**.
