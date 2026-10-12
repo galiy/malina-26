@@ -1098,6 +1098,8 @@ tr.ctl-changed { background: #fff8e1; }
   color: #b7cec0;
   font-size: .72rem;
   text-align: left;
+  /* зазор между наименованием и значением, чтобы они не слипались */
+  padding: .1rem .7rem .1rem 0;
 }
 .home-cols-table .home-cell-v-wrap { text-align: right; width: 1%; }
 .home-cols-table .home-cell-u {

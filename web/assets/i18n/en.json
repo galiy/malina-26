@@ -209,7 +209,7 @@
   "map.gone": "MAP is gone",
   "map.connection_lost": "Connection lost",
   "map.title": "MAP %s s/n %s port %s",
-  "map.tab_monitor": "Monitor",
+  "map.tab_monitor": "Panel",
   "map.tab_info": "Information",
   "map.tab_control": "Control",
   "kes.title": "KEC s/n %s port %s",

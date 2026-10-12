@@ -209,7 +209,7 @@
   "map.gone": "МАП недоступен",
   "map.connection_lost": "Нет связи",
   "map.title": "MAP %s s/n %s порт %s",
-  "map.tab_monitor": "Монитор",
+  "map.tab_monitor": "Панель",
   "map.tab_info": "Информация",
   "map.tab_control": "Управление",
   "kes.title": "КЭС s/n %s порт %s",

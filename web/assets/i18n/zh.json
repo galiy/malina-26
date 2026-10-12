@@ -209,7 +209,7 @@
   "map.gone": "MAP 不可用",
   "map.connection_lost": "连接丢失",
   "map.title": "MAP %s s/n %s 端口 %s",
-  "map.tab_monitor": "监控",
+  "map.tab_monitor": "面板",
   "map.tab_info": "信息",
   "map.tab_control": "控制",
   "kes.title": "KEC s/n %s 端口 %s",
