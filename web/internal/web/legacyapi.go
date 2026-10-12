@@ -1,9 +1,11 @@
 package web
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -260,10 +262,48 @@ func (ls *legacyService) snapshot() []byte {
 	return ls.snap
 }
 
+// countKesInShm — число занятых слотов kes-list в бинарном образе сегмента
+// (лимит 4 — число панелей MPPT в legacy-интерфейсе «Мастер-Узел»).
+func countKesInShm(data []byte) int {
+	if len(data) < kesShmHeader {
+		return 0
+	}
+	n := 0
+	for i := 0; i < kesSlots; i++ {
+		off := kesShmHeader + i*kesListItemLen
+		if off+kesListItemLen > len(data) {
+			break
+		}
+		b := data[off : off+kesListItemLen]
+		if binary.LittleEndian.Uint32(b[0:4]) != 1 { // state != 1 → слот не занят
+			continue
+		}
+		if binary.LittleEndian.Uint64(b[8:16])&1 != 0 { // seqlock: идёт запись
+			continue
+		}
+		n++
+	}
+	if n > 4 {
+		n = 4
+	}
+	return n
+}
+
+// presentKesCount — число присутствующих КЭС (из kes-list живого сегмента shm).
+func presentKesCount() int {
+	data, err := os.ReadFile(kesShmPath)
+	if err != nil {
+		return 0
+	}
+	return countKesInShm(data)
+}
+
 // handleCheckDaemons — legacy-совместимый статус демонов (открыт, без авторизации).
 // Значения как в legacy check_daemons.php: демон есть → 0, нет → 1.
-// mapd отражает реальную доступность: 0, если есть найденный МАП или сохранённое
-// состояние; иначе 1. Остальные демоны (КЭС/charging/batmon/db/emd/emon) — 1.
+// mapd отражает реальную доступность МАП: 0, если есть найденный МАП или сохранённое
+// состояние; иначе 1. mpptd0..3 — 0 для присутствующих КЭС (иначе агрегатор
+// «Мастер-Узел» не опрашивает /read_json.php?device=mppt и КЭС не рисуются).
+// Остальные демоны (charging/batmon/db/emd/emon) — 1.
 // dbe_flash — не демон, а уровень износа флеша (байт); у нас нет данных → 1.
 func (s *Server) handleCheckDaemons(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -275,11 +315,25 @@ func (s *Server) handleCheckDaemons(w http.ResponseWriter, r *http.Request) {
 	if s.legacy.available() {
 		mapd = 0
 	}
+	m := presentKesCount()
+	m0, m1, m2, m3 := 1, 1, 1, 1
+	if m > 0 {
+		m0 = 0
+	}
+	if m > 1 {
+		m1 = 0
+	}
+	if m > 2 {
+		m2 = 0
+	}
+	if m > 3 {
+		m3 = 0
+	}
 	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = fmt.Fprintf(w,
-		`{"0":%d,"1":1,"2":1,"3":1,"4":1,"5":1,"6":1,"7":1,"mapd":%d,"mpptd0":1,"mpptd1":1,"mpptd2":1,"mpptd3":1,"chargerd":1,"dbed":1,"batmond":1,"emd":1,"emon":1,"dbe_flash":1}`,
-		mapd, mapd)
+		`{"0":%d,"1":1,"2":1,"3":1,"4":1,"5":1,"6":1,"7":1,"mapd":%d,"mpptd0":%d,"mpptd1":%d,"mpptd2":%d,"mpptd3":%d,"chargerd":1,"dbed":1,"batmond":1,"emd":1,"emon":1,"dbe_flash":1}`,
+		mapd, mapd, m0, m1, m2, m3)
 }
 
 // handleReadJSON — открытый эндпоинт совместимости (без авторизации/сессий).
