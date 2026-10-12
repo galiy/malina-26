@@ -277,6 +277,22 @@ const (
 	kesrRSErrSisOff = 15
 	kesrI2CErrOff   = 16
 	kesrVcPVOff     = 18
+	kesrIcPVOff     = 20 // u16 LE
+	kesrVBatOff     = 22
+	kesrPPVOff      = 24
+	kesrPOutOff     = 26
+	kesrPLoadOff    = 28
+	kesrPCurrOff    = 30
+	kesrIChOff      = 32
+	kesrIOutOff     = 34
+	kesrTempIntOff  = 36 // byte (x-50)
+	kesrTempBatOff  = 37 // byte (x-50)
+	kesrPwrWOff     = 38 // u16 LE (младшая часть Pwr_kW)
+	kesrPwrKWOff    = 40 // u16 LE (целая часть Pwr_kW)
+	kesrIExts0Off   = 42
+	kesrIExts1Off   = 44
+	kesrPExts0Off   = 46
+	kesrPExts1Off   = 48
 	kesrBmsOff      = 52 // UakbCell[32]×u16 — начало BMS/MPPT массивов
 
 	// Смещения под-блока настроек ("KESS").
@@ -325,22 +341,22 @@ func buildRamPayload(meta contractMeta, d KesData) []byte {
 	b[kesrRSErrSisOff] = d.RSErrSis
 	b[kesrI2CErrOff] = d.I2CErr
 	binary.LittleEndian.PutUint16(b[kesrVcPVOff:kesrVcPVOff+2], d.VcPV)
-	binary.LittleEndian.PutUint16(b[20:22], d.IcPV)
-	binary.LittleEndian.PutUint16(b[22:24], d.VBat)
-	binary.LittleEndian.PutUint16(b[24:26], d.PPV)
-	binary.LittleEndian.PutUint16(b[26:28], d.POut)
-	binary.LittleEndian.PutUint16(b[28:30], d.PLoad)
-	binary.LittleEndian.PutUint16(b[30:32], d.PCurr)
-	binary.LittleEndian.PutUint16(b[32:34], d.ICh)
-	binary.LittleEndian.PutUint16(b[34:36], d.IOut)
-	b[36] = d.TempInt // однобайтовые ячейки (x-50)
-	b[37] = d.TempBat
-	binary.LittleEndian.PutUint16(b[38:40], d.PwrW)
-	binary.LittleEndian.PutUint16(b[40:42], d.PwrKW)
-	binary.LittleEndian.PutUint16(b[42:44], d.IExts0)
-	binary.LittleEndian.PutUint16(b[44:46], d.IExts1)
-	binary.LittleEndian.PutUint16(b[46:48], d.PExts0)
-	binary.LittleEndian.PutUint16(b[48:50], d.PExts1)
+	binary.LittleEndian.PutUint16(b[kesrIcPVOff:kesrIcPVOff+2], d.IcPV)
+	binary.LittleEndian.PutUint16(b[kesrVBatOff:kesrVBatOff+2], d.VBat)
+	binary.LittleEndian.PutUint16(b[kesrPPVOff:kesrPPVOff+2], d.PPV)
+	binary.LittleEndian.PutUint16(b[kesrPOutOff:kesrPOutOff+2], d.POut)
+	binary.LittleEndian.PutUint16(b[kesrPLoadOff:kesrPLoadOff+2], d.PLoad)
+	binary.LittleEndian.PutUint16(b[kesrPCurrOff:kesrPCurrOff+2], d.PCurr)
+	binary.LittleEndian.PutUint16(b[kesrIChOff:kesrIChOff+2], d.ICh)
+	binary.LittleEndian.PutUint16(b[kesrIOutOff:kesrIOutOff+2], d.IOut)
+	b[kesrTempIntOff] = d.TempInt // однобайтовые ячейки (x-50)
+	b[kesrTempBatOff] = d.TempBat
+	binary.LittleEndian.PutUint16(b[kesrPwrWOff:kesrPwrWOff+2], d.PwrW)
+	binary.LittleEndian.PutUint16(b[kesrPwrKWOff:kesrPwrKWOff+2], d.PwrKW)
+	binary.LittleEndian.PutUint16(b[kesrIExts0Off:kesrIExts0Off+2], d.IExts0)
+	binary.LittleEndian.PutUint16(b[kesrIExts1Off:kesrIExts1Off+2], d.IExts1)
+	binary.LittleEndian.PutUint16(b[kesrPExts0Off:kesrPExts0Off+2], d.PExts0)
+	binary.LittleEndian.PutUint16(b[kesrPExts1Off:kesrPExts1Off+2], d.PExts1)
 	// BMS и параллельные MPPT (Мастер).
 	off := kesrBmsOff
 	for i := 0; i < 32; i++ {

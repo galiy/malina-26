@@ -105,6 +105,9 @@ func listDoc(s *Shm) StateDoc {
 		if binary.LittleEndian.Uint32(b[0:4]) != 1 {
 			continue
 		}
+		if binary.LittleEndian.Uint64(b[8:16])&1 != 0 {
+			continue // seqlock: идёт запись — пропускаем неконсистентную запись
+		}
 		d.Kes = append(d.Kes, KesView{
 			ID:       i,
 			Gen:      binary.LittleEndian.Uint64(b[listGenOff : listGenOff+8]),

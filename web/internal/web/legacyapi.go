@@ -289,15 +289,25 @@ func (s *Server) handleReadJSON(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if r.URL.Query().Get("device") != "map" {
+	switch r.URL.Query().Get("device") {
+	case "map":
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(s.legacy.snapshot())
+	case "mppt":
+		snap := kesSnapshotJSON()
+		if snap == nil {
+			_, _ = w.Write([]byte("[]"))
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(snap)
+	default:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"error":"unsupported device"}`))
-		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
-	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(s.legacy.snapshot())
 }
 
 // handleReadMemory — совместимый с legacy read_memory.php?offset=&count=:

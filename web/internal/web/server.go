@@ -34,6 +34,7 @@ type Options struct {
 	SessionIdle      time.Duration // скользящий TTL сессий/токенов
 	AuthStorePath    string        // /dev/shm/malina-auth
 	ControlSock      string        // control-сокет map-reader
+	KesControlSock   string        // control-сокет kes-reader
 	BasicCacheTTL    time.Duration // TTL кэша успешных Basic-проверок (legacy)
 	MapTimeSyncOff   string        // флаг-файл отключения синхронизации времени МАП
 	AuditEnabled     bool          // аудит-журнал действий (syslog)
@@ -107,6 +108,9 @@ func New(o Options) (*Server, error) {
 	}
 	if o.ControlSock == "" {
 		o.ControlSock = "/run/malina-map/control.sock"
+	}
+	if o.KesControlSock == "" {
+		o.KesControlSock = "/run/malina-kes/control.sock"
 	}
 	if o.BasicCacheTTL == 0 {
 		o.BasicCacheTTL = 5 * time.Minute
@@ -311,6 +315,8 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/read_json.php", s.handleReadJSON)
 	mux.HandleFunc("/write_eeprom.php", s.handleWriteEEPROM)
 	mux.HandleFunc("/read_memory.php", s.handleReadMemory)
+	mux.HandleFunc("/read_sec.php", s.handleReadSec)
+	mux.HandleFunc("/write_sec.php", s.handleWriteSec)
 	mux.HandleFunc("/check_daemons.php", s.handleCheckDaemons)
 	mux.HandleFunc("/", s.handleIndex)
 

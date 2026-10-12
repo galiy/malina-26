@@ -14,8 +14,9 @@ import (
 // Шаблоны кандидатов (как у map-reader).
 const defaultPathsStr = "/dev/ttyUSB*,/dev/ttyACM*,/dev/ttyAMA*,/dev/ttyS*,/dev/serial/by-id/*,/dev/serial0,/dev/serial1"
 
-// kesSpeeds — порядок скоростей пробы (как у МАП; КЭС по умолчанию 19200).
-var kesSpeeds = []int{115200, 19200, 57600, 9600}
+// kesSpeeds — порядок скоростей пробы. Только legacy-диапазон КЭС: 19200/57600/115200
+// (R0/R1/R2 usbscanner, дефолт 19200). 9600 у КЭС не подтверждён — не пробуем.
+var kesSpeeds = []int{115200, 19200, 57600}
 
 // foundKes — данные найденного КЭС из пробы.
 type foundKes struct {
