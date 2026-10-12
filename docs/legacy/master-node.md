@@ -235,6 +235,11 @@ PHP-страница рендерит форму-заготовку: конте�
 собирает в JSON-массив `[ {...}, {...} ]`. JS берёт элемент `[0]`:
 `C_100_remain` (% остатка), `mppt_day_E` (дневная выработка).
 
+**У нас (`malina-web`):** ручка эмулируется (см. `docs/legacy/batmon-api.md`) —
+`batmond` на узле нет, но для корректного кВтч панель должна уйти в ветку batmon
+(`check_daemons` → `batmond:0`); `mppt_day_E` = суточная энергия КЭС (Вт·ч),
+`C_100_remain` = `0.0` (батареи нет).
+
 ### 7.4 `GET /read_json.php?device=mppt`
 
 **Назначение:** снимки до четырёх MPPT.
@@ -258,9 +263,11 @@ JS по каждому элементу читает `Vc_PV`, `P_Out`, `Temp_Int
   совместим старый экран.
 - **Обе страницы без аутентификации** — в новой системе закрывать входом по PAM.
 - Удалённые ручки мы поддерживаем для `read_json.php?device=map`,
-  `read_json.php?device=mppt` (КЭС через `kes-reader`), `read_sec.php`,
-  `write_sec.php` и `check_daemons.php`; `bat` — функционал иной подсистемы
-  (batmon/BMS), вне нашего профиля (не поддерживаем).
+  `read_json.php?device=mppt` (КЭС через `kes-reader`), `read_json.php?device=bat`
+  (**эмуляция** batmon — только `mppt_day_E`/`C_100_remain` для агрегатора;
+  см. `docs/legacy/batmon-api.md`), `read_sec.php`, `write_sec.php` и
+  `check_daemons.php`; реальный BMS/batmon — функционал иной подсистемы
+  (вне профиля — эмулируем только нужные панели поля).
 - Для совместимости «Мастер-Узла» `check_daemons.php` обязан отдавать
   `mpptd0..3=0` для присутствующих КЭС (`docs/legacy-api.md` §5); иначе агрегатор
   не опрашивает `read_json.php?device=mppt` и КЭС не рисуются.

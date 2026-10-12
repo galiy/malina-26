@@ -10,8 +10,7 @@ import (
 // Распаковка payload слота КЭС (KESE+KESR+KESS, 1536 Б) в поля и построение
 // виртуального адресного пространства КЭС (RAM-адреса) + legacy-снимка read_json.
 // Контракт слота — daemons/kes-reader/kes.go; адреса/масштабы — docs/kes-memory.md §1/§2.
-// Неподтверждённые поля (Mode/Sign/MPP 0x2C2/0x37A/0x379, windspeed 0x3F8) в контракт
-// не публикуются — в JSON отдаются пустыми.
+// Mode/Sign/MPP/windspeed публикуются в RAM-контракте и отдаются в JSON.
 
 // Размеры/смещения под-блоков слота (синхронно с daemons/kes-reader/kes.go).
 const (
@@ -59,7 +58,11 @@ const (
 	kesKesrIExts1Off   = 44
 	kesKesrPExts0Off   = 46
 	kesKesrPExts1Off   = 48
-	kesKesrBmsOff      = 52
+	kesKesrModeOff     = 50 // 1 байт: режим заряда (0x2C2)
+	kesKesrSignOff     = 51 // 1 байт: знак (0x37A)
+	kesKesrMppOff      = 52 // 1 байт: MPP (0x379)
+	kesKesrWindOff     = 53 // u16 LE: windspeed (0x3F8), 0xFFFF → 65535 (н/д)
+	kesKesrBmsOff      = 55
 )
 
 // Смещения под-блока "KESS".
@@ -101,6 +104,10 @@ type kesFields struct {
 	PwrKW     uint16
 	SignC0    byte
 	SignC1    byte
+	Mode      byte
+	Sign      byte
+	MPP       byte
+	Windspeed uint16
 	IExts0    uint16
 	IExts1    uint16
 	PExts0    uint16
@@ -162,6 +169,10 @@ func parseKesPayload(p []byte) (*kesFields, bool) {
 	// Sign_C[0]/Sign_C[1] (0x404/0x405) в контракт KESR не публикуются — 0.
 	f.SignC0 = 0
 	f.SignC1 = 0
+	f.Mode = kesr[kesKesrModeOff]
+	f.Sign = kesr[kesKesrSignOff]
+	f.MPP = kesr[kesKesrMppOff]
+	f.Windspeed = binary.LittleEndian.Uint16(kesr[kesKesrWindOff : kesKesrWindOff+2])
 	f.IExts0 = binary.LittleEndian.Uint16(kesr[kesKesrIExts0Off : kesKesrIExts0Off+2])
 	f.IExts1 = binary.LittleEndian.Uint16(kesr[kesKesrIExts1Off : kesKesrIExts1Off+2])
 	f.PExts0 = binary.LittleEndian.Uint16(kesr[kesKesrPExts0Off : kesKesrPExts0Off+2])
@@ -267,6 +278,10 @@ func buildKesVA(f *kesFields) []byte {
 	put(0x3A1, 2, uint32(f.PwrKW))
 	put(0x3B6, 1, uint32(f.RSErrSis))
 	put(0x3E3, 1, uint32(f.RelayC))
+	put(0x2C2, 1, uint32(f.Mode))
+	put(0x379, 1, uint32(f.MPP))
+	put(0x37A, 1, uint32(f.Sign))
+	put(0x3F8, 2, uint32(f.Windspeed))
 	put(0x404, 1, uint32(f.SignC0))
 	put(0x405, 1, uint32(f.SignC1))
 	put(0x406, 2, uint32(f.IExts0))
@@ -292,8 +307,8 @@ func buildKesVA(f *kesFields) []byte {
 }
 
 // renderKesJSON — legacy-снимок одного КЭС для read_json.php?device=mppt.
-// Значения — строки (как в legacy). Неподтверждённые Mode/Sign/MPP/windspeed —
-// пустые строки (в контракт не публикуются).
+// Значения — строки (полный паритет с `.68`: поле в поле, включая P_Out/I_Ch/Pwr_kW).
+// Mode/Sign/MPP/windspeed — реальные значения из контракта.
 func renderKesJSON(f *kesFields) []byte {
 	var b strings.Builder
 	b.WriteByte('{')
@@ -324,10 +339,10 @@ func renderKesJSON(f *kesFields) []byte {
 	write("P_EXTS1", fmt.Sprintf("%d", f.PExts1))
 	write("Relay_C", fmt.Sprintf("%d", f.RelayC))
 	write("RSErrSis", fmt.Sprintf("%d", f.RSErrSis))
-	write("Mode", "")
-	write("Sign", "")
-	write("MPP", "")
-	write("windspeed", "")
+	write("Mode", charField(f.Mode))
+	write("Sign", charField(f.Sign))
+	write("MPP", charField(f.MPP))
+	write("windspeed", fmt.Sprintf("%d", windVal(f.Windspeed)))
 	write("FW", fmt.Sprintf("%d.%d", f.FW&0x0F, f.FW>>5))
 	write("R1", fmt.Sprintf("%d", (f.RelayC>>0)&1))
 	write("R2", fmt.Sprintf("%d", (f.RelayC>>1)&1))
@@ -338,4 +353,26 @@ func renderKesJSON(f *kesFields) []byte {
 		s = s[:len(s)-1]
 	}
 	return []byte(s + "}")
+}
+
+// charField — строка из одного символа (Mode/Sign/MPP в legacy — ASCII-символ).
+// Правило legacy-маппера `mpptd` (fn 0x11d18): печатный символ `0x2A < c ≤ 0x7C`
+// отдаётся как есть; вне диапазона — `'U'`; 0 (не заполнено) — пустая строка.
+// Это гарантирует валидный JSON (никаких `\xNN`-escape).
+func charField(v byte) string {
+	if v == 0 {
+		return ""
+	}
+	if v > 0x2A && v <= 0x7C {
+		return string(rune(v))
+	}
+	return "U"
+}
+
+// windVal — значение ветра (u16, 0x3F8): 0xFFFF = н/д → 65535 (как legacy).
+func windVal(v uint16) uint16 {
+	if v == 0xFFFF {
+		return 65535
+	}
+	return v
 }

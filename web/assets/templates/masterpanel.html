@@ -11,7 +11,7 @@
 </head>
 <body>
 <div class="container">
-  <br><h3 class="text-muted">МАСТЕР-УЗЕЛ</h3><br>
+  <br>
   {{if not .Nodes}}<p class="text-muted">Узлы не настроены — добавьте на странице «Настройка».</p>{{end}}
   {{range $i, $n := .Nodes}}
   <div class="panel panel-primary">

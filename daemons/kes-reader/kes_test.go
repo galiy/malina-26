@@ -20,6 +20,7 @@ func TestWindowsCover(t *testing.T) {
 		0x2F9: true, 0x2FB: true, 0x2FF: true, 0x31D: true, 0x31E: true, 0x39F: true,
 		0x3A1: true, 0x3B6: true, 0x3E3: true, 0x404: true, 0x405: true, 0x406: true,
 		0x408: true, 0x40A: true, 0x40C: true, // телеметрия
+		0x2C2: true, 0x379: true, 0x37A: true, 0x3F8: true, // Mode/Sign/MPP/windspeed
 		0xD5A: true, // I2C_Err
 	}
 	for _, r := range kesSettings {
@@ -75,6 +76,11 @@ func TestParseKesAndData(t *testing.T) {
 	img[0x31E] = 0x64  // Temp_Bat (байт)
 	img[0x3E3] = 0x05  // Relay_C
 	img[0x3B6] = 0x02  // RSErrSis
+	img[0x2C2] = 'b'   // Mode: режим заряда
+	img[0x379] = 'L'   // MPP
+	img[0x37A] = '-'   // Sign
+	img[0x3F8] = 0xFF  // windspeed (u16 LE, мл.) → 0xFFFF = 65535 (н/д)
+	img[0x3F9] = 0xFF  // windspeed (ст.)
 	// Настройки (условно подтверждённые, RAM-копии).
 	img[0x210] = 0x04 // Roll_H_Speed (1 байт)
 	put16(0x212, 10)  // BL_Time (2 байта)
@@ -97,6 +103,9 @@ func TestParseKesAndData(t *testing.T) {
 	}
 	if d.TempInt != 0x5A || d.TempBat != 0x64 {
 		t.Fatalf("температуры (байты): %+v", d)
+	}
+	if d.Mode != 'b' || d.Sign != '-' || d.MPP != 'L' || d.Windspeed != 0xFFFF {
+		t.Fatalf("Mode/Sign/MPP/windspeed: %+v", d)
 	}
 
 	// Слот = [EEPROM-блок 512 Б][RAM-блок 512 Б][Настройки-блок 512 Б].
@@ -211,6 +220,7 @@ func TestContractGolden(t *testing.T) {
 		Device: 5, Pow: 0x02, FW: 0x63, ModelPow: 0x32, ModelVolt: 0x04, Pic: 0x01, Net: 0x05,
 		Serial: 0x1234, VcPV: 1234, VBat: 567, TempInt: 0x5A, TempBat: 0x64,
 		RelayC: 0x05, RSErrSis: 0x02, I2CErr: 0x07,
+		Mode: 'b', Sign: '-', MPP: 'L', Windspeed: 0xFFFF,
 	}
 	d.Settings[0] = 0x04
 	d.Settings[2] = 10
@@ -249,6 +259,13 @@ func TestContractGolden(t *testing.T) {
 	}
 	if got := binary.LittleEndian.Uint16(p[offKess+kessSettingsOff+2*39:]); got != d.Settings[39] {
 		t.Fatalf("KESS[39]@%d=%d", offKess+kessSettingsOff+2*39, got)
+	}
+	if p[offKesr+kesrModeOff] != 'b' || p[offKesr+kesrSignOff] != '-' ||
+		p[offKesr+kesrMppOff] != 'L' ||
+		binary.LittleEndian.Uint16(p[offKesr+kesrWindOff:]) != 0xFFFF {
+		t.Fatalf("KESR Mode/Sign/MPP/windspeed: %x/%x/%x/%x",
+			p[offKesr+kesrModeOff], p[offKesr+kesrSignOff], p[offKesr+kesrMppOff],
+			binary.LittleEndian.Uint16(p[offKesr+kesrWindOff:]))
 	}
 	if got := binary.LittleEndian.Uint16(p[offKesr+kesrBmsOff:]); got != d.UakbCell[0] {
 		t.Fatalf("KESR.UakbCell[0]@%d=%d", offKesr+kesrBmsOff, got)

@@ -14,6 +14,7 @@ TLS — **внешний слой**, нам не принадлежит и не 
 |---|---|---|
 | `/read_json.php`, `/read_memory.php`, `/check_daemons.php` | legacy чтение | **без авторизации** (как сейчас) |
 | `/read_json.php?device=mppt`, `/read_sec.php` | legacy чтение КЭС | **без авторизации** (как map-чтение) |
+| `/read_json.php?device=bat` | legacy чтение (эмуляция batmon) | **без авторизации** (как map-чтение; см. `docs/legacy/batmon-api.md`) |
 | `/write_eeprom.php`, `/write_sec.php` | legacy запись | **HTTP Basic** (пароль → PAM, кэш 5 мин) |
 | `/api/map/devices` | чтение (тип map) | cookie-сессия **или** `Bearer` |
 | `/api/map/raw` | чтение (тип map) | cookie-сессия **или** `Bearer` |

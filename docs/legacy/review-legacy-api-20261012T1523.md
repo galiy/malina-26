@@ -92,6 +92,11 @@ TestSlotAlloc, TestReadAndPublishE2E
 (в контракт не публикуются — `web/internal/web/kesmem.go`). Остальные КЭС-ручки явно
 помечены «не переносятся».
 
+> **Обновление (после ревью):** `Mode`/`Sign`/`MPP`/`windspeed` теперь **публикуются**
+> в RAM-контракте `kes-reader` и отдаются реальными значениями в `read_json?device=mppt`
+> (паритет с `.68`/`mpptd`); см. `docs/kes-memory.md` §1, `docs/kes-reader.md` §4/§7,
+> `docs/legacy-api.md` §7.1.
+
 **Где:** `docs/legacy-api.md:107-110` (§7 «КЭС (план)»), `docs/kes-reader.md:283`
 (§8 п.4), `docs/legacy-endpoints.md:99-100`.
 

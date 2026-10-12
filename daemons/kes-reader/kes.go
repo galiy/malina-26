@@ -31,7 +31,7 @@ type kesWindow struct {
 // тянула лишние байты). devAddr для RAM = RAM + 0x1F0; ID-окно читается «как есть».
 var kesWindows = []kesWindow{
 	{devAddr: 0x0000, length: 156, ramBase: 0x0000}, // ID/паспорт (RAM 0x000..0x09B, read as-is)
-	{devAddr: 0x0400, length: 66, ramBase: 0x0210},  // настройки (RAM 0x210..0x251)
+	{devAddr: 0x0400, length: 185, ramBase: 0x0210}, // настройки + Mode(0x2C2) (RAM 0x210..0x2C8)
 	{devAddr: 0x04B9, length: 240, ramBase: 0x02C9}, // измерения (RAM 0x2C9..0x3B8)
 	{devAddr: 0x05A9, length: 85, ramBase: 0x03B9},  // реле/знаки/измерения (RAM 0x3B9..0x40D)
 	{devAddr: 0x0F4A, length: 240, ramBase: 0x0D5A}, // I2C_Err(0xD5A), Uakb/Takb/QCell/ErrCells (RAM 0xD5A..0xE49)
@@ -162,6 +162,12 @@ type KesData struct {
 	RSErrSis byte
 	I2CErr   byte
 
+	// Режим/знак/MPP/ветер (публикуются в read_json?device=mppt; см. legacy §1b).
+	Mode      byte   // 0x2C2: 'i'/'v'/'B'/'b'/'S' (режим заряда)
+	Sign      byte   // 0x37A: '+'/'-'
+	MPP       byte   // 0x379: 'R'/'L'/'0'
+	Windspeed uint16 // 0x3F8 (LE, u16): 0xFFFF → 65535 (н/д)
+
 	// BMS и параллельные MPPT (Мастер) — docs/kes-memory.md §1.
 	UakbCell [32]uint16 // UakbCell (0xD80), напряжение банок
 	TakbCell [32]byte   // TakbCell (0xDC0), температура банок (x−50)
@@ -221,6 +227,10 @@ func parseData(img map[uint16]byte) KesData {
 		RelayC:    img[0x3E3],
 		RSErrSis:  img[0x3B6],
 		I2CErr:    img[0xD5A],
+		Mode:      img[0x2C2],
+		Sign:      img[0x37A],
+		MPP:       img[0x379],
+		Windspeed: le16(img, 0x3F8),
 	}
 	for i := 0; i < 32; i++ {
 		d.UakbCell[i] = le16(img, 0xD80+uint16(2*i))
@@ -293,7 +303,11 @@ const (
 	kesrIExts1Off   = 44
 	kesrPExts0Off   = 46
 	kesrPExts1Off   = 48
-	kesrBmsOff      = 52 // UakbCell[32]×u16 — начало BMS/MPPT массивов
+	kesrModeOff     = 50 // byte: режим заряда (0x2C2)
+	kesrSignOff     = 51 // byte: знак (0x37A)
+	kesrMppOff      = 52 // byte: MPP (0x379)
+	kesrWindOff     = 53 // u16 LE: windspeed (0x3F8), 0xFFFF → 65535 (н/д)
+	kesrBmsOff      = 55 // UakbCell[32]×u16 — начало BMS/MPPT массивов
 
 	// Смещения под-блока настроек ("KESS").
 	kessVerOff      = 4
@@ -312,8 +326,9 @@ const (
 //   - EEPROM-контракт (magic "KESE"): параметры устройства (паспорт/номинал), адрес «как есть»;
 //   - RAM-контракт (magic "KESR"): телеметрия + BMS/параллельные MPPT, адрес = RAM + 0x1F0;
 //   - Настройки (magic "KESS"): 40 значений RAM-копий (условно подтверждённые).
-// Неподтверждённые поля (Mode/Sign/MPP 0x2C2/0x37A/0x379, windspeed 0x3F8) в контракт
-// не публикуются (они лишь попадают в образ чтения, окно №4 покрывает 0x3F8).
+// Режим/знак/MPP/ветер (Mode 0x2C2, Sign 0x37A, MPP 0x379, windspeed 0x3F8) публикуются
+// в RAM-контракт и отдаются в read_json?device=mppt (legacy §1b).
+// Смещения контракта зафиксированы тестом TestContractGolden (защита от дрейфа).
 
 // buildEepromPayload — EEPROM-контракт (параметры устройства).
 func buildEepromPayload(meta contractMeta, d KesData) []byte {
@@ -357,6 +372,11 @@ func buildRamPayload(meta contractMeta, d KesData) []byte {
 	binary.LittleEndian.PutUint16(b[kesrIExts1Off:kesrIExts1Off+2], d.IExts1)
 	binary.LittleEndian.PutUint16(b[kesrPExts0Off:kesrPExts0Off+2], d.PExts0)
 	binary.LittleEndian.PutUint16(b[kesrPExts1Off:kesrPExts1Off+2], d.PExts1)
+	b[kesrModeOff] = d.Mode
+	b[kesrSignOff] = d.Sign
+	b[kesrMppOff] = d.MPP
+	b[kesrWindOff] = byte(d.Windspeed)
+	b[kesrWindOff+1] = byte(d.Windspeed >> 8)
 	// BMS и параллельные MPPT (Мастер).
 	off := kesrBmsOff
 	for i := 0; i < 32; i++ {

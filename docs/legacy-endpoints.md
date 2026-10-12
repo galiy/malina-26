@@ -4,8 +4,9 @@
 `titanator_malina_fixed_20261007`, раздел `settings/html`), которые у нас **пока не
 реализованы**. HTML-страницы не включены.
 
-Уже перенесено (см. `docs/legacy-api.md`): `read_json.php`, `read_memory.php`,
-`check_daemons.php`, `write_eeprom.php`.
+Уже перенесено (см. `docs/legacy-api.md`): `read_json.php` (вкл. `device=mppt`,
+`device=bat` — **эмуляция batmon**, `docs/legacy/batmon-api.md`), `read_memory.php`,
+`check_daemons.php`, `write_eeprom.php`, `read_sec.php`, `write_sec.php`.
 
 Скоуп и ручки пункта меню «МАСТЕР-УЗЕЛ» (агрегатор узлов) —
 `docs/legacy/master-node.md`.
@@ -96,7 +97,7 @@
 
 | Эндпоинт | Запрос | Ответ | Эффект |
 |---|---|---|---|
-| `read_sec.php` | GET `id,offset,count` | JSON-массив байт / `error` | чтение ячеек КЭС по id (1-based) |
+| `read_sec.php` | GET `id,offset,count` | массив байт (offset=0) / объект `{addr:byte}` (offset>0) / `error` | чтение ячеек КЭС по id (1-based); формат как legacy |
 | `write_sec.php` | GET/POST `id,relay,mode` или `id,data=[[c,v]]` | `Ok`/`error`/`unread` | реле/ячейки КЭС (спека: `docs/kes-reader.md` §4.2) |
 | `write_shm.php` | GET `target=uc1…` | `error` / число | запись управляющих байтов в shm |
 | `get_eeprom_state.php` | GET | `error`/`reload`/`no_changes` | чтение/сброс флага состояния EEPROM в shm |

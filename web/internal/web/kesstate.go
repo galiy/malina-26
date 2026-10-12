@@ -12,7 +12,6 @@ import (
 // Формат — docs/kes-reader.md §4 (синхронизирован с daemons/kes-reader/shm.go,
 // kes.go: контракт kes-list и слота KESE/KESR/KESS).
 const (
-	kesShmPath     = "/dev/shm/malina-kes-state"
 	kesShmMagic    = 0x3153454B // "KES1"
 	kesShmVersion  = 1
 	kesShmHeader   = 64
@@ -24,6 +23,10 @@ const (
 
 	kesContractPortSize = 32
 )
+
+// kesShmPath — путь к сегменту kes-list/КЭС shm. Переменная (не константа), чтобы
+// тесты могли поднять временный сегмент в t.TempDir().
+var kesShmPath = "/dev/shm/malina-kes-state"
 
 // Смещения записи kes-list (72 Б) — совпадают с daemons/kes-reader/shm.go.
 const (

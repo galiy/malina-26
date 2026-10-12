@@ -303,7 +303,10 @@ func presentKesCount() int {
 // mapd отражает реальную доступность МАП: 0, если есть найденный МАП или сохранённое
 // состояние; иначе 1. mpptd0..3 — 0 для присутствующих КЭС (иначе агрегатор
 // «Мастер-Узел» не опрашивает /read_json.php?device=mppt и КЭС не рисуются).
-// Остальные демоны (charging/batmon/db/emd/emon) — 1.
+// Остальные демоны (charging/db/emd/emon) — 1.
+// batmond — 0 при наличии КЭС (эмулируем batmon для «Мастер-Узла»: иначе агрегатор
+// не использует /read_json.php?device=bat и панель показывает NaN из-за строковых
+// Pwr_kW); без КЭС — 1 (не маскируем выработку МАП нулём). См. docs/legacy/batmon-api.md.
 // dbe_flash — не демон, а уровень износа флеша (байт); у нас нет данных → 1.
 func (s *Server) handleCheckDaemons(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -329,11 +332,18 @@ func (s *Server) handleCheckDaemons(w http.ResponseWriter, r *http.Request) {
 	if m > 3 {
 		m3 = 0
 	}
+	// Эмулируем batmon только при наличии КЭС: тогда «Мастер-Узел» уходит в ветку
+	// bat и берёт mppt_day_E (Вт·ч → кВтч), а не суммирует строковые Pwr_kW (NaN).
+	// Для узла без КЭС (только МАП) batmond=1 — не маскируем выработку МАП нулём.
+	batmond := 1
+	if m > 0 {
+		batmond = 0
+	}
 	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = fmt.Fprintf(w,
-		`{"0":%d,"1":1,"2":1,"3":1,"4":1,"5":1,"6":1,"7":1,"mapd":%d,"mpptd0":%d,"mpptd1":%d,"mpptd2":%d,"mpptd3":%d,"chargerd":1,"dbed":1,"batmond":1,"emd":1,"emon":1,"dbe_flash":1}`,
-		mapd, mapd, m0, m1, m2, m3)
+		`{"0":%d,"1":1,"2":1,"3":1,"4":1,"5":1,"6":1,"7":1,"mapd":%d,"mpptd0":%d,"mpptd1":%d,"mpptd2":%d,"mpptd3":%d,"chargerd":1,"dbed":1,"batmond":%d,"emd":1,"emon":1,"dbe_flash":1}`,
+		mapd, mapd, m0, m1, m2, m3, batmond)
 }
 
 // handleReadJSON — открытый эндпоинт совместимости (без авторизации/сессий).
@@ -349,14 +359,16 @@ func (s *Server) handleReadJSON(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write(s.legacy.snapshot())
 	case "mppt":
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		w.Header().Set("Cache-Control", "no-cache")
 		snap := kesSnapshotJSON()
 		if snap == nil {
 			_, _ = w.Write([]byte("[]"))
 			return
 		}
-		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
-		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write(snap)
+	case "bat":
+		s.handleReadBat(w, r)
 	default:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
