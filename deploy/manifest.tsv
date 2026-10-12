@@ -30,4 +30,5 @@ system/network/active	/malina/etc/malina/network/active	0644	if_absent
 system/systemd/malina-net-fallback.service	/etc/systemd/system/malina-net-fallback.service	0644	always
 system/systemd/malina-net-fallback.timer	/etc/systemd/system/malina-net-fallback.timer	0644	always
 daemons/map-reader/map-reader.service	/etc/systemd/system/map-reader.service	0644	always
+daemons/kes-reader/kes-reader.service	/etc/systemd/system/kes-reader.service	0644	always
 system/systemd/map-reader.service.d/sim.conf	/etc/systemd/system/map-reader.service.d/sim.conf	0644	always

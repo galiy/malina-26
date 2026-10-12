@@ -53,7 +53,7 @@ $S mount -o ro "${TARGET}2" /tmp/kilo/r
 $S mount -o ro "${TARGET}3" /tmp/kilo/m
 echo "[verify] /malina dir: $( [ -d /tmp/kilo/r/malina ] && echo ok || echo MISSING )"
 echo "[verify] fstab: malina=$(grep -c 'LABEL=malina' /tmp/kilo/r/etc/fstab) dhcp=$(grep -c '/var/lib/dhcp' /tmp/kilo/r/etc/fstab) nm=$(grep -c NetworkManager /tmp/kilo/r/etc/fstab)"
-echo "[verify] /malina binaries: $(ls /tmp/kilo/m/usr/local/bin /tmp/kilo/m/usr/local/sbin 2>/dev/null | grep -cE 'malina-web|malina-netd|map-reader|malina-rw')/4"
+echo "[verify] /malina binaries: $(ls /tmp/kilo/m/usr/local/bin /tmp/kilo/m/usr/local/sbin 2>/dev/null | grep -cE 'malina-web|malina-netd|map-reader|kes-reader|malina-rw')/5"
 echo "[verify] rootfs /usr/local пусто: $(ls -A /tmp/kilo/r/usr/local/bin /tmp/kilo/r/usr/local/sbin 2>/dev/null | wc -l)"
 echo "[verify] assets: card=$(find /tmp/kilo/m/usr/local/share/malina/web -type f 2>/dev/null | wc -l)"
 $S umount /tmp/kilo/m /tmp/kilo/r

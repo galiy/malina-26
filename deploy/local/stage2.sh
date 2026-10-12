@@ -142,6 +142,7 @@ log "бинарники"
 $SUDO install -D -o root -g root -m0755 "$SRC/web/dist/malina-web-armv7" "$MALM/usr/local/bin/malina-web"
 $SUDO install -D -o root -g root -m0755 "$SRC/web/dist/malina-netd-armv7" "$MALM/usr/local/sbin/malina-netd"
 $SUDO install -D -o root -g root -m0755 "$SRC/daemons/map-reader/dist/map-reader-armv7" "$MALM/usr/local/sbin/map-reader"
+$SUDO install -D -o root -g root -m0755 "$SRC/daemons/kes-reader/dist/kes-reader-armv7" "$MALM/usr/local/sbin/kes-reader"
 
 # --- 2.9 веб-ассеты (на /malina) ---
 log "веб-ассеты"
@@ -177,7 +178,7 @@ fi
 
 # --- 2.12 юниты offline ---
 log "enable/mask/disable юнитов"
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader; do
 	$SUDO systemctl --root="$ROOTM" enable "$u" >/dev/null 2>&1 || true
 done
 [ -f "$PROV/masked.txt" ]   && while read -r u; do [ -n "$u" ] && $SUDO systemctl --root="$ROOTM" mask "$u"    >/dev/null 2>&1 || true; done < "$PROV/masked.txt"

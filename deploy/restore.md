@@ -86,6 +86,7 @@
 ```
 make -C web arm                 # web/dist/malina-web-armv7, malina-netd-armv7
 make -C daemons/map-reader arm  # daemons/map-reader/dist/map-reader-armv7
+make -C daemons/kes-reader arm  # daemons/kes-reader/dist/kes-reader-armv7
 ```
 
 **2. Скопировать репозиторий (вместе с `dist/`) на устройство** в `/opt/malina-repo`:
@@ -123,14 +124,15 @@ passwd root ; passwd malina        # или задать согласованн�
 «Система → Хост» (применяется через короткое rw-окно `malina-rw`).
 
 **7. Перезагрузка.** Система поднимается в режиме 1 (AP+portal), поднимаются
-`malina-web`, `map-reader`, сеть (`malina-netd`).
+`malina-web`, `map-reader`, `kes-reader`, сеть (`malina-netd`).
 
 **8. Проверка после восстановления:**
 ```
-systemctl is-active malina-web malina-netd map-reader rsyslog ssh cron
+systemctl is-active malina-web malina-netd map-reader kes-reader rsyslog ssh cron
 ip -br a                                  # режим AP/STA
 curl -sI http://127.0.0.1/login | head -1 # web :80
 ls -l /dev/shm/malina-map-state           # shm map-reader
+ls -l /dev/shm/malina-kes-state           # shm kes-reader
 findmnt /malina                           # rw-раздел
 ```
 При необходимости — **первичная установка** артефактов из репо с ноутбука:

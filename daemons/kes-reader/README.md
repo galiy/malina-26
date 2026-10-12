@@ -77,3 +77,17 @@
 
     make host        # dist/kes-reader
     make arm         # dist/kes-reader-armv7 (GOARM=7, CGO_ENABLED=0)
+
+## Установка и деплой
+
+- Бинарник кладётся в **`/malina/usr/local/sbin/kes-reader`**, юнит **`kes-reader.service`** —
+  в `/etc/systemd/system/` (см. `deploy/manifest.tsv`). CPU-приоритет — как у `map-reader`
+  (`Nice=-5`, `CPUWeight=1000`, только CFS).
+- Локально на SD — `deploy/local/stage2.sh /dev/sdX` (см. `deploy/local-deploy.md`) —
+  ставит бинарник и включает юнит; проверка — `deploy/local/stage4.sh`.
+- По SSH на развёрнутом устройстве (точечно, демон): собрать `make -C daemons/kes-reader arm`,
+  затем rw-окно → `install -m0755 dist/kes-reader-armv7 /malina/usr/local/sbin/kes-reader`,
+  `install -m0644 kes-reader.service /etc/systemd/system/kes-reader.service` →
+  `systemctl daemon-reload && systemctl enable --now kes-reader` → `remount,ro`.
+- Проверка: `systemctl is-active kes-reader`, `ls -l /dev/shm/malina-kes-state`,
+  `journalctl -u kes-reader`, `list` по `/run/malina-kes/control.sock` (пусто без подключённых КЭС).

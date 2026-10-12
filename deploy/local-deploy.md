@@ -92,6 +92,7 @@
 ```
 make -C web arm
 make -C daemons/map-reader arm
+make -C daemons/kes-reader arm
 ```
 Определить SD (`lsblk -o NAME,SIZE,TYPE,LABEL,MOUNTPOINT`), **отключить авто-монтирование**
 (udisks может подхватить разделы и помешать). Не путать целевой диск с системными.
@@ -158,6 +159,7 @@ install -m0644 $PROV/hostname   $ROOT/etc/hostname
 install -D -o root -g root -m0755 web/dist/malina-web-armv7            $ROOT/usr/local/bin/malina-web
 install -D -o root -g root -m0755 web/dist/malina-netd-armv7          $ROOT/usr/local/sbin/malina-netd
 install -D -o root -g root -m0755 daemons/map-reader/dist/map-reader-armv7  $ROOT/usr/local/sbin/map-reader
+install -D -o root -g root -m0755 daemons/kes-reader/dist/kes-reader-armv7  $ROOT/usr/local/sbin/kes-reader
 ```
 
 **2.9. Веб-ассеты (на /malina, root:root):**
@@ -185,7 +187,7 @@ rm -f $ROOT/tmp/malina-pamcheck $ROOT/usr/bin/qemu-arm-static
 
 **2.12. Юниты offline (включение/маски/отключение):**
 ```
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader; do
   systemctl --root=$ROOT enable "$u" || true
 done
 # mask/disable по system/provision/{masked,disabled}.txt
@@ -208,7 +210,7 @@ umount $MAL $ROOT   # (для loop: losetup -d)
 # владельцы: не root там, где должен быть root
 find $ROOT/etc $ROOT/usr $MAL/usr -not -user root -printf '%u %p\n' | head
 # ключевые файлы и режимы
-ls -l $ROOT/etc/systemd/system/malina-*.service $ROOT/usr/local/bin/malina-web $ROOT/usr/local/sbin/{map-reader,malina-netd}
+ls -l $ROOT/etc/systemd/system/malina-*.service $ROOT/usr/local/bin/malina-web $ROOT/usr/local/sbin/{map-reader,kes-reader,malina-netd}
 ls -l $MAL/etc/malina/network $MAL/usr/local/share/malina/web | head
 readlink $ROOT/root $ROOT/home $ROOT/etc/wpa_supplicant $ROOT/etc/resolv.conf
 grep malina $ROOT/etc/fstab
@@ -313,7 +315,7 @@ grep malina $ROOT/etc/fstab
 ```
 systemctl --failed
 journalctl -b -p warning --no-pager
-systemctl status malina-web map-reader malina-net rsyslog ssh
+systemctl status malina-web map-reader kes-reader malina-net rsyslog ssh
 ip -br a ; nft list ruleset
 curl -sI http://127.0.0.1/login | head -1
 ```
