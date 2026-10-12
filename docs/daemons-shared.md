@@ -22,7 +22,7 @@ daemons/
 │  └─ device/                  # ✅ коды _Device (3/5/7/9) + Name()
 ├─ map-reader/                 # package main (без своего go.mod)
 ├─ kes-reader/                 # package main — каркас (сканирование/проба/опрос/shm/control/kes-list)
-└─ kes-emu/                    # (план) package main, использует transport+microart (сторона устройства)
+└─ kes-emu/                    # ✅ package main — «живой» эмулятор КЭС (3 PTY → /dev/ttyKES0..2), читает/пишет/команды
 ```
 
 Сборка не меняется: `cd daemons/map-reader && go build .` (модуль находится в

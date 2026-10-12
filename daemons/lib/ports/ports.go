@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -42,6 +43,26 @@ func ListPorts(patterns []string) []string {
 	return out
 }
 
+// fdAccessMode читает режим доступа fd из /proc/<pid>/fdinfo/<n> (flags & O_ACCMODE).
+func fdAccessMode(path string) (int, bool) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0, false
+	}
+	for _, ln := range strings.Split(string(b), "\n") {
+		if !strings.HasPrefix(ln, "flags:") {
+			continue
+		}
+		f := strings.TrimSpace(strings.TrimPrefix(ln, "flags:"))
+		v, err := strconv.ParseInt(f, 8, 64) // флаги в fdinfo — восьмеричные
+		if err != nil {
+			return 0, false
+		}
+		return int(v) & 3, true // O_ACCMODE: 0=RDONLY,1=WRONLY,2=RDWR
+	}
+	return 0, false
+}
+
 // BusyRdevs — множество rdev символьных устройств, открытых ДРУГИМИ процессами
 // (обход /proc выполняется один раз на цикл, а не на каждый порт).
 func BusyRdevs(self int) map[uint64]bool {
@@ -59,11 +80,17 @@ func BusyRdevs(self int) map[uint64]bool {
 			continue
 		}
 		fdDir := "/proc/" + pr.Name() + "/fd"
+		infoDir := "/proc/" + pr.Name() + "/fdinfo"
 		fds, err := os.ReadDir(fdDir)
 		if err != nil {
 			continue
 		}
 		for _, fd := range fds {
+			// Держатели, открытые только на чтение (напр., эмулятор держит slave
+			// O_RDONLY), порт НЕ занимают.
+			if acc, ok := fdAccessMode(infoDir + "/" + fd.Name()); ok && acc == 0 {
+				continue
+			}
 			l, err := os.Readlink(fdDir + "/" + fd.Name())
 			if err != nil {
 				continue

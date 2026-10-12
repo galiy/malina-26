@@ -1,0 +1,20 @@
+[Unit]
+Description=Эмулятор КЭС (KES/MPPT) — тестовый стенд
+Documentation=file:@PREFIX@/README.md
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=@BINDIR@
+ExecStart=@BINDIR@/kes-emu @ARGS@
+# legacy .68: после появления /dev/ttyUSB* пересканировать (tty_scan.sh → usbscanner →
+# D5 → mpptd). Вызов — только если есть И юнит add_tty.service, И /usr/sbin/tty_scan.sh
+# (на прочих хостах их нет — шаг пропускается).
+ExecStartPost=-/bin/sh -c '[ -e /etc/systemd/system/add_tty.service ] && [ -x /usr/sbin/tty_scan.sh ] && systemctl restart add_tty.service || true'
+Restart=always
+RestartSec=2
+# root нужен: создаёт симлинки /dev/<prefix>N и держит PTY
+User=root
+
+[Install]
+WantedBy=multi-user.target

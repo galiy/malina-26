@@ -193,8 +193,8 @@ func Read(p *transport.Port, addr uint16, page byte, echoTO, respTO time.Duratio
 			return nil, ErrNoDevice
 		}
 	}
-	raw, ok := p.ReadUntilNL(time.Now().Add(respTO), 600, true)
-	if !ok || len(raw) == 0 {
+	raw, _ := p.ReadUntilNL(time.Now().Add(respTO), 600, true)
+	if len(raw) == 0 {
 		return nil, ErrNoDevice
 	}
 	return ParseReply(raw, page)
@@ -213,9 +213,126 @@ func Write(p *transport.Port, addr uint16, data []byte, echoTO, respTO time.Dura
 			return ErrNoDevice
 		}
 	}
-	raw, ok := p.ReadUntilNL(time.Now().Add(respTO), 16, true)
-	if !ok || len(raw) == 0 {
+	raw, _ := p.ReadUntilNL(time.Now().Add(respTO), 16, true)
+	if len(raw) == 0 {
 		return ErrNoDevice
 	}
 	return ParseWriteReply(raw)
+}
+
+// --- Сторона устройства (для эмулятора) ---
+
+// Request — разобранный кадр запроса от ведущего (клиента).
+type Request struct {
+	Cmd  byte   // 'r' | 'w'
+	Page byte   // число байт данных минус 1
+	Addr uint16 // адрес
+	Data []byte // данные (для 'w')
+}
+
+// Unescape снимает экранирование Микроарт (0xDB 0xDC → 0x0A, 0xDB 0xDD → 0xDB).
+func Unescape(b []byte) ([]byte, error) {
+	out := make([]byte, 0, len(b))
+	for i := 0; i < len(b); i++ {
+		if b[i] == 0xDB {
+			if i+1 >= len(b) {
+				return nil, ErrNoDevice
+			}
+			switch b[i+1] {
+			case 0xDC:
+				out = append(out, 0x0A)
+			case 0xDD:
+				out = append(out, 0xDB)
+			default:
+				return nil, ErrNoDevice
+			}
+			i++
+			continue
+		}
+		out = append(out, b[i])
+	}
+	return out, nil
+}
+
+// ParseRequestFrame разбирает принятый от клиента кадр. CRC (последний байт) НЕ
+// экранируется; завершающий '\n' может отсутствовать (когда CRC == 0x0A).
+func ParseRequestFrame(raw []byte) (Request, error) {
+	if len(raw) == 0 {
+		return Request{}, ErrNoDevice
+	}
+	// Вариант A: последний байт — терминатор '\n'.
+	if raw[len(raw)-1] == 0x0A {
+		if req, ok := parseReqBody(raw[:len(raw)-1]); ok {
+			return req, nil
+		}
+	}
+	// Вариант B: терминатора нет, CRC == 0x0A.
+	if req, ok := parseReqBody(raw); ok {
+		return req, nil
+	}
+	return Request{}, ErrBadReply
+}
+
+// parseReqBody: body = [экранированные данные][CRC]; сумма по wire-байтам == 0.
+func parseReqBody(body []byte) (Request, bool) {
+	if len(body) < 5 {
+		return Request{}, false
+	}
+	var sum byte
+	for _, b := range body {
+		sum += b
+	}
+	if sum != 0 {
+		return Request{}, false
+	}
+	// CRC — последний байт (не экранируется), остальное — экранированные данные.
+	ck := body[len(body)-1]
+	var wsum byte
+	for _, b := range body[:len(body)-1] {
+		wsum += b
+	}
+	if byte(0-wsum) != ck {
+		return Request{}, false
+	}
+	logical, err := Unescape(body[:len(body)-1])
+	if err != nil || len(logical) < 4 {
+		return Request{}, false
+	}
+	req := Request{Cmd: logical[0], Page: logical[1], Addr: uint16(logical[2])<<8 | uint16(logical[3])}
+	if req.Cmd == 'w' {
+		want := int(req.Page) + 1
+		if len(logical) < 4+want {
+			return Request{}, false
+		}
+		req.Data = append([]byte(nil), logical[4:4+want]...)
+	}
+	return req, true
+}
+
+// BuildReply собирает ответ данных: 'o' данные S [\n].
+func BuildReply(data []byte) []byte {
+	var sum byte
+	seq := make([]byte, 0, len(data)+4)
+	seq = append(seq, Escape('o', &sum)...)
+	for _, d := range data {
+		seq = append(seq, Escape(d, &sum)...)
+	}
+	ck := byte(0 - sum)
+	seq = append(seq, ck)
+	if ck != 0x0A {
+		seq = append(seq, 0x0A)
+	}
+	return seq
+}
+
+// BuildErrorReply собирает ответ ошибки: 'e' код S [\n].
+func BuildErrorReply(code byte) []byte {
+	var sum byte
+	seq := append(Escape('e', &sum), Escape(code, &sum)...)
+	ck := byte(0 - sum)
+	seq = append(seq, ck)
+	if ck != 0x0A {
+		seq = append(seq, 0x0A)
+	}
+	return seq
 }
