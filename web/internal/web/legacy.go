@@ -187,6 +187,120 @@ func mpptList(f *legacyFields) []kesRec {
 	return out
 }
 
+// toMap — представление полей снимка как map[name]value (только присутствующие
+// ячейки) для переиспользования OCV-хелперов (batSocFromFields, uaccFromFields).
+func (f *legacyFields) toMap() map[string]uint32 {
+	m := make(map[string]uint32, len(mapFieldNames))
+	for name, i := range legacyFieldIdx {
+		if f.pres[i] {
+			m[name] = f.val[i]
+		}
+	}
+	return m
+}
+
+// fmtFloats — элементы массива через запятую по формату fmtv.
+func fmtFloats(vals []float64, fmtv string) string {
+	var b strings.Builder
+	for i, v := range vals {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		fmt.Fprintf(&b, fmtv, v)
+	}
+	return b.String()
+}
+
+// renderBMS формирует тело read_bms.php (ANT BMS) из снимка МАП.
+// Формат — как демон bmslistener (shm 2018): {"updated":<epoch>,"devices":[...]},
+// каждое устройство — объект ANT BMS. Источник данных — снимок МАП (банки BMS
+// UakbCell/TakbCell, напряжение/ток АКБ, SoC). Поля, которых в снимке МАП нет
+// (токи разряд/заряд-ключей, balancer, frames) — 0; ёмкость — из настроек МАП.
+func renderBMS(f *legacyFields, ts int64, model, port string) []byte {
+	if f == nil {
+		return []byte(`{"updated":0,"devices":[]}`)
+	}
+	t := time.Unix(ts, 0)
+
+	// Банки BMS из снимка МАП (как bmsList): напряжение/температура каждой банки.
+	bmsf := f.u("LCD_BMSFunk")
+	n := int(f.u("BMS_Num"))
+	var cellsV, temps []float64
+	if (bmsf == 1 || bmsf == 3) && n >= 1 && n <= 32 {
+		cellsV = make([]float64, 0, n)
+		temps = make([]float64, 0, n)
+		for i := 0; i < n; i++ {
+			l := f.u(fmt.Sprintf("UakbCell_L%d", i))
+			h := f.u(fmt.Sprintf("UakbCell_H%d", i))
+			uv := float64((l&0xff)|((h&0x7f)<<8)) / 100
+			raw := int(f.u(fmt.Sprintf("TakbCell%d", i)))
+			tt := raw - 50
+			if raw == 255 {
+				tt = 127 // нет датчика
+			}
+			cellsV = append(cellsV, uv)
+			temps = append(temps, float64(tt))
+		}
+	}
+
+	m := f.toMap()
+	soc := 0.0
+	if s, ok := batSocFromFields(m); ok {
+		soc = clampSoc(s)
+	}
+	u, _ := uaccFromFields(m)
+
+	// Направление заряд/разряд — по композитному режиму (как renderLegacy:
+	// заряд = режимы 4..9); ток АКБ — IAcc_med_A_u16.
+	mode := mapmode.Mode(func(nm string) uint32 {
+		if nm == "UNET" {
+			if r := f.u("UNET"); r != 0 {
+				return r + 100
+			}
+			return 0
+		}
+		return f.u(nm)
+	})
+	cur := (float64(f.u("IAcc_med_A_u16_L")) + float64(f.u("IAcc_med_A_u16_H"))*256) / 16
+	if !(mode >= 4 && mode <= 9) {
+		cur = -cur
+	}
+
+	// Полная ёмкость АКБ (Ач) — формула родного UI: (LCD_CAcc*25) >> UACC.
+	sh := f.u("UACC") & 0x1f
+	capacity := 0.0
+	if sh < 32 {
+		capacity = float64((int(f.u("LCD_CAcc")) * 25) >> sh)
+	}
+	remaining := capacity * soc / 100
+
+	maxI, minI := 0, 0
+	var maxV, minV, avgV float64
+	if len(cellsV) > 0 {
+		maxV, minV = cellsV[0], cellsV[0]
+		var sum float64
+		for i, v := range cellsV {
+			sum += v
+			if v > maxV {
+				maxV, maxI = v, i
+			}
+			if v < minV {
+				minV, minI = v, i
+			}
+		}
+		avgV = sum / float64(len(cellsV))
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b,
+		`{"updated":%d,"devices":[{"deviceName":"AntBms %d A/h (%s)","port":"%s","timestamp":%d,"time":"%02d:%02d:%02d","cell_count":%d,"cells_v":[%s],"current_a":%.2f,"soc":%d,"capacity_ah":%.2f,"remaining_ah":%.2f,"temperatures_c":[%s],"charge_mos":0,"discharge_mos":0,"balancer":0,"power_w":%.1f,"max_cell_idx":%d,"max_cell_v":%.3f,"min_cell_idx":%d,"min_cell_v":%.3f,"avg_cell_v":%.3f,"frames":0}]}`,
+		ts, int(capacity), model, port, ts, t.Hour(), t.Minute(), t.Second(),
+		len(cellsV), fmtFloats(cellsV, "%.3f"), cur, int(soc), capacity, remaining,
+		fmtFloats(temps, "%.0f"),
+		u*cur, maxI, maxV, minI, minV, avgV)
+	return []byte(b.String())
+}
+
 // bmsRec — одна банка BMS.
 type bmsRec struct {
 	V float64

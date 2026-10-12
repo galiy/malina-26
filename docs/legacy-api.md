@@ -11,6 +11,7 @@
 | `/read_memory.php?offset=&count=` | GET | нет | массив байт образа памяти |
 | `/check_daemons.php` | GET | нет | статусы демонов (совместимость) |
 | `/write_eeprom.php` | POST | **HTTP Basic** (PAM) | запись в МАП |
+| `/read_bms.php` | GET | нет | снимок ANT BMS (из снимка МАП, stateless) |
 
 Legacy-**чтение** — **без авторизации** (как в старой системе; нужно для внешних
 потребителей/портала). Legacy-**запись** — Basic (пароль → PAM, кэш 5 мин,
@@ -61,6 +62,11 @@ GET /read_memory.php?offset=0&count=4
 - `batmond=0` при наличии КЭС (эмуляция batmon — иначе агрегатор не использует
   `/read_json.php?device=bat` и показывает `NaN` из-за строковых `Pwr_kW`);
   без КЭС — `1` (не маскируем выработку МАП нулём). См. `docs/legacy/batmon-api.md` §6.
+- `bms=0` при наличии BMS-банок в снимке МАП (тогда `/read_bms.php` отдаёт реальные
+  банки), иначе `1`.
+- Числовые ключи `"0".."7"` — статусные байты shm 5000 (как в legacy `check_daemons.php`):
+  `0`=mapd, `1..4`=mpptd0..3, `5`=chargerd, `6`=emon, `7`=dbe_flash;
+  `0` — подсистема доступна, `1` — нет.
 - Остальные демоны в нашей системе отсутствуют → `1`; `dbe_flash` (износ флеша) → `1`.
 
 ## 6. `POST /write_eeprom.php`
@@ -199,10 +205,26 @@ Basic+PAM; это повторяет МАП-политику (`docs/api-auth.md`
 
 Полный контракт полей, семантика (реверс `.68`) и логика — **`docs/legacy/batmon-api.md`**.
 
+## 7.4 `read_bms.php` (ANT BMS, из снимка МАП)
+
+**`GET /read_bms.php`** — открыт (без авторизации), **stateless**: считается по
+требованию из текущего снимка МАП (первый доступный), без накопителей/состояния.
+Отдаёт формат демона `bmslistener` (shm 2018):
+`{"updated":<epoch>,"devices":[{...}]}` — **одно** устройство (АКБ выбранного МАП).
+
+Источник — снимок МАП: банки BMS (`cells_v`/`temperatures_c` из `UakbCell`/`TakbCell`,
+число `BMS_Num`, `LCD_BMSFunk∈{1,3}`), `soc` (аппаратный `SoC` → OCV-оценка),
+`current_a` (`IAcc_med_A_u16`), `capacity_ah`/`remaining_ah`, `power_w`;
+`charge_mos`/`discharge_mos`/`balancer`/`frames` = `0`. При отсутствии МАП/снимка —
+`{"updated":0,"devices":[]}`.
+
+Полный контракт и отличия от `.68` — **`docs/legacy/bms-api.md`**.
+
 ## 8. Ссылки
 
 - `docs/api-auth.md` — авторизация (read открыт, write Basic+PAM).
 - `docs/map-write.md`, `docs/map-write-api.md` — контракт записи в МАП.
 - `docs/legacy_read_json_map.md` — формат `read_json.php` (реверс).
 - `docs/legacy-endpoints.md` — инвентаризация legacy-API (что есть и не перенесено).
+- `docs/legacy/bms-api.md` — контракт `read_bms.php`.
 - `web/README.md` — реализация.

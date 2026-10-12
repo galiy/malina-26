@@ -298,6 +298,26 @@ func presentKesCount() int {
 	return countKesInShm(data)
 }
 
+// mapHasBMS — есть ли BMS-банки в текущем снимке МАП (read_bms отдаёт реальные
+// банки). Stateless: читает текущий снимок первого МАП (как read_bms.php).
+func mapHasBMS() bool {
+	ml := loadMapList()
+	if len(ml.Maps) == 0 {
+		return false
+	}
+	payload := mapRawPayload(ml.Maps[0].ID)
+	if payload == nil {
+		return false
+	}
+	f, ok := decodeLegacy(payload)
+	if !ok {
+		return false
+	}
+	bmsf := f.u("LCD_BMSFunk")
+	n := int(f.u("BMS_Num"))
+	return (bmsf == 1 || bmsf == 3) && n >= 1
+}
+
 // handleCheckDaemons — legacy-совместимый статус демонов (открыт, без авторизации).
 // Значения как в legacy check_daemons.php: демон есть → 0, нет → 1.
 // mapd отражает реальную доступность МАП: 0, если есть найденный МАП или сохранённое
@@ -307,6 +327,9 @@ func presentKesCount() int {
 // batmond — 0 при наличии КЭС (эмулируем batmon для «Мастер-Узла»: иначе агрегатор
 // не использует /read_json.php?device=bat и панель показывает NaN из-за строковых
 // Pwr_kW); без КЭС — 1 (не маскируем выработку МАП нулём). См. docs/legacy/batmon-api.md.
+// bms — доступность /read_bms.php (банки BMS в снимке МАП); 0 — есть, 1 — нет.
+// Числовые ключи "0".."7" — байты shm 5000: 0=mapd, 1..4=mpptd0..3, 5=chargerd,
+// 6=emon, 7=dbe_flash (0 = подсистема доступна, 1 — нет).
 // dbe_flash — не демон, а уровень износа флеша (байт); у нас нет данных → 1.
 func (s *Server) handleCheckDaemons(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -339,11 +362,19 @@ func (s *Server) handleCheckDaemons(w http.ResponseWriter, r *http.Request) {
 	if m > 0 {
 		batmond = 0
 	}
+	// bms — доступность read_bms.php (банки BMS в снимке МАП): 0 — есть, 1 — нет.
+	bms := 1
+	if mapHasBMS() {
+		bms = 0
+	}
+	// Числовые ключи "0".."7" — статусные байты shm 5000 (см. legacy check_daemons.php):
+	// 0=mapd, 1..4=mpptd0..3, 5=chargerd, 6=emon, 7=dbe_flash. У нас эти байты не
+	// пишутся, поэтому отдаём честные значения по доступности подсистем (0=есть,1=нет).
 	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = fmt.Fprintf(w,
-		`{"0":%d,"1":1,"2":1,"3":1,"4":1,"5":1,"6":1,"7":1,"mapd":%d,"mpptd0":%d,"mpptd1":%d,"mpptd2":%d,"mpptd3":%d,"chargerd":1,"dbed":1,"batmond":%d,"emd":1,"emon":1,"dbe_flash":1}`,
-		mapd, mapd, m0, m1, m2, m3, batmond)
+		`{"0":%d,"1":%d,"2":%d,"3":%d,"4":%d,"5":1,"6":1,"7":1,"mapd":%d,"mpptd0":%d,"mpptd1":%d,"mpptd2":%d,"mpptd3":%d,"chargerd":1,"dbed":1,"batmond":%d,"emd":1,"emon":1,"dbe_flash":1,"bms":%d}`,
+		mapd, m0, m1, m2, m3, mapd, m0, m1, m2, m3, batmond, bms)
 }
 
 // handleReadJSON — открытый эндпоинт совместимости (без авторизации/сессий).
@@ -374,6 +405,32 @@ func (s *Server) handleReadJSON(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"error":"unsupported device"}`))
 	}
+}
+
+// handleReadBMS — совместимый с legacy read_bms.php: JSON {"updated","devices"}
+// (ANT BMS), открытый, без авторизации (как read_json/check_daemons).
+// Stateless: считает по требованию из текущего снимка МАП (первый доступный),
+// без накопителей и состояния. Собственного bmslistener на узле нет.
+func (s *Server) handleReadBMS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+	w.Header().Set("Cache-Control", "no-cache")
+
+	body := []byte(`{"updated":0,"devices":[]}`)
+	ml := loadMapList()
+	if len(ml.Maps) > 0 {
+		if payload := mapRawPayload(ml.Maps[0].ID); payload != nil {
+			if f, ok := decodeLegacy(payload); ok {
+				model := mapModelFull(ml.Maps[0].Model)
+				body = renderBMS(f, f.meta.LastSeen, model, ml.Maps[0].Port)
+			}
+		}
+	}
+	_, _ = w.Write(body)
 }
 
 // handleReadMemory — совместимый с legacy read_memory.php?offset=&count=:

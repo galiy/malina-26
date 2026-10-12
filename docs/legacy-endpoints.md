@@ -6,7 +6,8 @@
 
 Уже перенесено (см. `docs/legacy-api.md`): `read_json.php` (вкл. `device=mppt`,
 `device=bat` — **эмуляция batmon**, `docs/legacy/batmon-api.md`), `read_memory.php`,
-`check_daemons.php`, `write_eeprom.php`, `read_sec.php`, `write_sec.php`.
+`check_daemons.php`, `write_eeprom.php`, `read_sec.php`, `write_sec.php`,
+`read_bms.php` (**stateless**, из снимка МАП — `docs/legacy/bms-api.md`).
 
 Скоуп и ручки пункта меню «МАСТЕР-УЗЕЛ» (агрегатор узлов) —
 `docs/legacy/master-node.md`.
@@ -61,7 +62,6 @@
 | `mppt_errors_history.php` | POST `device,start_date,end_date` | HTML-строки | история ошибок MPPT |
 | `mppt_counters_history.php` | POST `device,start_date,end_date` | HTML-строки | история счётчиков MPPT |
 | `batmon_history.php` | POST `start_date,end_date` | HTML-строки | история АКБ |
-| `read_bms.php` | GET | JSON `{"updated":…,"devices":[…]}` | ANT BMS из shm (демон `bmslistener`) |
 
 ## Узлы, меню, настройки МАП/АКБ
 

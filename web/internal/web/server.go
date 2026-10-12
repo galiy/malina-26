@@ -318,6 +318,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/read_sec.php", s.handleReadSec)
 	mux.HandleFunc("/write_sec.php", s.handleWriteSec)
 	mux.HandleFunc("/check_daemons.php", s.handleCheckDaemons)
+	mux.HandleFunc("/read_bms.php", s.handleReadBMS)
 	mux.HandleFunc("/", s.handleIndex)
 
 	go s.legacy.run()
