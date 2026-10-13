@@ -19,7 +19,8 @@ daemons/
 │  ├─ control/                 # ✅ каркас unix-сокет управления (Serve + JSON-фрейминг); диспетчер — у демона
 │  ├─ scanner/                 # ✅ Runner: цикл сканирования, backoff (обычный/чужой), active, занятость портов (через /proc); проба — колбэк
 │  ├─ ports/                   # ✅ device-agnostic: ListPorts, RdevOf, BusyRdevs (glob/дедуп по rdev, занятость через /proc)
-│  └─ device/                  # ✅ коды _Device (3/5/7/9) + Name()
+│  ├─ device/                  # ✅ коды _Device (3/5/7/9) + Name()
+│  └─ tscontract/              # ✅ контракты телеметрии: схемы/кодеки map/kes/mbms (общие с daemons/tsdb и продюсером malina-web)
 ├─ map-reader/                 # package main (без своего go.mod)
 ├─ kes-reader/                 # package main — каркас (сканирование/проба/опрос/shm/control/kes-list)
 └─ kes-emu/                    # ✅ package main — «живой» эмулятор КЭС (3 PTY → /dev/ttyUSB9..11), читает/пишет/команды
@@ -45,6 +46,7 @@ daemons/
 | `lib/control` | `map-reader/control.go` | `Serve(sock, stop, handler)`, `WriteJSON`; лимиты соединений/дедлайны внутри |
 | `lib/ports` | `map-reader/{scan.go}` | `ListPorts`, `RdevOf`, `BusyRdevs` (glob, дедуп по rdev, занятость через `/proc`) |
 | `lib/device` | — | коды `_Device` (`TypeMap=3`, `TypeKes=5`, `TypeCharger=7/9`), `Name(code)` |
+| `lib/tscontract` | `daemons/tsdb/contract.go` | контракты телеметрии: `FieldType`/`Field`/`Value`, `Contract`, `Registry` (`Get`/`Register`/`Project`), `AppendValue`/`DecodeValue`, `NewDefaultRegistry()` (`map`/`kes`/`mbms`) |
 
 > **Не общее (остаётся в демоне):** Modbus (`modbus.go`), оркестрация пробы и порядок
 > скоростей (`detect.go`), MAP-контракт/payload (`cells.go`, `mapdata.go`, `contract.go`,

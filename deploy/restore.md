@@ -40,6 +40,9 @@
   конфиг и systemd-дроп-ин Redis (in-memory кэш телеметрии, без персиста;
   `docs/redis-cache.md`). Пакет `redis-server` — в образе; юнит включается
   первичным деплоем.
+- `daemons/tsdb/` — сервис хранилища рядов телеметрии (`malina-tsdb`):
+  append-only сегменты на `/malina/var/malina-ts`, двоичный API, без фоновых
+  оптимизаций; юнит `tsdb.service` → `malina-tsdb.service` (`docs/telemetry-store.md`).
 - `system/provision/` — снимок состояния: `fstab`, `cmdline.txt`, `config.txt`,
   `packages.txt` (apt-mark showmanual), `masked.txt`, `disabled.txt`.
 - `image/stage-malina/05-map-uart/` — UART для МАП: `enable_uart=1` +

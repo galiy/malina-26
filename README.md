@@ -52,6 +52,10 @@
 - **Кэш телеметрии**: Redis 7 (in-memory, без персиста, лимит 200 МБ,
   `allkeys-lru`), доступ по loopback; конфиг `system/redis/malina.conf` →
   `/etc/malina/redis.conf` (см. `docs/redis-cache.md`).
+- **Хранилище рядов телеметрии**: демон `daemons/tsdb` (`malina-tsdb`) —
+  append-only сегменты на `/malina` (ключ: тип+id+время, версия контракта,
+  двоичный API, без фоновых оптимизаций), доступ локально по Unix-сокету (без
+  сети; см. `docs/telemetry-store.md`).
 
 ## Сборка и установка (кратко)
 

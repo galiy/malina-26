@@ -32,22 +32,26 @@ SCP=(sshpass -p "$PASS" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/d
 
 if [ "$BUILD" = 1 ]; then
   make -C "$ROOT/web" arm
+  make -C "$ROOT/daemons/tsdb" arm
 fi
 
 BIN_WEB="$ROOT/web/dist/malina-web-armv7"
 BIN_NETD="$ROOT/web/dist/malina-netd-armv7"
+BIN_TSDB="$ROOT/daemons/tsdb/dist/malina-tsdb-armv7"
 [ -f "$BIN_WEB" ] || { echo "нет $BIN_WEB (собери: --build)"; exit 1; }
 [ -f "$BIN_NETD" ] || { echo "нет $BIN_NETD (собери: --build)"; exit 1; }
+[ -f "$BIN_TSDB" ] || { echo "нет $BIN_TSDB (собери: --build)"; exit 1; }
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 cp "$BIN_WEB" "$STAGE/malina-web"
 cp "$BIN_NETD" "$STAGE/malina-netd"
+cp "$BIN_TSDB" "$STAGE/malina-tsdb"
 cp "$ROOT/web/pamcheck/pamcheck.c" "$STAGE/pamcheck.c"
 tar -C "$ROOT" -cf "$STAGE/pkg.tar" system daemons deploy/manifest.tsv web/assets
 
 "${SSH[@]}" "$HOST" 'rm -rf /tmp/malina-install && mkdir -p /tmp/malina-install'
-"${SCP[@]}" "$STAGE/pkg.tar" "$STAGE/malina-web" "$STAGE/malina-netd" "$STAGE/pamcheck.c" "$HOST:/tmp/malina-install/"
+"${SCP[@]}" "$STAGE/pkg.tar" "$STAGE/malina-web" "$STAGE/malina-netd" "$STAGE/malina-tsdb" "$STAGE/pamcheck.c" "$HOST:/tmp/malina-install/"
 
 "${SSH[@]}" "$HOST" 'bash -s' <<'REMOTE'
 set -e
@@ -76,8 +80,10 @@ done < deploy/manifest.tsv
 # Бинарники (собраны/скопированы)
 sudo install -D -m0755 malina-web  /malina/usr/local/bin/malina-web
 sudo install -D -m0755 malina-netd /malina/usr/local/sbin/malina-netd
+sudo install -D -m0755 malina-tsdb /malina/usr/local/sbin/malina-tsdb
 echo "inst  /malina/usr/local/bin/malina-web"
 echo "inst  /malina/usr/local/sbin/malina-netd"
+echo "inst  /malina/usr/local/sbin/malina-tsdb"
 
 # Веб-ассеты (шаблоны/статика/i18n) — путь из malina-web.service (-assets).
 sudo rm -rf /malina/usr/local/share/malina/web
@@ -103,10 +109,11 @@ sudo rm -f /malina/usr/local/libexec/malina-sysconfig
 # hostname/timezone больше не хранятся на /malina.
 sudo rm -f /malina/etc/hostname /malina/etc/timezone
 sudo systemctl daemon-reload
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer redis-server; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer malina-tsdb redis-server; do
 	sudo systemctl enable "$u" >/dev/null 2>&1 || true
 done
 sudo systemctl restart malina-web
+sudo systemctl restart malina-tsdb 2>/dev/null || true
 sudo systemctl restart redis-server 2>/dev/null || true
 sudo rm -rf /tmp/malina-install
 echo "install: done"

@@ -1,0 +1,22 @@
+[Unit]
+Description=Malina telemetry store (append-only, binary)
+After=local-fs.target
+RequiresMountsFor=/malina
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# Каталог под Unix-сокет (tmpfs); сам сокет — 0600.
+RuntimeDirectory=malina-ts
+RuntimeDirectoryMode=0755
+ExecStart=/malina/usr/local/sbin/malina-tsdb
+# Переопределяемо при необходимости (по умолчанию — только локальный сокет):
+#   MALINA_TS_ROOT=/malina/var/malina-ts
+#   MALINA_TS_SOCK=/run/malina-ts/tsdb.sock
+#   MALINA_TS_... (лимиты — флагами в drop-in)
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -93,6 +93,7 @@
 make -C web arm
 make -C daemons/map-reader arm
 make -C daemons/kes-reader arm
+make -C daemons/tsdb arm
 ```
 Определить SD (`lsblk -o NAME,SIZE,TYPE,LABEL,MOUNTPOINT`), **отключить авто-монтирование**
 (udisks может подхватить разделы и помешать). Не путать целевой диск с системными.
@@ -164,6 +165,7 @@ install -D -o root -g root -m0755 web/dist/malina-web-armv7            $ROOT/usr
 install -D -o root -g root -m0755 web/dist/malina-netd-armv7          $ROOT/usr/local/sbin/malina-netd
 install -D -o root -g root -m0755 daemons/map-reader/dist/map-reader-armv7  $ROOT/usr/local/sbin/map-reader
 install -D -o root -g root -m0755 daemons/kes-reader/dist/kes-reader-armv7  $ROOT/usr/local/sbin/kes-reader
+install -D -o root -g root -m0755 daemons/tsdb/dist/malina-tsdb-armv7        $ROOT/usr/local/sbin/malina-tsdb
 ```
 
 **2.9. Веб-ассеты (на /malina, root:root):**
