@@ -109,12 +109,11 @@ sudo rm -f /malina/usr/local/libexec/malina-sysconfig
 # hostname/timezone больше не хранятся на /malina.
 sudo rm -f /malina/etc/hostname /malina/etc/timezone
 sudo systemctl daemon-reload
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer malina-tsdb redis-server; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer malina-tsdb; do
 	sudo systemctl enable "$u" >/dev/null 2>&1 || true
 done
 sudo systemctl restart malina-web
 sudo systemctl restart malina-tsdb 2>/dev/null || true
-sudo systemctl restart redis-server 2>/dev/null || true
 sudo rm -rf /tmp/malina-install
 echo "install: done"
 REMOTE

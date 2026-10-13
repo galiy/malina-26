@@ -239,7 +239,6 @@ raspi-firmware
 raspi-gpio
 raspi-utils
 readline-common
-redis-server
 rfkill
 rpicam-apps-lite
 rpi-eeprom

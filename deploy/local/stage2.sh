@@ -179,7 +179,7 @@ fi
 
 # --- 2.12 юниты offline ---
 log "enable/mask/disable юнитов"
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-tsdb redis-server; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-tsdb; do
 	$SUDO systemctl --root="$ROOTM" enable "$u" >/dev/null 2>&1 || true
 done
 [ -f "$PROV/masked.txt" ]   && while read -r u; do [ -n "$u" ] && $SUDO systemctl --root="$ROOTM" mask "$u"    >/dev/null 2>&1 || true; done < "$PROV/masked.txt"

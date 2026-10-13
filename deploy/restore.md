@@ -36,10 +36,6 @@
 - `system/udev/` — udev-правила (`60-usb-serial-latency.rules`: `latency_timer=1`
   для USB-serial — эхо-протокол МАП, см. `docs/map.md`).
 - `system/network/` — дефолты `mode1.json`, `mode2.json`, `active`.
-- `system/redis/malina.conf`, `system/systemd/redis-server.service.d/malina.conf` —
-  конфиг и systemd-дроп-ин Redis (in-memory кэш телеметрии, без персиста;
-  `docs/redis-cache.md`). Пакет `redis-server` — в образе; юнит включается
-  первичным деплоем.
 - `daemons/tsdb/` — сервис хранилища рядов телеметрии (`malina-tsdb`):
   append-only сегменты на `/malina/var/malina-ts`, двоичный API, без фоновых
   оптимизаций; юнит `tsdb.service` → `malina-tsdb.service` (`docs/telemetry-store.md`).

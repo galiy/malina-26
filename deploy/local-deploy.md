@@ -36,7 +36,7 @@
 4. **Состав образа (решено):**
    - входят **только пакеты из репозиториев** (`stage-malina/00-packages` +
      `apt update/upgrade`): mc, rsyslog, iw, rfkill, hostapd, dnsmasq, nftables,
-     isc-dhcp-client, gcc, redis-server;
+     isc-dhcp-client, gcc;
    - **не устанавливаются**: `network-manager` и `raspberrypi-net-mods` (исключены
      из `stage2/02-net-tweaks/00-packages` в `image/setup.sh`; зависимых у
      `raspberrypi-net-mods` нет);
@@ -154,10 +154,6 @@ install -m0644 $PROV/hostname   $ROOT/etc/hostname
 **2.7. Артефакты `system/*` по manifest** (как `install.sh`):
 для каждой строки `src dst mode policy` — `install -D -o root -g root -m <mode> $REPO/$src $ROOT$dst`
 (политика `if_absent` — не перезаписывать существующее).
-
-> Redis (кэш телеметрии): по манифесту ставится `/etc/malina/redis.conf` и дроп-ин
-> `redis-server.service.d/malina.conf`; юнит `redis-server` включается в 2.12
-> (см. `docs/redis-cache.md`). Пакет `redis-server` — в образе (Этап 1).
 
 **2.8. Бинарники (root:root, 0755):**
 ```
