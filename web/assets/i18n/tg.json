@@ -1189,5 +1189,13 @@
   "home.col.load": "Бор",
   "home.col.panel": "Панелҳо",
   "home.status.stale": "кӯҳна",
-  "home.status.lost": "гумшуда"
+  "home.status.lost": "гумшуда",
+  "sys.monitoring": "Мониторинг",
+  "sys.monitoring_enable": "Фаъол кардани фиристони даврии трапҳои SNMP",
+  "sys.monitoring_ip": "IP қабулкунандаи trap",
+  "sys.monitoring_interval": "Даврнокӣ (сония)",
+  "sys.monitoring_hint": "Ҳангоми фаъол будан давранок (30…3600 с) трапҳои SNMP ба UDP 162 / public фиристода мешаванд.",
+  "sys.msg.monitoring_ok": "Танзимоти мониторинг нигоҳ дошта шуд.",
+  "sys.err.monitoring_ip": "Суроғаи дурусти IPv4-и қабулкунандаро нишон диҳед.",
+  "sys.err.monitoring_interval": "Даврнокӣ — адади бутун аз 30 то 3600 сония."
 }

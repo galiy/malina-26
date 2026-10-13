@@ -43,6 +43,22 @@
   </section>
 
   <section class="card">
+    <h2>{{index .T "sys.monitoring"}}</h2>
+    <form method="post" action="system/monitoring">
+      <label class="check">
+        <input type="checkbox" name="enabled" value="1"{{if .Monitoring.Enabled}} checked{{end}}>
+        {{index .T "sys.monitoring_enable"}}
+      </label>
+      <label for="monitoring_ip">{{index .T "sys.monitoring_ip"}}</label>
+      <input id="monitoring_ip" name="ip" type="text" value="{{.Monitoring.IP}}" autocomplete="off" placeholder="192.168.1.10">
+      <label for="monitoring_interval">{{index .T "sys.monitoring_interval"}}</label>
+      <input id="monitoring_interval" name="interval" type="number" min="30" max="3600" step="1" value="{{if .Monitoring.Interval}}{{.Monitoring.Interval}}{{else}}300{{end}}" autocomplete="off">
+      <p class="muted">{{index .T "sys.monitoring_hint"}}</p>
+      <button type="submit">{{index .T "sys.save"}}</button>
+    </form>
+  </section>
+
+  <section class="card">
     <h2>{{index .T "sys.password"}}</h2>
     <form method="post" action="system/password">
       <label for="password_new">{{index .T "sys.password_new"}}</label>

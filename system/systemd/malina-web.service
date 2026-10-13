@@ -8,6 +8,9 @@ Type=simple
 ExecStart=/malina/usr/local/bin/malina-web -listen :80 -user malina -assets /malina/usr/local/share/malina/web
 Restart=always
 RestartSec=3
+# SNMP-агент (UDP 161) встроен в web — привилегия на порт <1024.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target

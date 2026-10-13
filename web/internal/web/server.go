@@ -3,7 +3,9 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,6 +22,7 @@ import (
 	"github.com/galiy/malina-26/web/internal/mailer"
 	"github.com/galiy/malina-26/web/internal/masternode"
 	"github.com/galiy/malina-26/web/internal/session"
+	"github.com/galiy/malina-26/web/internal/snmp"
 	"github.com/galiy/malina-26/web/internal/sysinfo"
 )
 
@@ -48,6 +51,9 @@ type Options struct {
 	EventsConfigPath string        // путь к events.json (менеджер событий)
 	EventsStatePath  string        // путь к состоянию правил (tmpfs)
 	EventsLogTag     string        // syslog-тег лога менеджера событий
+	SNMPPort         int           // UDP-порт SNMP-агента (161)
+	SNMPCommunity    string        // community агента (public)
+	SNMPMonitoring   string        // путь к настройке периодических трапов
 }
 
 // Server — HTTP-сервер.
@@ -76,7 +82,13 @@ type Server struct {
 
 	eventsPath   string
 	eventsEngine *events.Engine
+
+	snmpAgent      *snmp.Agent
+	monitoringPath string
 }
+
+// serverStart — момент старта процесса (аптайм для sysUpTime в trap).
+var serverStart = time.Now()
 
 // ctxKey — ключ контекста «запрос авторизован».
 type ctxKey struct{}
@@ -148,6 +160,15 @@ func New(o Options) (*Server, error) {
 	}
 	if o.EventsStatePath == "" {
 		o.EventsStatePath = events.DefaultStatePath
+	}
+	if o.SNMPPort == 0 {
+		o.SNMPPort = 161
+	}
+	if o.SNMPCommunity == "" {
+		o.SNMPCommunity = "public"
+	}
+	if o.SNMPMonitoring == "" {
+		o.SNMPMonitoring = DefaultMonitoringPath
 	}
 	// Источник строк — русский; недостающие ключи добираются из него.
 	bundle, err := i18n.Load(os.DirFS(o.AssetsDir), "i18n", "ru", o.Langs)
@@ -253,7 +274,8 @@ func New(o Options) (*Server, error) {
 
 		email: em,
 
-		eventsPath: o.EventsConfigPath,
+		eventsPath:     o.EventsConfigPath,
+		monitoringPath: o.SNMPMonitoring,
 	}, nil
 }
 
@@ -272,11 +294,30 @@ func (s *Server) startEvents() {
 	go s.eventsEngine.Run(context.Background())
 }
 
+// startSNMP запускает SNMP-агент (v2c, UDP) встроенно в web: тот же источник shm
+// и общий маппинг MIB с trap. Порт 161 — через CAP_NET_BIND_SERVICE в юните.
+// Ошибка запуска (порт занят/нет CAP) не валит веб — логируем (агент по
+// необходимости). Периодическая отправка трапов (runMonitoring) — независимая
+// функция, запускается отдельно в Run().
+func (s *Server) startSNMP() {
+	ag := snmp.NewAgent(fmt.Sprintf(":%d", s.opts.SNMPPort), s.opts.SNMPCommunity, webSnmpHandler{})
+	if err := ag.Start(); err != nil {
+		s.audit.Event("snmp_agent", map[string]any{"port": s.opts.SNMPPort, "result": "err", "error": err.Error()})
+		log.Printf("snmp-agent: не удалось стартовать (%v)", err)
+		return
+	}
+	s.snmpAgent = ag
+	s.audit.Event("snmp_agent", map[string]any{"port": s.opts.SNMPPort, "community": s.opts.SNMPCommunity, "result": "ok"})
+}
+
 // Run запускает HTTP-сервер.
 func (s *Server) Run() error {
 	s.email.Start()
 	defer s.email.Stop()
 	s.startEvents()
+	s.startSNMP()
+	// Периодическая отправка трапов — независимая от агента функция (§2.9).
+	go s.runMonitoring(context.Background())
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/logout", s.handleLogout)
@@ -308,6 +349,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/system/email/outbox", s.handleEmailOutbox)
 	mux.HandleFunc("/system/events", s.handleEvents)
 	mux.HandleFunc("/system/events/save", s.handleEventsSave)
+	mux.HandleFunc("/system/monitoring", s.handleSystemMonitoring)
 	mux.HandleFunc("/api/master/check_daemons", s.handleAPIMasterCheckDaemons)
 	mux.HandleFunc("/api/master/read_json", s.handleAPIMasterReadJSON)
 	mux.HandleFunc("/network", s.handleNetwork)

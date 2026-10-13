@@ -1189,5 +1189,13 @@
   "home.col.load": "Load",
   "home.col.panel": "Panels",
   "home.status.stale": "stale",
-  "home.status.lost": "lost"
+  "home.status.lost": "lost",
+  "sys.monitoring": "Monitoring",
+  "sys.monitoring_enable": "Enable periodic SNMP trap sending",
+  "sys.monitoring_ip": "Trap receiver IP",
+  "sys.monitoring_interval": "Period (seconds)",
+  "sys.monitoring_hint": "When enabled, SNMP traps are sent periodically (30…3600 s) to UDP 162 / public.",
+  "sys.msg.monitoring_ok": "Monitoring settings saved.",
+  "sys.err.monitoring_ip": "Enter a valid IPv4 receiver address.",
+  "sys.err.monitoring_interval": "Period must be an integer from 30 to 3600 seconds."
 }

@@ -1189,5 +1189,13 @@
   "home.col.load": "Нагрузка",
   "home.col.panel": "Панэлі",
   "home.status.stale": "састарэла",
-  "home.status.lost": "страчана"
+  "home.status.lost": "страчана",
+  "sys.monitoring": "Маніторынг",
+  "sys.monitoring_enable": "Уключыць перыядычную адпраўку SNMP-трапаў",
+  "sys.monitoring_ip": "IP прымальніка trap",
+  "sys.monitoring_interval": "Перыядычнасць (секунды)",
+  "sys.monitoring_hint": "Пры ўключэнні перыядычна (30…3600 с) адпраўляюцца SNMP-трапы на UDP 162 / public.",
+  "sys.msg.monitoring_ok": "Налады маніторынгу захаваны.",
+  "sys.err.monitoring_ip": "Пакажыце карэктны IPv4-адрас прымальніка.",
+  "sys.err.monitoring_interval": "Перыядычнасць — цэлы лік ад 30 да 3600 секунд."
 }

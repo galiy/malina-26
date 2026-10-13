@@ -1189,5 +1189,13 @@
   "home.col.load": "Жүктеме",
   "home.col.panel": "Панельдер",
   "home.status.stale": "ескірген",
-  "home.status.lost": "жоғалған"
+  "home.status.lost": "жоғалған",
+  "sys.monitoring": "Мониторинг",
+  "sys.monitoring_enable": "Периодты SNMP-траптар жіберуді қосу",
+  "sys.monitoring_ip": "Трап қабылдағышының IP",
+  "sys.monitoring_interval": "Кезеңділік (секунд)",
+  "sys.monitoring_hint": "Қосылғанда периодты түрде (30…3600 с) UDP 162 / public-ке SNMP-траптар жіберіледі.",
+  "sys.msg.monitoring_ok": "Мониторинг баптаулары сақталды.",
+  "sys.err.monitoring_ip": "Қабылдағыштың дұрыс IPv4 мекенжайын көрсетіңіз.",
+  "sys.err.monitoring_interval": "Кезеңділік — 30-ден 3600 секундқа дейінгі бүтін сан."
 }

@@ -231,6 +231,9 @@ func (a *eventsActions) MacCmd(serial, kind, cmd string) error {
 	return a.write(id, gen, []map[string]any{{"op": "cmd", "code": code}})
 }
 
-func (a *eventsActions) SNMPTrap(host, field string, value float64, mpptNo int) error {
-	return errNotImpl
+func (a *eventsActions) SNMPTrap(host, field string, value float64, mpptNo int, ok bool) error {
+	if host == "" {
+		return errors.New("не указан приёмник trap")
+	}
+	return sendEventTrap(host, field, value, mpptNo, ok)
 }

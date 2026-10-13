@@ -36,6 +36,9 @@ func main() {
 	emailKey := flag.String("email-key", envOr("MALINA_WEB_EMAIL_KEY", mailer.DefaultKeyPath), "путь к ключу шифрования секрета")
 	emailOutbox := flag.String("email-outbox", envOr("MALINA_WEB_EMAIL_OUTBOX", mailer.DefaultOutboxDir), "каталог аутбокса")
 	eventsState := flag.String("events-state", envOr("MALINA_WEB_EVENTS_STATE", events.DefaultStatePath), "путь к состоянию правил (tmpfs)")
+	snmpPort := flag.Int("snmp-port", 161, "UDP-порт SNMP-агента")
+	snmpCommunity := flag.String("snmp-community", "public", "community SNMP-агента")
+	snmpMonitoring := flag.String("snmp-monitoring", "/malina/etc/malina/snmp-monitoring.json", "путь к настройке периодических трапов")
 	flag.Parse()
 
 	var a auth.Authenticator
@@ -65,6 +68,10 @@ func main() {
 		EmailOutboxDir:  *emailOutbox,
 
 		EventsStatePath: *eventsState,
+
+		SNMPPort:       *snmpPort,
+		SNMPCommunity:  *snmpCommunity,
+		SNMPMonitoring: *snmpMonitoring,
 	})
 	if err != nil {
 		log.Fatalf("init: %v", err)

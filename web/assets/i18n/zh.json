@@ -1189,5 +1189,13 @@
   "home.col.load": "负载",
   "home.col.panel": "光伏板",
   "home.status.stale": "过期",
-  "home.status.lost": "离线"
+  "home.status.lost": "离线",
+  "sys.monitoring": "监控",
+  "sys.monitoring_enable": "启用周期性 SNMP 陷阱发送",
+  "sys.monitoring_ip": "陷阱接收方 IP",
+  "sys.monitoring_interval": "周期（秒）",
+  "sys.monitoring_hint": "启用后按周期（30…3600 秒）发送 SNMP 陷阱到 UDP 162 / public。",
+  "sys.msg.monitoring_ok": "监控设置已保存。",
+  "sys.err.monitoring_ip": "请输入有效的 IPv4 接收方地址。",
+  "sys.err.monitoring_interval": "周期需为 30 到 3600 秒之间的整数。"
 }

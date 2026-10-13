@@ -164,7 +164,8 @@ findmnt /malina                           # rw-раздел
   `/run/rsyslog-remote/remote.conf`, `/run/malina/resolv.conf`,
   `/run/logrotate.status`.
 - **Persistent — на rw `/malina`:** `/malina/etc/malina/network/{active,mode1.json,mode2.json}`,
-  `/malina/etc/malina/remote-syslog`.
+  `/malina/etc/malina/remote-syslog`, `/malina/etc/malina/snmp-monitoring.json`
+  (настройка периодической отправки SNMP-трапов «Мониторинг»).
   Имя хоста и часовой пояс хранятся **в `/etc`** (`/etc/hostname`, `/etc/timezone`,
   симлинк `/etc/localtime`), а не на `/malina`: применяются из UI через короткое
   rw-окно (`malina-rw run`: запись `/etc` → remount ro). В устойчивом состоянии

@@ -48,7 +48,7 @@ func (a *fakeAct) Email(subject, body, recipient string) error {
 }
 func (a *fakeAct) Relay(serial, kind string, relayNo int, on bool) error { return nil }
 func (a *fakeAct) MacCmd(serial, kind, cmd string) error                 { a.macs++; return nil }
-func (a *fakeAct) SNMPTrap(host, field string, value float64, mpptNo int) error {
+func (a *fakeAct) SNMPTrap(host, field string, value float64, mpptNo int, ok bool) error {
 	return nil
 }
 

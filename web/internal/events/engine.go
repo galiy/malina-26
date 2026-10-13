@@ -35,7 +35,10 @@ type Actions interface {
 	Email(subject, body, recipient string) error
 	Relay(serial, kind string, relayNo int, on bool) error
 	MacCmd(serial, kind, cmd string) error // mac_stop_gen|mac_stop|mac_start
-	SNMPTrap(host, field string, value float64, mpptNo int) error
+	// SNMPTrap отправляет v2c-trap. ok=false — фронт условия; ok=true — «Ok»
+	// (выход условия в норму; если у поля нет Ok-нотификации — действие разумно
+	// не отправлять, реализация сама отбивает).
+	SNMPTrap(host, field string, value float64, mpptNo int, ok bool) error
 }
 
 // LogFn — запись в лог (отдельный лог менеджера событий).
@@ -374,7 +377,7 @@ func (e *Engine) fire(r *Event, val float64, modeText string) {
 			s, k := e.targetDev(r)
 			err = e.act.MacCmd(s, k, "mac_start")
 		case "snmp":
-			err = e.act.SNMPTrap(r.TrapHost, r.Field, val, r.MPPTNo)
+			err = e.act.SNMPTrap(r.TrapHost, r.Field, val, r.MPPTNo, false)
 		}
 	}
 	e.logResult("fire", r, val, err)
@@ -406,6 +409,9 @@ func (e *Engine) ok(r *Event, val float64, sc uint32, _ string) {
 	if r.Action == "email" {
 		err = e.act.Email("Событие OK: "+evField(r),
 			fmt.Sprintf("Правило %s вернулось в норму.\n%s = %s", r.ID, evField(r), fmtVal(val, r)), r.Recipient)
+	} else if r.Action == "snmp" {
+		// «Ok»-trap при выходе условия в норму (если у поля есть Ok-нотификация).
+		err = e.act.SNMPTrap(r.TrapHost, r.Field, val, r.MPPTNo, true)
 	}
 	e.logResult("ok", r, val, err)
 }

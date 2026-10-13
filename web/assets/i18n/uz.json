@@ -1189,5 +1189,13 @@
   "home.col.load": "Юклама",
   "home.col.panel": "Панеллар",
   "home.status.stale": "ескирган",
-  "home.status.lost": "йўқолган"
+  "home.status.lost": "йўқолган",
+  "sys.monitoring": "Monitoring",
+  "sys.monitoring_enable": "Davriy SNMP-trap yuborishni yoqish",
+  "sys.monitoring_ip": "Trap qabul qiluvchi IP",
+  "sys.monitoring_interval": "Davriylik (soniya)",
+  "sys.monitoring_hint": "Yoqilganda davriy ravishda (30…3600 s) UDP 162 / public-ga SNMP-trap yuboriladi.",
+  "sys.msg.monitoring_ok": "Monitoring sozlamalari saqlandi.",
+  "sys.err.monitoring_ip": "Qabul qiluvchining toʻgʻri IPv4 manzilini kiriting.",
+  "sys.err.monitoring_interval": "Davriylik — 30 dan 3600 soniyagacha butun son."
 }

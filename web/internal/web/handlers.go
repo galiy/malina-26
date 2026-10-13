@@ -152,6 +152,7 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	data["Timezones"] = sysctl.ListTimezones()
 	data["RemoteSyslog"] = sysctl.RemoteSyslogSetting()
 	data["MapTimeSyncEnabled"] = timeSyncEnabled(s.opts.MapTimeSyncOff)
+	data["Monitoring"] = loadMonitoringConfigPath(s.opts.SNMPMonitoring)
 	lang := s.lang(r)
 	if ok := r.URL.Query().Get("ok"); ok != "" {
 		data["Ok"] = s.tr(lang, "sys.msg."+ok+"_ok")

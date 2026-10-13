@@ -1189,5 +1189,13 @@
   "home.col.load": "დატვირთვა",
   "home.col.panel": "პანელები",
   "home.status.stale": "მოძველებულია",
-  "home.status.lost": "დაკარგულია"
+  "home.status.lost": "დაკარგულია",
+  "sys.monitoring": "მონიტორინგი",
+  "sys.monitoring_enable": "პერიოდული SNMP-ტრაპების გაგზავნის ჩართვა",
+  "sys.monitoring_ip": "ტრაპის მიმღების IP",
+  "sys.monitoring_interval": "პერიოდულობა (წამები)",
+  "sys.monitoring_hint": "ჩართვისას პერიოდულად (30…3600 წმ) იგზავნება SNMP-ტრაპები UDP 162 / public-ზე.",
+  "sys.msg.monitoring_ok": "მონიტორინგის პარამეტრები შენახულია.",
+  "sys.err.monitoring_ip": "მიუთითეთ მიმღების სწორი IPv4 მისამართი.",
+  "sys.err.monitoring_interval": "პერიოდულობა — მთელი რიცხვი 30-დან 3600 წმ-მდე."
 }
