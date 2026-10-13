@@ -37,13 +37,11 @@ type MapInfo struct {
 	LastSeen     int64  `json:"last_seen"`
 }
 
-// SerialLabel — серийный номер с буквой (информационное поле).
+// SerialLabel — серийный номер для подписей, меню и заголовков: только число.
+// Буква серийника (SerialLetter) остаётся в бинарном контракте (docs/map-contract.md,
+// docs/map-reader.md), но в отображении и идентификации устройства не учитывается.
 func (m MapInfo) SerialLabel() string {
-	s := strconv.FormatUint(uint64(m.Serial), 10)
-	if m.SerialLetter != "" {
-		s += " " + m.SerialLetter
-	}
-	return s
+	return strconv.FormatUint(uint64(m.Serial), 10)
 }
 
 // modelNames — имена моделей МАП по-русски (fallback, см. docs/map.md).

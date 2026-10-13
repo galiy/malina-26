@@ -126,7 +126,8 @@
   присутствия.
 - `map-list` (внешний API) читается из блока списка: `id`, `gen`, `port`,
   `protocol`, `baud`, `model`, `unit`, `serial`, `serial_letter`, `state`,
-  `last_seen`.
+  `last_seen`. `serial_letter` сохраняется в контракте, но потребители (UI, меню,
+  заголовки, сопоставление устройства) его не используют — там только `serial`.
 
 ## Прочее
 

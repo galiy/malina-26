@@ -12,7 +12,7 @@ import (
 )
 
 // legacyService — фоновый расчёт снимка read_json.php?device=map.
-// Состояние только в памяти; выбор МАП — по серийнику.
+// Состояние только в памяти; выбор МАП — по числовому серийнику (буква не учитывается).
 // Запись legacy-API идёт через этот же модуль: команда ставится в очередь и
 // исполняется в основном цикле (run), затем снимок и память пересобираются сразу.
 type legacyService struct {
@@ -32,7 +32,6 @@ type legacyService struct {
 
 	selected  bool
 	selSerial uint16
-	selLetter byte
 	lostSince int64
 }
 
@@ -133,17 +132,17 @@ func groupOps(ops []map[string]any) [][]map[string]any {
 	return reqs
 }
 
-// targetID — МАП, за которым закреплён legacy-модуль (по серийнику). Если
-// привязки нет — false (писать некуда).
+// targetID — МАП, за которым закреплён legacy-модуль (по числовому серийнику;
+// буква серийника не учитывается). Если привязки нет — false (писать некуда).
 func (ls *legacyService) targetID() (int, uint64, bool) {
 	ls.mu.RLock()
-	sel, ser, letter := ls.selected, ls.selSerial, ls.selLetter
+	sel, ser := ls.selected, ls.selSerial
 	ls.mu.RUnlock()
 	if !sel {
 		return 0, 0, false
 	}
 	for _, m := range loadMapList().Maps {
-		if m.Serial == ser && letterByte(m.SerialLetter) == letter {
+		if m.Serial == ser {
 			return m.ID, m.Gen, true
 		}
 	}
@@ -219,7 +218,7 @@ func (ls *legacyService) available() bool {
 func (ls *legacyService) pick(ml MapList, now int64) int {
 	if ls.selected {
 		for _, m := range ml.Maps {
-			if m.Serial == ls.selSerial && letterByte(m.SerialLetter) == ls.selLetter {
+			if m.Serial == ls.selSerial {
 				return m.ID
 			}
 		}
@@ -245,15 +244,7 @@ func (ls *legacyService) pick(ml MapList, now int64) int {
 func (ls *legacyService) adopt(m MapInfo) {
 	ls.selected = true
 	ls.selSerial = m.Serial
-	ls.selLetter = letterByte(m.SerialLetter)
 	ls.lostSince = 0
-}
-
-func letterByte(s string) byte {
-	if s == "" {
-		return 0
-	}
-	return s[0]
 }
 
 func (ls *legacyService) snapshot() []byte {

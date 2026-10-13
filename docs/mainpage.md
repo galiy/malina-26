@@ -213,7 +213,8 @@ func mvND() mainValue                   // нет данных (nd=true)
   `Модель · серийник · порт · скорость`. Имя модели берётся из перевода `tr`
   (ключ `model.<буква>`: `T`→«Титанатор»/Titanator, `D`→«Доминатор»/Dominator,
   `H`→«Гибрид»/Hybrid, `P`→Pro; fallback — русский `modelNames`); серийник =
-  `SerialLabel()` = «число + буква». `tr` — переводы языка страницы (`s.trFor(r)`
+  `SerialLabel()` = «число» (буква серийника в подписях не используется).
+  `tr` — переводы языка страницы (`s.trFor(r)`
   / `s.bundle.Translations(s.lang(r))`).
 - **КЭС** — `k.MenuLabel(tr)` (`web/internal/web/kesapi.go:160`):
   `КЭС · серийник · порт · скорость`, где «КЭС» — ключ `kes.dev` из перевода

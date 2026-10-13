@@ -89,7 +89,7 @@ func maybeSyncTime(cfg *config, reg *Registry, p *Port, proto string, entries []
 	model, sn := "", ""
 	if e.info != nil {
 		model = e.info.Model
-		sn = fmt.Sprintf("sn=%d%s", e.info.Serial, string(rune(e.info.SerialLetter)))
+		sn = fmt.Sprintf("sn=%d", e.info.Serial)
 	}
 	tag := fmt.Sprintf("slot=%d port=%s unit=%d model=%s %s", e.slotIdx, e.port, e.unit, model, sn)
 	if resp.OK {

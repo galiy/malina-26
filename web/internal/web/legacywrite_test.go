@@ -121,6 +121,16 @@ func TestMenuLabel(t *testing.T) {
 	if got := tt.MenuLabel(ru); !strings.HasPrefix(got, "Титанатор · ") {
 		t.Fatalf("метка Титанатора: %q", got)
 	}
+	// Буква серийника в подписях не участвует — только число.
+	if got := d.SerialLabel(); got != "37005" {
+		t.Fatalf("SerialLabel Доминатора: %q, ожидалось \"37005\"", got)
+	}
+	if got := tt.SerialLabel(); got != "51510" {
+		t.Fatalf("SerialLabel Титанатора: %q, ожидалось \"51510\"", got)
+	}
+	if strings.Contains(tt.MenuLabel(ru), "51510 a") {
+		t.Fatalf("буква серийника не должна попадать в метку: %q", tt.MenuLabel(ru))
+	}
 	// Локализация: английский перевод модели подменяет русский fallback.
 	en := map[string]string{"model.T": "Titanator"}
 	if got := tt.MenuLabel(en); !strings.HasPrefix(got, "Titanator · ") {
@@ -130,5 +140,23 @@ func TestMenuLabel(t *testing.T) {
 	u := MapInfo{Model: "?", Baud: 9600, Port: "/dev/ttyS0", Serial: 1}
 	if strings.HasPrefix(u.MenuLabel(ru), " · ") || !strings.HasPrefix(u.MenuLabel(ru), "1") {
 		t.Fatalf("метка неизвестной модели: %q", u.MenuLabel(ru))
+	}
+}
+
+// TestLegacyPickIgnoresLetter — привязка legacy-модуля к МАП идёт по числовому
+// серийнику; буква серийника при выборе/сопоставлении не учитывается.
+func TestLegacyPickIgnoresLetter(t *testing.T) {
+	ls := newLegacyService("/nonexistent")
+	ls.selected = true
+	ls.selSerial = 100
+	// Тот же номер, но другая буква — всё равно подобран.
+	ml := MapList{Maps: []MapInfo{{ID: 3, Serial: 100, SerialLetter: "z"}}}
+	if got := ls.pick(ml, 1000); got != 3 {
+		t.Fatalf("pick по числу (буква игнорируется): got %d, want 3", got)
+	}
+	// Другой номер — ждём возврата того же (lostSince только что установлен).
+	ml2 := MapList{Maps: []MapInfo{{ID: 4, Serial: 200, SerialLetter: "a"}}}
+	if got := ls.pick(ml2, 1000); got != -1 {
+		t.Fatalf("pick чужого номера: got %d, want -1 (ждём тот же серийник)", got)
 	}
 }

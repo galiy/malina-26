@@ -60,8 +60,8 @@ func newScanner(cfg *config, reg *Registry, stop chan struct{}, wg *sync.WaitGro
 				return false
 			}
 			for _, e := range entries {
-				log.Printf("МАП найден: %s unit=%d протокол=%s baud=%d модель=%s serial=%d%c (слот %d)",
-					p.Path(), e.unit, fd.proto, fd.baud, e.info.Model, e.info.Serial, e.info.SerialLetter, e.slotIdx)
+				log.Printf("МАП найден: %s unit=%d протокол=%s baud=%d модель=%s serial=%d (слот %d)",
+					p.Path(), e.unit, fd.proto, fd.baud, e.info.Model, e.info.Serial, e.slotIdx)
 			}
 			wg.Add(1)
 			go func() {

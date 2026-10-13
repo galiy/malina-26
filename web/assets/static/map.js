@@ -107,8 +107,8 @@
   }
   function serialOf(f) {
     if (SERIAL) { return SERIAL; }
-    var s0 = f["SerialNum0"], s1 = f["SerialNum1"], s3 = f["SerialNum3"];
-    if (typeof s0 === "number" && typeof s1 === "number") { var n = String(s0 + s1 * 256); if (s3) { n += " " + String.fromCharCode(s3); } return n; }
+    var s0 = f["SerialNum0"], s1 = f["SerialNum1"];
+    if (typeof s0 === "number" && typeof s1 === "number") { return String(s0 + s1 * 256); }
     return "—";
   }
 
