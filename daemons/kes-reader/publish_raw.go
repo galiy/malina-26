@@ -10,6 +10,9 @@ import (
 // statsink — модуль сохранения сырья (raw-tsdb); nil, если не настроен.
 var statsink *stat.Sink
 
+// tsreg — реестр контрактов, создаётся один раз (не в горячем пути опроса).
+var tsreg = tscontract.NewDefaultRegistry()
+
 func initStatsink(sock string) {
 	if sock == "" {
 		return
@@ -23,7 +26,7 @@ func publishRaw(serial uint16, t int64, d KesData) {
 	if statsink == nil {
 		return
 	}
-	c, ok := tscontract.NewDefaultRegistry().Get("kes", 1)
+	c, ok := tsreg.Get("kes", 1)
 	if !ok {
 		return
 	}

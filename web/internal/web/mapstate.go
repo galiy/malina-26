@@ -2,7 +2,6 @@ package web
 
 import (
 	"encoding/binary"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -83,7 +82,7 @@ type MapList struct {
 
 func loadMapList() MapList {
 	ml := MapList{Maps: []MapInfo{}, Updated: time.Now().Unix()}
-	data, err := os.ReadFile(mapShmPath)
+	data, err := readShmAt(mapShmPath, 0, int64(mapShmHeader+mapShmSlots*mapListItemLen))
 	if err != nil || len(data) < mapShmHeader {
 		return ml
 	}
@@ -144,15 +143,11 @@ func mapRawPayload(id int) []byte {
 	if id < 0 || id >= mapShmSlots {
 		return nil
 	}
-	data, err := os.ReadFile(mapShmPath)
-	if err != nil || len(data) < mapShmHeader {
+	off := int64(mapShmHeader + mapShmSlots*mapListItemLen + id*mapSlotSize)
+	slot, err := readShmAt(mapShmPath, off, int64(mapSlotSize))
+	if err != nil {
 		return nil
 	}
-	off := mapShmHeader + mapShmSlots*mapListItemLen + id*mapSlotSize
-	if off+mapSlotSize > len(data) {
-		return nil
-	}
-	slot := data[off : off+mapSlotSize]
 	if binary.LittleEndian.Uint32(slot[0:4]) != 1 { // state
 		return nil
 	}

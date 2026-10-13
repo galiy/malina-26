@@ -33,7 +33,10 @@ func publishRaw(serial uint16, t int64, mem memMap) {
 	}
 }
 
-func registry() *tscontract.Registry { return tscontract.NewDefaultRegistry() }
+// tsreg — реестр контрактов, создаётся один раз (не в горячем пути опроса).
+var tsreg = tscontract.NewDefaultRegistry()
+
+func registry() *tscontract.Registry { return tsreg }
 
 // buildMapV1 собирает payload контракта `map` v1 (26 полей, docs/stat.md) из
 // карты памяти МАП. Присутствуют только прочитанные ячейки (presence — по ним).

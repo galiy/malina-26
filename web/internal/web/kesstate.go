@@ -59,9 +59,23 @@ type KesList struct {
 	Kes     []KesInfo `json:"kes"`
 }
 
+// readShmAt читает size байт с offset из shm-файла, не читая весь сегмент.
+func readShmAt(path string, off, size int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	b := make([]byte, size)
+	if _, err := f.ReadAt(b, off); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 func loadKesList() KesList {
 	kl := KesList{Kes: []KesInfo{}, Updated: time.Now().Unix()}
-	data, err := os.ReadFile(kesShmPath)
+	data, err := readShmAt(kesShmPath, 0, int64(kesShmHeader+kesSlots*kesListItemLen))
 	if err != nil || len(data) < kesShmHeader {
 		return kl
 	}
@@ -105,15 +119,11 @@ func kesRawPayload(id int) []byte {
 	if id < 0 || id >= kesSlots {
 		return nil
 	}
-	data, err := os.ReadFile(kesShmPath)
-	if err != nil || len(data) < kesShmHeader {
+	off := int64(kesShmHeader + kesSlots*kesListItemLen + id*kesSlotSize)
+	slot, err := readShmAt(kesShmPath, off, int64(kesSlotSize))
+	if err != nil {
 		return nil
 	}
-	off := kesShmHeader + kesSlots*kesListItemLen + id*kesSlotSize
-	if off+kesSlotSize > len(data) {
-		return nil
-	}
-	slot := data[off : off+kesSlotSize]
 	if binary.LittleEndian.Uint32(slot[0:4]) != 1 { // state
 		return nil
 	}

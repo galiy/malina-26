@@ -34,7 +34,9 @@ func serveDevice(d *Device, master io.ReadWriteCloser, stop <-chan struct{}) {
 		master.Close()
 	}()
 
-	buf := make([]byte, 1)
+	// Пакетное чтение (пачка до 64 Б за один read) — меньше syscall; побайтовая
+	// обработка/эхо сохранены (протокол не меняем).
+	buf := make([]byte, 64)
 	frame := make([]byte, 0, 64)
 	// sent — хвост последнего ответа, чьё эхо может прислать клиент. Сверяем побайтно:
 	// если пришёл ожидаемый байт — это эхо (игнор), иначе это новый запрос. Так работает
@@ -42,44 +44,46 @@ func serveDevice(d *Device, master io.ReadWriteCloser, stop <-chan struct{}) {
 	var sent []byte
 	for {
 		n, err := master.Read(buf)
-		if n == 1 {
-			b := buf[0]
-			if len(sent) > 0 && b == sent[0] {
-				sent = sent[1:]
-				wiref('e', b)
-				continue
-			}
-			sent = nil
-			wiref('R', b)
-			_, _ = master.Write([]byte{b}) // эхо запроса
-			if b == 0x0A {
-				req, perr := microart.ParseRequestFrame(frame)
-				frame = frame[:0]
-				var reply []byte
-				if perr != nil {
-					reply = microart.BuildErrorReply(0x01) // ErrRS_sum
+		if n > 0 {
+			for i := 0; i < n; i++ {
+				b := buf[i]
+				if len(sent) > 0 && b == sent[0] {
+					sent = sent[1:]
+					wiref('e', b)
+					continue
+				}
+				sent = nil
+				wiref('R', b)
+				_, _ = master.Write([]byte{b}) // эхо запроса
+				if b == 0x0A {
+					req, perr := microart.ParseRequestFrame(frame)
+					frame = frame[:0]
+					var reply []byte
+					if perr != nil {
+						reply = microart.BuildErrorReply(0x01) // ErrRS_sum
+					} else {
+						reply = d.handle(req)
+					}
+					for _, rb := range reply {
+						wiref('T', rb)
+					}
+					if _, werr := master.Write(reply); werr != nil {
+						return
+					}
+					sent = reply
+					continue
+				}
+				if len(frame) < 512 {
+					frame = append(frame, b)
 				} else {
-					reply = d.handle(req)
+					frame = frame[:0] // защита от мусора
 				}
-				for _, rb := range reply {
-					wiref('T', rb)
-				}
-				if _, werr := master.Write(reply); werr != nil {
-					return
-				}
-				sent = reply
-				continue
-			}
-			if len(frame) < 512 {
-				frame = append(frame, b)
-			} else {
-				frame = frame[:0] // защита от мусора
 			}
 		}
 		if err != nil {
 			// Нет открытого slave → master отдаёт EIO/EOF: это не смерть, ждём клиента.
 			if err == io.EOF || err == syscall.EIO {
-				time.Sleep(10 * time.Millisecond)
+				time.Sleep(50 * time.Millisecond) // реже поллим в простое
 				continue
 			}
 			return

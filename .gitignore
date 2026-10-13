@@ -4,3 +4,9 @@ AGENTS.md
 archive/
 disasm/
 /tsdb
+/kes-emu
+/malina-web
+/malina-netd
+/map-reader
+/kes-reader
+/malina-tsdb

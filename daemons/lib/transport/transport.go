@@ -246,21 +246,51 @@ func (p *Port) ReadOne(deadline time.Time) (byte, bool) {
 }
 
 // ReadUntilNL читает байты до первого '\n' (включительно) или дедлайна.
-// Если echo=true — каждый принятый байт возвращается эхом в порт (Микроарт).
+// Микроарт: при echo=true принятые байты возвращаются эхом в порт.
+//
+// Оптимизация обмена (протокол не изменён): чтение — ПАКЕТНОЕ (один syscall.Read
+// на доступную пачку до 64 байт), эхо — ОДНИМ WriteAll на пачку до '\n'
+// включительно. Устраняет syscall на каждый байт. Байты после '\n' в прочитанной
+// пачке игнорируются — их сбросит Flush() в начале следующего запроса.
 func (p *Port) ReadUntilNL(deadline time.Time, max int, echo bool) ([]byte, bool) {
+	if p.fd < 0 {
+		return nil, false
+	}
 	out := make([]byte, 0, max)
+	// окна МАП/КЭС небольшие — пачка 64 Б с запасом покрывает ответ целиком,
+	// дальнейшее увеличение буфера профита не даёт (проверено).
+	var buf [64]byte
 	for len(out) < max {
-		b, ok := p.ReadOne(deadline)
-		if !ok {
+		if !time.Now().Before(deadline) {
 			return out, false
 		}
-		if echo {
-			_ = p.WriteAll([]byte{b})
+		want := len(buf)
+		if r := max - len(out); r < want {
+			want = r
 		}
-		out = append(out, b)
-		if b == 0x0A {
-			return out, true
+		n, err := syscall.Read(p.fd, buf[:want])
+		if n > 0 {
+			// эхо — одним write на всю принятую пачку до '\n' включительно
+			end, hasNL := n, false
+			for i := 0; i < n; i++ {
+				if buf[i] == 0x0A {
+					end, hasNL = i+1, true
+					break
+				}
+			}
+			if echo {
+				_ = p.WriteAll(buf[:end])
+			}
+			out = append(out, buf[:end]...)
+			if hasNL {
+				return out, true
+			}
+			continue
 		}
+		if err != nil && err != syscall.EINTR && err != syscall.EAGAIN && err != syscall.EWOULDBLOCK {
+			return out, false
+		}
+		time.Sleep(time.Millisecond)
 	}
 	return out, false
 }

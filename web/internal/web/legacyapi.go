@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -33,6 +32,7 @@ type legacyService struct {
 	selected  bool
 	selSerial uint16
 	lostSince int64
+	lastTick  int64 // троттл ленивого обновления снимка (unix sec)
 }
 
 // legacyWriteJob — команда записи из legacy-API в основной цикл модуля.
@@ -52,19 +52,31 @@ func newLegacyService(sock string) *legacyService {
 	return ls
 }
 
+// run обслуживает ТОЛЬКО команды записи; снимок обновляется ЛЕНИВО по запросу
+// API (refresh) — фоновый тик 1/с убран, нагрузка возникает лишь при обращениях.
 func (ls *legacyService) run() {
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
 	for {
 		select {
 		case <-ls.stop:
 			return
 		case job := <-ls.cmds:
 			ls.doWrite(job) // запись + немедленное перечитывание
-		case <-t.C:
-			ls.tick()
 		}
 	}
+}
+
+// ensureFresh обновляет снимок не чаще 1 раза в секунду (лениво, по запросу API);
+// результат эквивалентен прежнему фоновому тику раз в секунду.
+func (ls *legacyService) ensureFresh() {
+	now := time.Now().Unix()
+	ls.mu.Lock()
+	if now == ls.lastTick {
+		ls.mu.Unlock()
+		return
+	}
+	ls.lastTick = now
+	ls.mu.Unlock()
+	ls.tick()
 }
 
 // stopLoop останавливает основной цикл (для тестов/останова).
@@ -200,6 +212,7 @@ func (ls *legacyService) tick() {
 // memory — копия образа памяти под защитой (чтобы не читать регионы во время
 // пересборки в цикле).
 func (ls *legacyService) memory() []byte {
+	ls.ensureFresh()
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 	out := make([]byte, len(ls.mem))
@@ -209,6 +222,7 @@ func (ls *legacyService) memory() []byte {
 
 // available — есть ли найденный МАП или сохранённое состояние (для check_daemons).
 func (ls *legacyService) available() bool {
+	ls.ensureFresh()
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 	return ls.active || ls.haveState
@@ -248,6 +262,7 @@ func (ls *legacyService) adopt(m MapInfo) {
 }
 
 func (ls *legacyService) snapshot() []byte {
+	ls.ensureFresh()
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 	return ls.snap
@@ -282,7 +297,7 @@ func countKesInShm(data []byte) int {
 
 // presentKesCount — число присутствующих КЭС (из kes-list живого сегмента shm).
 func presentKesCount() int {
-	data, err := os.ReadFile(kesShmPath)
+	data, err := readShmAt(kesShmPath, 0, int64(kesShmHeader+kesSlots*kesListItemLen))
 	if err != nil {
 		return 0
 	}

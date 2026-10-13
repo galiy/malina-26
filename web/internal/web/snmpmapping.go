@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/galiy/malina-26/web/internal/mapmode"
 	"github.com/galiy/malina-26/web/internal/snmp"
@@ -257,9 +259,28 @@ func byteField(v byte) string {
 	return "U"
 }
 
-// snmpView — объединённая карта «OID → значение» для агента (МАП «первый» + КЭС
-// 1..4 по списку). Строится лениво из актуального снимка shm.
+// snmpView — кэш объединённой карты «OID → значение» (TTL 1 c). SNMP-обход
+// (GetNext по каждому OID) не должен пересобирать карту на каждый запрос.
+var (
+	snmpCacheMu  sync.Mutex
+	snmpCacheMap map[string]snmp.Value
+	snmpCacheAt  time.Time
+)
+
 func snmpView() map[string]snmp.Value {
+	snmpCacheMu.Lock()
+	defer snmpCacheMu.Unlock()
+	if snmpCacheMap != nil && time.Since(snmpCacheAt) < time.Second {
+		return snmpCacheMap
+	}
+	snmpCacheMap = buildSnmpView()
+	snmpCacheAt = time.Now()
+	return snmpCacheMap
+}
+
+// buildSnmpView собирает карту «OID → значение» (МАП «первый» + КЭС 1..4) из
+// актуального снимка shm.
+func buildSnmpView() map[string]snmp.Value {
 	out := map[string]snmp.Value{}
 	// «первый» МАП в списке (порядок слота map-list) — ограничение «1 МАП на хост».
 	if m, ok := firstMap(); ok {

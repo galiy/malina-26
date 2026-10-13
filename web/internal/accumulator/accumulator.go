@@ -13,6 +13,9 @@ import (
 	"github.com/galiy/malina-26/daemons/lib/tsdbclient"
 )
 
+// reg — реестр контрактов, создаётся один раз (не в горячем пути усреднения).
+var reg = tscontract.NewDefaultRegistry()
+
 // Config — настройка аккумулятора (страница «Параметры системы»).
 type Config struct {
 	Enabled   bool `json:"enabled"`
@@ -114,7 +117,7 @@ func Average(typ string, version uint16, samples []Sample) (Result, bool) {
 	}
 	samples = append([]Sample(nil), samples...)
 	sort.Slice(samples, func(i, j int) bool { return samples[i].Time < samples[j].Time })
-	c, ok := tscontract.NewDefaultRegistry().Get(typ, version)
+	c, ok := reg.Get(typ, version)
 	if !ok {
 		return Result{}, false
 	}
@@ -259,15 +262,19 @@ func Run(rawRoot, rawSock, avgSock, cfgPath string, logf func(string, ...any)) {
 		now := time.Now()
 		windowEnd := now.Truncate(period) // конец прошедшего окна
 		fire := windowEnd.Add(5 * time.Second)
-		if fire.After(now) { // старт через 5 c после границы
+		if fire.After(now) { // старт обработки через 5 c после границы
 			time.Sleep(time.Until(fire))
 		}
-		if !cfg.Enabled {
-			continue
+		if cfg.Enabled {
+			from := windowEnd.Add(-period).UnixMilli()
+			to := windowEnd.UnixMilli()
+			processWindow(raw, avg, rawRoot, from, to, logf)
 		}
-		from := windowEnd.Add(-period).UnixMilli()
-		to := windowEnd.UnixMilli()
-		processWindow(raw, avg, rawRoot, from, to, logf)
+		// ждать до границы следующего окна (+5 c) — без busy-loop
+		next := windowEnd.Add(period).Add(5 * time.Second)
+		if d := time.Until(next); d > 0 {
+			time.Sleep(d)
+		}
 	}
 }
 
@@ -280,7 +287,7 @@ func processWindow(raw, avg *tsdbclient.Client, rawRoot string, from, to int64, 
 		// группировка по версии контракта
 		byVer := map[uint16][]Sample{}
 		for _, r := range rows {
-			c, ok := tscontract.NewDefaultRegistry().Get(dev.Type, r.Version)
+			c, ok := reg.Get(dev.Type, r.Version)
 			if !ok {
 				continue
 			}
