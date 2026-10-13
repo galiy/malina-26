@@ -228,8 +228,9 @@ a.brand { display: flex; align-items: center; gap: 8px; font-weight: 500; color:
 .flash.err { background: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
 .sysforms {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
+  align-items: start;
 }
 .card form label { display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
 .card form input {
