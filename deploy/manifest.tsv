@@ -32,3 +32,5 @@ system/systemd/malina-net-fallback.timer	/etc/systemd/system/malina-net-fallback
 daemons/map-reader/map-reader.service	/etc/systemd/system/map-reader.service	0644	always
 daemons/kes-reader/kes-reader.service	/etc/systemd/system/kes-reader.service	0644	always
 system/systemd/map-reader.service.d/sim.conf	/etc/systemd/system/map-reader.service.d/sim.conf	0644	always
+system/redis/malina.conf	/etc/malina/redis.conf	0644	always
+system/systemd/redis-server.service.d/malina.conf	/etc/systemd/system/redis-server.service.d/malina.conf	0644	always

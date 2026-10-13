@@ -7,3 +7,4 @@ dnsmasq
 nftables
 isc-dhcp-client
 gcc
+redis-server

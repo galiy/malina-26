@@ -49,6 +49,9 @@
   секреты маскируются (см. `docs/api-auth.md`).
 - **Наблюдаемость**: rsyslog + пересылка на удалённый syslog (DHCP опция 7 или
   ручной хост).
+- **Кэш телеметрии**: Redis 7 (in-memory, без персиста, лимит 200 МБ,
+  `allkeys-lru`), доступ по loopback; конфиг `system/redis/malina.conf` →
+  `/etc/malina/redis.conf` (см. `docs/redis-cache.md`).
 
 ## Сборка и установка (кратко)
 

@@ -23,7 +23,8 @@
   остаётся (жёсткая зависимость `raspi-config`) и маскируется; `x11-common` в
   образе нет; `nfs-common` оставлен.
 - Из Lite удалены `avahi-daemon`, `triggerhappy`, `dphys-swapfile`.
-- Добавлен `mc`.
+- Добавлены `mc` и `redis-server` (in-memory кэш телеметрии, конфиг —
+  `system/redis/malina.conf`, см. `docs/redis-cache.md`).
 - **watchdog**: аппаратный сторож `bcm2835_wdt` включается через systemd
   (`RuntimeWatchdogSec=15s`, файл `system/systemd/watchdog.conf`); отдельный пакет
   `watchdog` не нужен. Пакет `snmpd` — не входит, доставляется позже.
@@ -33,7 +34,8 @@
 - `config` — конфиг pi-gen.
 - `stage-malina/` — кастомный стейдж:
   - `00-packages` — пакеты проекта из репозиториев (`mc`, `rsyslog`, `iw`,
-    `rfkill`, `hostapd`, `dnsmasq`, `nftables`, `isc-dhcp-client`, `gcc`) и
+    `rfkill`, `hostapd`, `dnsmasq`, `nftables`, `isc-dhcp-client`, `gcc`,
+    `redis-server`) и
     `01-run-chroot.sh` — `apt update && apt upgrade` до текущего состояния
     публичных репо. **Кастомные артефакты проекта (бинарники/юниты/ассеты
     `malina-*`) в образ НЕ добавляются** — они восстанавливаются из репозитория
