@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/galiy/malina-26/web/internal/accumulator"
@@ -83,9 +87,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("init: %v", err)
 	}
-	go accumulator.Run(*rawRoot, *rawSock, *avgSock, *accCfg, log.Printf)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	var accWG sync.WaitGroup
+	accWG.Add(1)
+	go func() {
+		defer accWG.Done()
+		accumulator.Run(ctx, *rawRoot, *rawSock, *avgSock, *accCfg, log.Printf)
+	}()
+
 	log.Printf("malina-web listening on %s (user=%s)", *listen, *user)
-	if err := srv.Run(); err != nil {
-		log.Fatalf("server: %v", err)
+	if err := srv.Run(ctx); err != nil {
+		log.Printf("server: %v", err)
 	}
+	log.Printf("остановка: завершаем аккумулятор…")
+	accWG.Wait()
+	log.Printf("stopped")
 }

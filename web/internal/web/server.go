@@ -315,7 +315,7 @@ func (s *Server) startSNMP() {
 }
 
 // Run запускает HTTP-сервер.
-func (s *Server) Run() error {
+func (s *Server) Run(ctx context.Context) error {
 	s.email.Start()
 	defer s.email.Stop()
 	s.startEvents()
@@ -390,7 +390,17 @@ func (s *Server) Run() error {
 		Handler:           cleanSlashes(s.authMiddleware(mux)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	return srv.ListenAndServe()
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.ListenAndServe() }()
+	select {
+	case <-ctx.Done(): // graceful: дренаж активных соединений
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutCtx)
+		return nil
+	case err := <-errCh:
+		return err
+	}
 }
 
 // pathOnly убирает схему/хост (http://, https://) — оставляем только путь.

@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -44,11 +45,15 @@ func main() {
 			log.Fatalf("status: %v", err)
 		}
 	case "monitor":
-		if err := monitor(); err != nil {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		if err := monitor(ctx); err != nil {
 			log.Fatalf("monitor: %v", err)
 		}
 	case "wifi-watch":
-		if err := wifiWatch(); err != nil {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		if err := wifiWatch(ctx); err != nil {
 			log.Fatalf("wifi-watch: %v", err)
 		}
 	case "probe":
@@ -61,6 +66,18 @@ func main() {
 		}
 	default:
 		log.Fatalf("unknown command %q", os.Args[1])
+	}
+}
+
+// sleepCtx спит d; false — если контекст отменён (graceful stop).
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
 	}
 }
 
@@ -354,9 +371,13 @@ func wifiApApply(on bool, m netcfg.Mode1) {
 
 // wifiWatch — сторожевой цикл: держит AP в соответствии с carrier(eth0).
 // Debounce: смена состояния только после 3 подряд одинаковых замеров.
-func wifiWatch() error {
+func wifiWatch(ctx context.Context) error {
 	last, stable := wifiApState() == "on", 0
 	for {
+		if ctx.Err() != nil {
+			log.Printf("wifi-watch: остановка")
+			return nil
+		}
 		m := netcfg.LoadMode1()
 		if !m.WifiOffOnEth {
 			log.Printf("wifi-watch: флаг выключен — выход")
@@ -375,7 +396,10 @@ func wifiWatch() error {
 		} else {
 			last, stable = desired, 1
 		}
-		time.Sleep(4 * time.Second)
+		if !sleepCtx(ctx, 4*time.Second) {
+			log.Printf("wifi-watch: остановка")
+			return nil
+		}
 	}
 }
 
@@ -486,10 +510,14 @@ func dhcpOff() {
 
 // monitor — активный зонд раз в 2 минуты: чужой DHCP → глушим наш;
 // повторное включение Serving — только после ≥2 подряд «чистых» проверок.
-func monitor() error {
+func monitor(ctx context.Context) error {
 	log.Printf("monitor: started (interval 2m, re-arm after >=2 clean probes)")
 	cleanCount := 0
 	for {
+		if ctx.Err() != nil {
+			log.Printf("monitor: остановка")
+			return nil
+		}
 		mode := activeMode()
 		m := netcfg.LoadMode2()
 		if mode == "mode2" && m.Serve {
@@ -524,7 +552,10 @@ func monitor() error {
 				_ = writeFile(filepath.Join(runDir, "monitor.state"), string(st), 0o644)
 			}
 		}
-		time.Sleep(2 * time.Minute)
+		if !sleepCtx(ctx, 2*time.Minute) {
+			log.Printf("monitor: остановка")
+			return nil
+		}
 	}
 }
 

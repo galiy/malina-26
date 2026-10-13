@@ -4,6 +4,7 @@
 package accumulator
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"sort"
@@ -247,10 +248,24 @@ func enumerateRaw(root string) []Dev {
 	return out
 }
 
-// Run — цикл аккумулятора: по календарным окнам (кратным периоду, старт +5 c)
-// читает raw за прошедшее окно, усредняет и пишет в avg. Настройка (вкл/период)
-// перечитывается перед каждым тиком; ошибки не роняют процесс.
-func Run(rawRoot, rawSock, avgSock, cfgPath string, logf func(string, ...any)) {
+// sleepCtx спит d; возвращает false, если контекст отменён (graceful stop).
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+// Run — цикл аккумулятора: по календарным окнам (кратным периоду) читает raw за
+// прошедшее окно, усредняет и пишет в avg. Окно обработки — строго через
+// [5, 10] c после границы окна: не раньше +5 c и не позже +10 c; если проснулись
+// позже (задержка/сон) — устаревшее окно НЕ догоняем. Настройка (вкл/период)
+// перечитывается перед каждым тиком. Завершается по ctx.
+func Run(ctx context.Context, rawRoot, rawSock, avgSock, cfgPath string, logf func(string, ...any)) {
 	raw := tsdbclient.New(rawSock)
 	avg := tsdbclient.New(avgSock)
 	for {
@@ -262,10 +277,14 @@ func Run(rawRoot, rawSock, avgSock, cfgPath string, logf func(string, ...any)) {
 		now := time.Now()
 		windowEnd := now.Truncate(period) // конец прошедшего окна
 		fire := windowEnd.Add(5 * time.Second)
-		if fire.After(now) { // старт обработки через 5 c после границы
-			time.Sleep(time.Until(fire))
+		deadline := windowEnd.Add(10 * time.Second)
+		if now.Before(fire) {
+			if !sleepCtx(ctx, time.Until(fire)) {
+				return
+			}
 		}
-		if cfg.Enabled {
+		now = time.Now()
+		if cfg.Enabled && !now.After(deadline) { // только в окне [fire, deadline]
 			from := windowEnd.Add(-period).UnixMilli()
 			to := windowEnd.UnixMilli()
 			processWindow(raw, avg, rawRoot, from, to, logf)
@@ -273,15 +292,26 @@ func Run(rawRoot, rawSock, avgSock, cfgPath string, logf func(string, ...any)) {
 		// ждать до границы следующего окна (+5 c) — без busy-loop
 		next := windowEnd.Add(period).Add(5 * time.Second)
 		if d := time.Until(next); d > 0 {
-			time.Sleep(d)
+			if !sleepCtx(ctx, d) {
+				return
+			}
 		}
 	}
 }
 
+// processWindow усредняет окно [from,to] по всем устройствам raw и пишет в avg.
+// Ошибки не логируем поштучно (чтобы не завалить лог) — считаем и отдаём одной
+// сводкой за тик.
 func processWindow(raw, avg *tsdbclient.Client, rawRoot string, from, to int64, logf func(string, ...any)) {
-	for _, dev := range enumerateRaw(rawRoot) {
+	devs := enumerateRaw(rawRoot)
+	written, rowsOut, errs := 0, 0, 0
+	for _, dev := range devs {
 		status, rows, err := raw.Query(tsdbclient.ModeWholeOne, dev.Type, []string{dev.ID}, nil, from, to)
-		if err != nil || status != tsdbclient.StatusOK || len(rows) == 0 {
+		if err != nil || status != tsdbclient.StatusOK {
+			errs++
+			continue
+		}
+		if len(rows) == 0 {
 			continue
 		}
 		// группировка по версии контракта
@@ -289,10 +319,12 @@ func processWindow(raw, avg *tsdbclient.Client, rawRoot string, from, to int64, 
 		for _, r := range rows {
 			c, ok := reg.Get(dev.Type, r.Version)
 			if !ok {
+				errs++
 				continue
 			}
 			vals, derr := c.Decode(r.Payload)
 			if derr != nil {
+				errs++
 				continue
 			}
 			m := make(map[uint16]tscontract.Value, len(vals))
@@ -309,10 +341,17 @@ func processWindow(raw, avg *tsdbclient.Client, rawRoot string, from, to int64, 
 			}
 			out = append(out, tsdbclient.Row{Type: dev.Type, ID: dev.ID, Time: res.Time, Version: ver, Payload: res.Payload})
 		}
-		if len(out) > 0 {
-			if _, _, werr := avg.Write(out); werr != nil && logf != nil {
-				logf("аккумулятор: запись в avg-tsdb %s/%s: %v", dev.Type, dev.ID, werr)
-			}
+		if len(out) == 0 {
+			continue
 		}
+		if _, _, werr := avg.Write(out); werr != nil {
+			errs++
+			continue
+		}
+		written++
+		rowsOut += len(out)
+	}
+	if logf != nil {
+		logf("аккумулятор: окно [%d..%d] устройств=%d записей=%d ошибок=%d", from, to, written, rowsOut, errs)
 	}
 }
