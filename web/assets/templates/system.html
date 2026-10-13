@@ -43,6 +43,22 @@
   </section>
 
   <section class="card">
+    <h2>{{index .T "sys.acc"}}</h2>
+    <form method="post" action="system/accumulator">
+      <label class="check">
+        <input type="checkbox" name="enabled" value="1"{{if .AccEnabled}} checked{{end}}>
+        {{index .T "sys.acc_enable"}}
+      </label>
+      <label for="acc_period">{{index .T "sys.acc_period"}}</label>
+      <select id="acc_period" name="period">
+        {{range .AccPeriods}}<option value="{{.}}"{{if eq . $.AccPeriod}} selected{{end}}>{{.}}</option>{{end}}
+      </select>
+      <p class="muted">{{index .T "sys.acc_hint"}}</p>
+      <button type="submit">{{index .T "sys.save"}}</button>
+    </form>
+  </section>
+
+  <section class="card">
     <h2>{{index .T "sys.monitoring"}}</h2>
     <form method="post" action="system/monitoring">
       <label class="check">

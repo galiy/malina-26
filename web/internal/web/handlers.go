@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/galiy/malina-26/web/internal/accumulator"
 	"github.com/galiy/malina-26/web/internal/auth"
 	"github.com/galiy/malina-26/web/internal/authstore"
 	"github.com/galiy/malina-26/web/internal/logtail"
@@ -153,6 +154,10 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	data["RemoteSyslog"] = sysctl.RemoteSyslogSetting()
 	data["MapTimeSyncEnabled"] = timeSyncEnabled(s.opts.MapTimeSyncOff)
 	data["Monitoring"] = loadMonitoringConfigPath(s.opts.SNMPMonitoring)
+	acc := accumulator.Load(s.opts.AccConfigPath)
+	data["AccEnabled"] = acc.Enabled
+	data["AccPeriod"] = acc.PeriodMin
+	data["AccPeriods"] = []int{1, 2, 3, 4, 5, 6, 10}
 	lang := s.lang(r)
 	if ok := r.URL.Query().Get("ok"); ok != "" {
 		data["Ok"] = s.tr(lang, "sys.msg."+ok+"_ok")
@@ -205,6 +210,31 @@ func (s *Server) handleSystemMapTimeSync(w http.ResponseWriter, r *http.Request)
 	}
 	s.audit.Event("system_settings", map[string]any{"what": "maptime", "enabled": enabled, "result": "ok", "ip": clientIP(r)})
 	s.redirectSystem(w, r, "ok=maptime")
+}
+
+// handleSystemAccumulator — настройка аккумулятора (период/вкл) — «Параметры системы».
+func (s *Server) handleSystemAccumulator(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAuth(w, r); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	_ = r.ParseForm()
+	period, _ := strconv.Atoi(r.FormValue("period"))
+	cfg := accumulator.Config{Enabled: r.FormValue("enabled") == "1", PeriodMin: period}
+	if !accumulator.ValidatePeriod(cfg.PeriodMin) {
+		s.redirectSystem(w, r, "err=acc")
+		return
+	}
+	if err := accumulator.Save(s.opts.AccConfigPath, cfg); err != nil {
+		s.audit.Event("system_settings", map[string]any{"what": "acc", "result": "err", "ip": clientIP(r)})
+		s.redirectSystem(w, r, "err=acc")
+		return
+	}
+	s.audit.Event("system_settings", map[string]any{"what": "acc", "enabled": cfg.Enabled, "period": cfg.PeriodMin, "result": "ok", "ip": clientIP(r)})
+	s.redirectSystem(w, r, "ok=acc")
 }
 
 // handleSystemHost — общая «хост»-настройка: имя хоста + часовой пояс.

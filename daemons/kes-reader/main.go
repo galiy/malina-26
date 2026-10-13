@@ -37,6 +37,7 @@ const (
 type config struct {
 	shmPath  string
 	sockPath string
+	rawSock  string // Unix-сокет raw-tsdb (модуль сохранения сырья)
 	paths    []string
 
 	pollInterval time.Duration
@@ -68,9 +69,14 @@ func (c *config) debugf(format string, args ...any) {
 }
 
 func newConfig(debug bool) *config {
+	raw := "/run/malina-ts-raw/tsdb.sock"
+	if v := os.Getenv("MALINA_TS_RAW_SOCK"); v != "" {
+		raw = v
+	}
 	return &config{
 		shmPath:        defSHMPath,
 		sockPath:       defSockPath,
+		rawSock:        raw,
 		paths:          strings.Split(defaultPathsStr, ","),
 		pollInterval:   defPoll,
 		maxMiss:        defMaxMiss,
@@ -95,7 +101,8 @@ func main() {
 	cfg := newConfig(*debug)
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.SetPrefix("kes-reader: ")
-	log.Printf("starting (shm=%s sock=%s max=%d poll=%s)", cfg.shmPath, cfg.sockPath, cfg.maxKes, cfg.pollInterval)
+	log.Printf("starting (shm=%s sock=%s raw=%s max=%d poll=%s)", cfg.shmPath, cfg.sockPath, cfg.rawSock, cfg.maxKes, cfg.pollInterval)
+	initStatsink(cfg.rawSock)
 
 	shm, err := shmOpen(cfg.shmPath, kesSlots)
 	if err != nil {
@@ -140,5 +147,8 @@ func main() {
 		log.Printf("горутины не завершились за 5 с — принудительный выход")
 	}
 	reg.ReleaseAll()
+	if statsink != nil {
+		statsink.Close()
+	}
 	log.Printf("stopped")
 }

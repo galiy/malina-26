@@ -186,6 +186,42 @@ func TestStoreTruncatedTailRecovery(t *testing.T) {
 	}
 }
 
+// TestStoreRowMode — raw-режим (row-раскладка): запись/чтение/переоткрытие/проекция.
+func TestStoreRowMode(t *testing.T) {
+	root := t.TempDir()
+	st, err := NewStore(root, Options{Row: true, SegMax: 300}, tscontract.NewDefaultRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 20; i++ {
+		st.Write([]Row{rowT(t, "map", "5", int64(1000+i*10), sample(float64(i))...)})
+	}
+	st.Wait()
+	st.Close()
+
+	st2, err := NewStore(root, Options{Row: true}, tscontract.NewDefaultRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st2.Close()
+	got, err := st2.Query(Query{Type: "map", IDs: []string{"5"}, From: 0, To: 2000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 20 || got[0].Time != 1000 || got[19].Time != 1190 {
+		t.Fatalf("row: %d строк, %d..%d", len(got), got[0].Time, got[len(got)-1].Time)
+	}
+	// проекция (1 метрика) в row-режиме (декодирование payload)
+	got2, _ := st2.Query(Query{Type: "map", IDs: []string{"5"}, From: 0, To: 2000, Metrics: []uint16{3}})
+	c, _ := tscontract.NewDefaultRegistry().Get("map", 1)
+	for _, r := range got2 {
+		vals, err := c.Decode(r.Payload)
+		if err != nil || len(vals) != 1 || vals[0].ID != 3 {
+			t.Fatalf("row проекция: %+v err=%v", vals, err)
+		}
+	}
+}
+
 func TestQueryLimits(t *testing.T) {
 	st, _ := NewStore(t.TempDir(), Options{MaxRows: 2, MaxRangeMS: 100_000}, tscontract.NewDefaultRegistry())
 	defer st.Close()

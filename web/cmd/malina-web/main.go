@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/galiy/malina-26/web/internal/accumulator"
 	"github.com/galiy/malina-26/web/internal/auth"
 	"github.com/galiy/malina-26/web/internal/events"
 	"github.com/galiy/malina-26/web/internal/mailer"
@@ -39,6 +40,10 @@ func main() {
 	snmpPort := flag.Int("snmp-port", 161, "UDP-порт SNMP-агента")
 	snmpCommunity := flag.String("snmp-community", "public", "community SNMP-агента")
 	snmpMonitoring := flag.String("snmp-monitoring", "/malina/etc/malina/snmp-monitoring.json", "путь к настройке периодических трапов")
+	rawRoot := flag.String("ts-raw-root", envOr("MALINA_TS_RAW_ROOT", "/run/malina-ts-raw"), "каталог raw-tsdb (tmpfs)")
+	rawSock := flag.String("ts-raw-sock", envOr("MALINA_TS_RAW_SOCK", "/run/malina-ts-raw/tsdb.sock"), "Unix-сокет raw-tsdb")
+	avgSock := flag.String("ts-avg-sock", envOr("MALINA_TS_SOCK", "/run/malina-ts/tsdb.sock"), "Unix-сокет avg-tsdb")
+	accCfg := flag.String("acc-config", envOr("MALINA_WEB_ACC_CFG", accumulator.DefaultConfigPath), "настройка аккумулятора (json)")
 	flag.Parse()
 
 	var a auth.Authenticator
@@ -72,10 +77,13 @@ func main() {
 		SNMPPort:       *snmpPort,
 		SNMPCommunity:  *snmpCommunity,
 		SNMPMonitoring: *snmpMonitoring,
+
+		AccConfigPath: *accCfg,
 	})
 	if err != nil {
 		log.Fatalf("init: %v", err)
 	}
+	go accumulator.Run(*rawRoot, *rawSock, *avgSock, *accCfg, log.Printf)
 	log.Printf("malina-web listening on %s (user=%s)", *listen, *user)
 	if err := srv.Run(); err != nil {
 		log.Fatalf("server: %v", err)

@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/galiy/malina-26/daemons/lib/tscontract"
 )
@@ -42,18 +43,22 @@ var (
 type seriesKey struct{ typ, id string }
 
 type segRef struct {
-	seq     uint32
-	path    string
-	minTime int64
-	maxTime int64
-	sealed  bool
-	entries []idxEntry
+	seq      uint32
+	path     string
+	minTime  int64
+	maxTime  int64
+	timeBase int64
+	hdrSize  int64
+	sealed   bool
+	entries  []idxEntry
 }
 
 type activeSeg struct {
-	ref  *segRef
-	f    *os.File
-	size int64
+	ref      *segRef
+	f        *os.File
+	size     int64
+	rows     int
+	lastTime int64
 }
 
 type series struct {
@@ -73,7 +78,9 @@ type pendBlock struct {
 	last    int64
 	times   []int64
 	ids     []uint16
-	rows    []map[uint16]tscontract.Value
+	rows    []map[uint16]tscontract.Value // колоночный режим
+	vers    []uint16                      // row-режим: версия строки
+	raw     [][]byte                      // row-режим: payload как есть
 }
 
 // Store — хранилище.
@@ -83,6 +90,9 @@ type Store struct {
 	segMax     int64
 	maxRows    int
 	maxRangeMS int64
+	row        bool          // raw-режим: row-раскладка сегмента
+	retention  time.Duration // raw: возраст очистки (0 = выкл.)
+	limitBytes int64         // raw: лимит объёма (0 = без лимита)
 	reg        *tscontract.Registry
 
 	mu     sync.RWMutex
@@ -101,8 +111,11 @@ type writeOp struct {
 type Options struct {
 	BucketSize uint32
 	SegMax     int64
-	MaxRows    int   // лимит строк в ответе (0 = без лимита)
-	MaxRangeMS int64 // лимит длительности периода запроса, мс (0 = без лимита)
+	MaxRows    int           // лимит строк в ответе (0 = без лимита)
+	MaxRangeMS int64         // лимит длительности периода запроса, мс (0 = без лимита)
+	Row        bool          // raw-режим (row-раскладка)
+	Retention  time.Duration // raw: возраст очистки (0 = выкл.)
+	LimitBytes int64         // raw: лимит объёма (0 = без лимита)
 }
 
 func defaultOptions() Options {
@@ -130,6 +143,9 @@ func NewStore(root string, opt Options, reg *tscontract.Registry) (*Store, error
 		segMax:     opt.SegMax,
 		maxRows:    opt.MaxRows,
 		maxRangeMS: opt.MaxRangeMS,
+		row:        opt.Row,
+		retention:  opt.Retention,
+		limitBytes: opt.LimitBytes,
 		reg:        reg,
 		series:     make(map[seriesKey]*series),
 		wch:        make(chan writeOp, 1024),
@@ -140,6 +156,10 @@ func NewStore(root string, opt Options, reg *tscontract.Registry) (*Store, error
 	}
 	s.wg.Add(1)
 	go s.writerLoop()
+	if s.retention > 0 || s.limitBytes > 0 {
+		s.wg.Add(1)
+		go s.retentionLoop()
+	}
 	return s, nil
 }
 
@@ -174,7 +194,7 @@ func (s *Store) writerLoop() {
 			return
 		}
 		s.mu.Lock()
-		err := s.flushBlockLocked(pend)
+		err := s.flushLocked(pend)
 		s.mu.Unlock()
 		if err != nil {
 			log.Printf("writer: %v", err)
@@ -202,11 +222,28 @@ func (s *Store) writerLoop() {
 					floor = ser.lastTime
 				}
 				s.mu.RUnlock()
-				if pend != nil && pend.key == key && len(pend.rows) > 0 {
+				if pend != nil && pend.key == key && len(pend.times) > 0 {
 					floor = pend.last
 				}
 				if r.Time < floor {
 					log.Printf("writer: %v (%s/%s %d)", errTimeBack, r.Type, r.ID, r.Time)
+					continue
+				}
+				if s.row { // raw: row-запись сразу, payload как есть
+					if _, ok := s.reg.Get(r.Type, r.Version); !ok {
+						log.Printf("writer: %v (%s/%s v%d)", errNoCodec, r.Type, r.ID, r.Version)
+						continue
+					}
+					if pend != nil && pend.key != key {
+						flush()
+					}
+					if pend == nil {
+						pend = &pendBlock{key: key, first: r.Time}
+					}
+					pend.last = r.Time
+					pend.times = append(pend.times, r.Time)
+					pend.vers = append(pend.vers, r.Version)
+					pend.raw = append(pend.raw, r.Payload)
 					continue
 				}
 				vals, decErr, ok := s.decodeRow(r)
@@ -230,6 +267,14 @@ func (s *Store) writerLoop() {
 			return
 		}
 	}
+}
+
+// flushLocked — диспетчер раскладки: row (raw) или колоночный (avg).
+func (s *Store) flushLocked(pb *pendBlock) error {
+	if s.row {
+		return s.writeRowsLocked(pb)
+	}
+	return s.flushBlockLocked(pb)
 }
 
 // decodeRow разбирает payload строки в map[field_id]Value по реестру.
@@ -372,9 +417,9 @@ func (s *Store) newActiveLocked(ser *series, timeBase int64) error {
 		f.Close()
 		return err
 	}
-	ref := &segRef{seq: seq, path: path, minTime: timeBase}
+	ref := &segRef{seq: seq, path: path, minTime: timeBase, timeBase: timeBase, hdrSize: int64(len(hdr))}
 	ser.lastSeq = seq
-	ser.active = &activeSeg{ref: ref, f: f, size: int64(len(hdr))}
+	ser.active = &activeSeg{ref: ref, f: f, size: int64(len(hdr)), lastTime: timeBase}
 	return nil
 }
 
@@ -457,7 +502,11 @@ func (s *Store) loadSegment(key seriesKey, seq uint32, path string) error {
 		return nil
 	}
 	hsz64 := int64(hsz)
-	ref := &segRef{seq: seq, path: path}
+	ref := &segRef{seq: seq, path: path, timeBase: sh.TimeBase, hdrSize: hsz64}
+	if s.row {
+		f.Close()
+		return s.loadRowSegment(key, seq, path, size, ref)
+	}
 	if size > hsz64 {
 		if sealed, ents := readFooterFromFile(f, size, hsz64); sealed && len(ents) > 0 {
 			ref.sealed = true
@@ -656,14 +705,22 @@ func (s *Store) readSeries(ser *series, q Query) []Row {
 		if ref.maxTime < q.From || ref.minTime > q.To {
 			continue
 		}
-		out = append(out, s.readSegment(ref, ser.key.id, q)...)
+		out = append(out, s.readSegRef(ref, ser.key.id, q)...)
 	}
 	if as := ser.active; as != nil {
 		if as.ref.maxTime >= q.From && as.ref.minTime <= q.To {
-			out = append(out, s.readSegment(as.ref, ser.key.id, q)...)
+			out = append(out, s.readSegRef(as.ref, ser.key.id, q)...)
 		}
 	}
 	return out
+}
+
+// readSegRef — чтение сегмента по раскладке (row/col).
+func (s *Store) readSegRef(ref *segRef, id string, q Query) []Row {
+	if s.row {
+		return s.readSegmentRow(ref, id, q)
+	}
+	return s.readSegment(ref, id, q)
 }
 
 func (s *Store) readSegment(ref *segRef, id string, q Query) []Row {

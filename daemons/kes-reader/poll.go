@@ -59,6 +59,9 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *transport.Port,
 		miss = 0
 		reg.SetInfo(e, parseKes(img))
 		reg.Touch(e)
-		e.slot.Publish(buildPayload(reg.Meta(e), parseData(img)))
+		meta := reg.Meta(e)
+		d := parseData(img)
+		e.slot.Publish(buildPayload(meta, d))
+		publishRaw(meta.Serial, time.Now().UnixMilli(), d) // raw-хранилище (§14)
 	}
 }

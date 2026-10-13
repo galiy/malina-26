@@ -30,15 +30,15 @@ func TestSocFromOCV(t *testing.T) {
 // без аппаратного SoC (255).
 func testMapProfile() map[string]uint32 {
 	return map[string]uint32{
-		"LCD_AccType":       5, // Li-ion LYP 3.7В
-		"UACC":              2, // 48 В
-		"UAcc_med_VH":       2,
-		"UAcc_med_VL":       3, // (2*256+3)/10 = 51.5 В
-		"MODE":              4, // заряд
-		"IAcc_med_A_u16_L":  10,
-		"IAcc_med_A_u16_H":  0, // (10)/16 = 0.625 А
-		"LCD_CAcc":          80, // → (80*25)>>2 = 500 Ач
-		"LCD_CAcc_dop":      0,
+		"LCD_AccType":      5, // Li-ion LYP 3.7В
+		"UACC":             2, // 48 В
+		"UAcc_med_VH":      2,
+		"UAcc_med_VL":      3, // (2*256+3)/10 = 51.5 В
+		"MODE":             4, // заряд
+		"IAcc_med_A_u16_L": 10,
+		"IAcc_med_A_u16_H": 0,  // (10)/16 = 0.625 А
+		"LCD_CAcc":         80, // → (80*25)>>2 = 500 Ач
+		"LCD_CAcc_dop":     0,
 	}
 }
 

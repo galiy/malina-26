@@ -84,6 +84,7 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 			reg.Touch(e)
 			simInjectKesBms(mem) // ВРЕМЕННО: эмуляция КЭС/BMS для UI (удалить)
 			e.slot.Publish(buildContract(mem, reg.Meta(e)))
+			publishRaw(e.info.Serial, time.Now().UnixMilli(), mem)         // raw-хранилище (§14)
 			maybeSyncTime(cfg, reg, p, proto, entries, e, mem, time.Now()) // синхронизация времени МАП
 			alive = append(alive, e)
 		}

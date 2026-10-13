@@ -1,0 +1,311 @@
+// Package accumulator — аккумулятор телеметрии в составе malina-web
+// (docs/accumulator.md). Читает сырые снапшоты из raw-tsdb за прошедшее окно,
+// усредняет по правилам (§5) и пишет усреднённый снапшот в avg-tsdb.
+package accumulator
+
+import (
+	"encoding/json"
+	"os"
+	"sort"
+	"time"
+
+	"github.com/galiy/malina-26/daemons/lib/tscontract"
+	"github.com/galiy/malina-26/daemons/lib/tsdbclient"
+)
+
+// Config — настройка аккумулятора (страница «Параметры системы»).
+type Config struct {
+	Enabled   bool `json:"enabled"`
+	PeriodMin int  `json:"period_min"` // 1,2,3,4,5,6,10
+}
+
+// DefaultConfigPath — файл настроек.
+const DefaultConfigPath = "/malina/etc/malina/accumulator.json"
+
+// ValidatePeriod — допустимый период (кратен минутам; 7,8,9 запрещены).
+func ValidatePeriod(p int) bool {
+	switch p {
+	case 1, 2, 3, 4, 5, 6, 10:
+		return true
+	}
+	return false
+}
+
+// Load читает настройку; при отсутствии — дефолт (выкл., 5 мин).
+func Load(path string) Config {
+	cfg := Config{Enabled: false, PeriodMin: 5}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return cfg
+	}
+	_ = json.Unmarshal(b, &cfg)
+	if !ValidatePeriod(cfg.PeriodMin) {
+		cfg.PeriodMin = 5
+	}
+	return cfg
+}
+
+// Save записывает настройку (период валидируется).
+func Save(path string, cfg Config) error {
+	if !ValidatePeriod(cfg.PeriodMin) {
+		cfg.PeriodMin = 5
+	}
+	b, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o644)
+}
+
+// Sample — снапшот устройства: время + значения полей.
+type Sample struct {
+	Time int64
+	Vals map[uint16]tscontract.Value
+}
+
+// Result — усреднённый снапшот: время (последний снимок окна) + payload.
+type Result struct {
+	Time    int64
+	Payload []byte
+}
+
+// --- правила усреднения (docs/accumulator.md §5) ---
+
+type rule uint8
+
+const (
+	rAvg         rule = iota // среднее
+	rOr                      // битовая маска → ИЛИ
+	rLast                    // последнее значение
+	rLastNonZero             // последнее ненулевое
+	rUnet2                   // flagUnet2: если был активен 2-й вход → 2-й
+)
+
+// mapRules — правила для полей контракта map v1 (id → rule).
+var mapRules = map[uint16]rule{
+	1: rAvg, 2: rAvg, 3: rAvg, 4: rAvg, 5: rAvg, 6: rAvg, 7: rAvg, 8: rAvg,
+	9: rAvg, 10: rAvg, 11: rLast, 12: rOr, 13: rAvg, 14: rAvg, 15: rAvg,
+	16: rAvg, 17: rOr, 18: rAvg, 19: rLast, 20: rLast, 21: rOr, 22: rOr,
+	23: rOr, 24: rOr, 25: rOr, 26: rUnet2,
+}
+
+// kesRules — правила для полей контракта kes v1.
+var kesRules = map[uint16]rule{
+	1: rAvg, 2: rAvg, 3: rAvg, 4: rAvg, 5: rAvg, 6: rAvg, 7: rAvg, 8: rAvg,
+	9: rAvg, 10: rAvg, 11: rAvg, 12: rAvg, 13: rLast, 14: rLast, 15: rOr,
+}
+
+func rulesFor(typ string) map[uint16]rule {
+	switch typ {
+	case "map":
+		return mapRules
+	case "kes":
+		return kesRules
+	default: // mbms и прочие — всё измеряемое
+		return nil
+	}
+}
+
+// Average усредняет выборку снапшотов одной (type, version). Время результата —
+// время последнего снимка. ok=false при пустой выборке.
+func Average(typ string, version uint16, samples []Sample) (Result, bool) {
+	if len(samples) == 0 {
+		return Result{}, false
+	}
+	samples = append([]Sample(nil), samples...)
+	sort.Slice(samples, func(i, j int) bool { return samples[i].Time < samples[j].Time })
+	c, ok := tscontract.NewDefaultRegistry().Get(typ, version)
+	if !ok {
+		return Result{}, false
+	}
+	last := samples[len(samples)-1]
+	fields := c.Fields()
+	rules := rulesFor(typ)
+
+	// собрать значения по полям
+	byField := map[uint16][]tscontract.Value{}
+	var order []uint16
+	for _, s := range samples {
+		for id, v := range s.Vals {
+			if _, seen := byField[id]; !seen {
+				order = append(order, id)
+			}
+			byField[id] = append(byField[id], v)
+		}
+	}
+	sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
+
+	out := make([]tscontract.Value, 0, len(order))
+	for _, id := range order {
+		vals := byField[id]
+		typField := fieldTypeOf(fields, id)
+		rl := rAvg
+		if rules != nil {
+			if r, ok := rules[id]; ok {
+				rl = r
+			}
+		}
+		v := tscontract.Value{ID: id, Type: typField}
+		switch rl {
+		case rOr:
+			var acc int64
+			for _, x := range vals {
+				acc |= x.Int
+			}
+			v.Int = acc
+		case rLast:
+			v = lastValue(vals)
+			v.ID = id
+		case rLastNonZero:
+			v = lastNonZero(vals)
+			v.ID = id
+		case rUnet2:
+			v = unet2(vals)
+			v.ID = id
+		default: // rAvg
+			if typField == tscontract.FTFloat {
+				var sum float64
+				for _, x := range vals {
+					sum += x.Float
+				}
+				v.Float = sum / float64(len(vals))
+			} else {
+				var sum int64
+				for _, x := range vals {
+					sum += x.Int
+				}
+				v.Int = sum / int64(len(vals))
+			}
+		}
+		out = append(out, v)
+	}
+	payload, err := c.Encode(out)
+	if err != nil {
+		return Result{}, false
+	}
+	return Result{Time: last.Time, Payload: payload}, true
+}
+
+func fieldTypeOf(fields []tscontract.Field, id uint16) tscontract.FieldType {
+	for _, f := range fields {
+		if f.ID == id {
+			return f.Type
+		}
+	}
+	return tscontract.FTU8
+}
+
+func lastValue(vals []tscontract.Value) tscontract.Value { return vals[len(vals)-1] }
+
+func lastNonZero(vals []tscontract.Value) tscontract.Value {
+	for i := len(vals) - 1; i >= 0; i-- {
+		if vals[i].Int != 0 {
+			return vals[i]
+		}
+	}
+	return vals[len(vals)-1]
+}
+
+// unet2: если в окне был активен 2-й вход (бит 0x04) — вернуть значение с ним;
+// иначе — последнее.
+func unet2(vals []tscontract.Value) tscontract.Value {
+	for _, v := range vals {
+		if v.Int&0x04 != 0 {
+			return v
+		}
+	}
+	return vals[len(vals)-1]
+}
+
+// --- цикл аккумулятора ---
+
+// Dev — устройство (тип+идентификатор) в raw-хранилище.
+type Dev struct {
+	Type string
+	ID   string
+}
+
+// enumerateRaw перечисляет устройства по дереву raw (<root>/<type>/<id>/…):
+// «что насыпалось» (для кого есть данные).
+func enumerateRaw(root string) []Dev {
+	var out []Dev
+	types, _ := os.ReadDir(root)
+	for _, t := range types {
+		if !t.IsDir() {
+			continue
+		}
+		ids, _ := os.ReadDir(root + "/" + t.Name())
+		for _, id := range ids {
+			if id.IsDir() {
+				out = append(out, Dev{Type: t.Name(), ID: id.Name()})
+			}
+		}
+	}
+	return out
+}
+
+// Run — цикл аккумулятора: по календарным окнам (кратным периоду, старт +5 c)
+// читает raw за прошедшее окно, усредняет и пишет в avg. Настройка (вкл/период)
+// перечитывается перед каждым тиком; ошибки не роняют процесс.
+func Run(rawRoot, rawSock, avgSock, cfgPath string, logf func(string, ...any)) {
+	raw := tsdbclient.New(rawSock)
+	avg := tsdbclient.New(avgSock)
+	for {
+		cfg := Load(cfgPath)
+		period := time.Duration(cfg.PeriodMin) * time.Minute
+		if period <= 0 {
+			period = 5 * time.Minute
+		}
+		now := time.Now()
+		windowEnd := now.Truncate(period) // конец прошедшего окна
+		fire := windowEnd.Add(5 * time.Second)
+		if fire.After(now) { // старт через 5 c после границы
+			time.Sleep(time.Until(fire))
+		}
+		if !cfg.Enabled {
+			continue
+		}
+		from := windowEnd.Add(-period).UnixMilli()
+		to := windowEnd.UnixMilli()
+		processWindow(raw, avg, rawRoot, from, to, logf)
+	}
+}
+
+func processWindow(raw, avg *tsdbclient.Client, rawRoot string, from, to int64, logf func(string, ...any)) {
+	for _, dev := range enumerateRaw(rawRoot) {
+		status, rows, err := raw.Query(tsdbclient.ModeWholeOne, dev.Type, []string{dev.ID}, nil, from, to)
+		if err != nil || status != tsdbclient.StatusOK || len(rows) == 0 {
+			continue
+		}
+		// группировка по версии контракта
+		byVer := map[uint16][]Sample{}
+		for _, r := range rows {
+			c, ok := tscontract.NewDefaultRegistry().Get(dev.Type, r.Version)
+			if !ok {
+				continue
+			}
+			vals, derr := c.Decode(r.Payload)
+			if derr != nil {
+				continue
+			}
+			m := make(map[uint16]tscontract.Value, len(vals))
+			for _, v := range vals {
+				m[v.ID] = v
+			}
+			byVer[r.Version] = append(byVer[r.Version], Sample{Time: r.Time, Vals: m})
+		}
+		out := make([]tsdbclient.Row, 0, len(byVer))
+		for ver, samples := range byVer {
+			res, ok := Average(dev.Type, ver, samples)
+			if !ok {
+				continue
+			}
+			out = append(out, tsdbclient.Row{Type: dev.Type, ID: dev.ID, Time: res.Time, Version: ver, Payload: res.Payload})
+		}
+		if len(out) > 0 {
+			if _, _, werr := avg.Write(out); werr != nil && logf != nil {
+				logf("аккумулятор: запись в avg-tsdb %s/%s: %v", dev.Type, dev.ID, werr)
+			}
+		}
+	}
+}

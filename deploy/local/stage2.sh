@@ -179,7 +179,7 @@ fi
 
 # --- 2.12 юниты offline ---
 log "enable/mask/disable юнитов"
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-tsdb; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-tsdb malina-tsdb-raw; do
 	$SUDO systemctl --root="$ROOTM" enable "$u" >/dev/null 2>&1 || true
 done
 [ -f "$PROV/masked.txt" ]   && while read -r u; do [ -n "$u" ] && $SUDO systemctl --root="$ROOTM" mask "$u"    >/dev/null 2>&1 || true; done < "$PROV/masked.txt"
@@ -201,6 +201,8 @@ log "fstab: убираю tmpfs /var/lib/NetworkManager; обеспечиваю /
 $SUDO sed -i '\#/var/lib/NetworkManager#d' "$ROOTM/etc/fstab"
 # /var/lib/dhcp — аренды dhclient (иначе запись на ro-корень падает)
 grep -q '/var/lib/dhcp' "$ROOTM/etc/fstab" || echo 'tmpfs   /var/lib/dhcp           tmpfs   defaults,noatime,nosuid,nodev,mode=0755,size=4m    0 0' | $SUDO tee -a "$ROOTM/etc/fstab" >/dev/null
+# raw-tsdb: отдельный tmpfs 200 МБ (§14)
+grep -q '/run/malina-ts-raw' "$ROOTM/etc/fstab" || echo 'tmpfs   /run/malina-ts-raw      tmpfs   size=200M,mode=0755,nosuid,nodev    0 0' | $SUDO tee -a "$ROOTM/etc/fstab" >/dev/null
 awk '$3=="tmpfs"{print $2}' "$ROOTM/etc/fstab" | while read -r mp; do
 	[ -n "$mp" ] && $SUDO mkdir -p "$ROOTM$mp"
 done

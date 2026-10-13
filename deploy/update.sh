@@ -94,13 +94,13 @@ sudo chown -R root:root /malina/usr/local/share/malina/web
 sudo find /malina/usr/local/share/malina/web -type d -exec chmod 0755 {} +
 sudo find /malina/usr/local/share/malina/web -type f -exec chmod 0644 {} +
 # перезапуск сервисов (malina-netd не трогаем: сетевой стек)
-for u in malina-web map-reader kes-reader malina-tsdb; do
+for u in malina-web map-reader kes-reader malina-tsdb malina-tsdb-raw; do
   sudo systemctl restart "$u" 2>/dev/null && echo "restart $u" || echo "skip   $u (не активен/не установлен)"
 done
 sleep 2
 echo "--- status ---"
-for u in malina-web map-reader kes-reader malina-tsdb; do
-  printf '%-12s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
+for u in malina-web map-reader kes-reader malina-tsdb malina-tsdb-raw; do
+  printf '%-16s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
 done
 curl -s -o /dev/null -w "login http=%{http_code}\n" http://127.0.0.1/login || true
 sudo rm -rf /malina/.deploy/tmp

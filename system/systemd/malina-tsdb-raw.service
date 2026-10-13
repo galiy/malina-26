@@ -1,0 +1,14 @@
+[Unit]
+Description=Хранилище телеметрии — raw (tmpfs, row-раскладка)
+Documentation=file:/malina/usr/local/share/malina/docs/telemetry-store.md
+After=local-fs.target
+# каталог смонтирован как отдельный tmpfs size=200M (см. install/stage2, fstab)
+
+[Service]
+Type=simple
+ExecStart=/malina/usr/local/sbin/malina-tsdb -root /run/malina-ts-raw -sock /run/malina-ts-raw/tsdb.sock -row -retention 48h -limit 200 -segmax 1048576
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

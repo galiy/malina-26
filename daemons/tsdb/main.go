@@ -36,6 +36,9 @@ func main() {
 	segMax := flag.Int64("segmax", defSegMax, "предел размера сегмента (байт)")
 	maxRows := flag.Int("maxrows", defMaxRows, "лимит строк в ответе чтения (0 = без лимита)")
 	maxRange := flag.Duration("maxrange", defMaxRange, "лимит периода запроса (0 = без лимита)")
+	row := flag.Bool("row", false, "raw-режим: row-раскладка сегмента (tmpfs)")
+	retention := flag.Duration("retention", 0, "raw: возраст очистки сегментов (0 = выкл.)")
+	limitMB := flag.Int64("limit", 0, "raw: лимит объёма данных, МБ (0 = без лимита)")
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
@@ -46,6 +49,9 @@ func main() {
 		SegMax:     *segMax,
 		MaxRows:    *maxRows,
 		MaxRangeMS: maxRange.Milliseconds(),
+		Row:        *row,
+		Retention:  *retention,
+		LimitBytes: *limitMB << 20,
 	}, tscontract.NewDefaultRegistry())
 	if err != nil {
 		log.Fatalf("открытие хранилища %s: %v", *root, err)

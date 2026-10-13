@@ -54,6 +54,7 @@ type Options struct {
 	SNMPPort         int           // UDP-порт SNMP-агента (161)
 	SNMPCommunity    string        // community агента (public)
 	SNMPMonitoring   string        // путь к настройке периодических трапов
+	AccConfigPath    string        // настройка аккумулятора (json)
 }
 
 // Server — HTTP-сервер.
@@ -169,6 +170,9 @@ func New(o Options) (*Server, error) {
 	}
 	if o.SNMPMonitoring == "" {
 		o.SNMPMonitoring = DefaultMonitoringPath
+	}
+	if o.AccConfigPath == "" {
+		o.AccConfigPath = "/malina/etc/malina/accumulator.json"
 	}
 	// Источник строк — русский; недостающие ключи добираются из него.
 	bundle, err := i18n.Load(os.DirFS(o.AssetsDir), "i18n", "ru", o.Langs)
@@ -334,6 +338,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/system/logging", s.handleSystemLogging)
 	mux.HandleFunc("/system/password", s.handleSystemPassword)
 	mux.HandleFunc("/system/map-time-sync", s.handleSystemMapTimeSync)
+	mux.HandleFunc("/system/accumulator", s.handleSystemAccumulator)
 	mux.HandleFunc("/services", s.handleServices)
 	mux.HandleFunc("/api/services", s.handleAPIServices)
 	mux.HandleFunc("/services/action", s.handleServiceAction)

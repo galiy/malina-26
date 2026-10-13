@@ -109,11 +109,17 @@ sudo rm -f /malina/usr/local/libexec/malina-sysconfig
 # hostname/timezone больше не хранятся на /malina.
 sudo rm -f /malina/etc/hostname /malina/etc/timezone
 sudo systemctl daemon-reload
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer malina-tsdb; do
+# raw-tsdb: отдельный tmpfs 200 МБ под детальное сырьё (§14)
+grep -q '/run/malina-ts-raw' /etc/fstab || echo 'tmpfs  /run/malina-ts-raw  tmpfs  size=200M,mode=0755,nosuid,nodev  0  0' | sudo tee -a /etc/fstab >/dev/null
+sudo mkdir -p /run/malina-ts-raw
+sudo mountpoint -q /run/malina-ts-raw || sudo mount /run/malina-ts-raw 2>/dev/null || true
+
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer malina-tsdb malina-tsdb-raw; do
 	sudo systemctl enable "$u" >/dev/null 2>&1 || true
 done
 sudo systemctl restart malina-web
 sudo systemctl restart malina-tsdb 2>/dev/null || true
+sudo systemctl restart malina-tsdb-raw 2>/dev/null || true
 sudo rm -rf /tmp/malina-install
 echo "install: done"
 REMOTE
