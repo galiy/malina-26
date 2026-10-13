@@ -1,0 +1,1545 @@
+
+-- MICROART-MIB
+--  
+-- Author                   Date        Comment 
+-- ================================================================== 
+-- Osolemio             28/5/17     Initial 
+--  	
+
+MICROART-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, 
+	enterprises, Integer32
+		FROM SNMPv2-SMI
+	MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
+		FROM SNMPv2-CONF
+	TEXTUAL-CONVENTION, DisplayString
+		FROM SNMPv2-TC;
+
+microartModIdentity MODULE-IDENTITY
+	LAST-UPDATED "201702062355Z"
+	ORGANIZATION 
+		"MICROART Ltd"
+	CONTACT-INFO 
+		"2/133, Ivovaya street, Moscow, Russia
+		+7 (495) 54-23-23-0, +7 (495) 504-20-25
+		sale@microart.ru"
+	DESCRIPTION 
+		"MIB objects for monitoring Microart devices"
+
+	REVISION "201702062355Z"
+	DESCRIPTION 
+		"Initial"
+::= { microart 3 }
+
+
+FloatValue ::= TEXTUAL-CONVENTION
+	DISPLAY-HINT 	"d-1"
+	STATUS     current
+	DESCRIPTION 
+		"The convention for 1 decimal float value"
+	SYNTAX  Integer32 (1..2147483647)
+
+
+KwhValue ::= TEXTUAL-CONVENTION
+	DISPLAY-HINT 	"d-2"
+	STATUS     current
+	DESCRIPTION 
+		"kWh counters"
+	SYNTAX  Integer32 (1..2147483647)
+
+microart             OBJECT IDENTIFIER ::= { enterprises 50330 }
+
+-- Branch for MAC monitoring
+
+notifications        OBJECT IDENTIFIER ::= { microart 0 }
+mac                  OBJECT IDENTIFIER ::= { microart 1 }
+
+-- AC input data
+
+input                OBJECT IDENTIFIER ::= { mac 1 }
+
+-- AC output data
+
+output               OBJECT IDENTIFIER ::= { mac 2 }
+
+-- DC data (on battery)
+
+battery              OBJECT IDENTIFIER ::= { mac 3 }
+
+-- Energy counters
+
+counters             OBJECT IDENTIFIER ::= { mac 4 }
+
+-- Status info
+
+status               OBJECT IDENTIFIER ::= { mac 5 }
+
+-- MAC info (FW rev, HW rev, etc)
+
+info                 OBJECT IDENTIFIER ::= { mac 6 }
+batteryMonitor       OBJECT IDENTIFIER ::= { mac 7 }
+mppt                 OBJECT IDENTIFIER ::= { microart 2 }
+mppt1                OBJECT IDENTIFIER ::= { mppt 1 }
+mppt2                OBJECT IDENTIFIER ::= { mppt 2 }
+mppt3                OBJECT IDENTIFIER ::= { mppt 3 }
+mppt4                OBJECT IDENTIFIER ::= { mppt 4 }
+
+trapInputVoltage  NOTIFICATION-TYPE
+	OBJECTS { inputVoltage }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 1 }
+
+trapInputCurrent  NOTIFICATION-TYPE
+	OBJECTS { inputCurrent }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 2 }
+
+trapInputPower  NOTIFICATION-TYPE
+	OBJECTS { inputPower }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 3 }
+
+trapOutputVoltage  NOTIFICATION-TYPE
+	OBJECTS { outputVoltage }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 4 }
+
+trapBatteryVoltage  NOTIFICATION-TYPE
+	OBJECTS { batteryVoltage }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 5 }
+
+trapBatteryCurrent  NOTIFICATION-TYPE
+	OBJECTS { batteryCurrent }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 6 }
+
+trapBatteryPower  NOTIFICATION-TYPE
+	OBJECTS { batteryPower }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 7 }
+
+trapBatteryMpptCurrent  NOTIFICATION-TYPE
+	OBJECTS { batteryMpptCurrent }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 8 }
+
+trapCountersENET  NOTIFICATION-TYPE
+	OBJECTS { countersENET }
+	STATUS     current
+	DESCRIPTION 
+		"trap for ENET"
+	::= { notifications 9 }
+
+trapCountersEACC  NOTIFICATION-TYPE
+	OBJECTS { countersEACC }
+	STATUS     current
+	DESCRIPTION 
+		"trap for EACC"
+	::= { notifications 10 }
+
+trapCountersECHG  NOTIFICATION-TYPE
+	OBJECTS { countersECHG }
+	STATUS     current
+	DESCRIPTION 
+		"trap for ECHG"
+	::= { notifications 11 }
+
+trapStatusMode  NOTIFICATION-TYPE
+	OBJECTS { statusMODE }
+	STATUS     current
+	DESCRIPTION 
+		"trap for MODE"
+	::= { notifications 12 }
+
+trapStatusTacc  NOTIFICATION-TYPE
+	OBJECTS { statusTACC }
+	STATUS     current
+	DESCRIPTION 
+		"trap for t ACC"
+	::= { notifications 13 }
+
+trapStatusTMac  NOTIFICATION-TYPE
+	OBJECTS { statusTMAC }
+	STATUS     current
+	DESCRIPTION 
+		"trap for t MAC"
+	::= { notifications 14 }
+
+trapBatteryMonitorDoD  NOTIFICATION-TYPE
+	OBJECTS { batteryMonitorDoD }
+	STATUS     current
+	DESCRIPTION 
+		"trap for DoD"
+	::= { notifications 15 }
+
+trapBatteryMonitorSoC  NOTIFICATION-TYPE
+	OBJECTS { batteryMonitorSoC }
+	STATUS     current
+	DESCRIPTION 
+		"trap for SoC"
+	::= { notifications 16 }
+
+trapBatteryMoitorUsersCounter  NOTIFICATION-TYPE
+	OBJECTS { batteryMonitorUsersCounter }
+	STATUS     current
+	DESCRIPTION 
+		"trap for UC"
+	::= { notifications 17 }
+
+trapBatteryMonitorConsumedAh  NOTIFICATION-TYPE
+	OBJECTS { batteryMonitorConsumedAh }
+	STATUS     current
+	DESCRIPTION 
+		"trap for Consumed Ah"
+	::= { notifications 18 }
+
+trapInputVoltageOk  NOTIFICATION-TYPE
+	OBJECTS { inputVoltage }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 19 }
+
+trapInputCurrentOk  NOTIFICATION-TYPE
+	OBJECTS { inputCurrent }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 20 }
+
+trapInputPowerOk  NOTIFICATION-TYPE
+	OBJECTS { inputPower }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 21 }
+
+trapOutputVoltageOk  NOTIFICATION-TYPE
+	OBJECTS { outputVoltage }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 22 }
+
+trapBatteryVoltageOk  NOTIFICATION-TYPE
+	OBJECTS { batteryVoltage }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 23 }
+
+trapBatteryCurrentOk  NOTIFICATION-TYPE
+	OBJECTS { batteryCurrent }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 24 }
+
+trapBatteryPowerOk  NOTIFICATION-TYPE
+	OBJECTS { batteryPower }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 25 }
+
+trapBatteryMpptCurrentOk  NOTIFICATION-TYPE
+	OBJECTS { batteryMpptCurrent }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 26 }
+
+trapStatusTaccOk  NOTIFICATION-TYPE
+	OBJECTS { statusTACC }
+	STATUS     current
+	DESCRIPTION 
+		"trap for t ACC"
+	::= { notifications 27 }
+
+trapStatusTMacOk  NOTIFICATION-TYPE
+	OBJECTS { statusTMAC }
+	STATUS     current
+	DESCRIPTION 
+		"trap for t MAC"
+	::= { notifications 28 }
+
+trapMpptMode  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptMode }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 29 }
+
+trapMpptPVVoltageOk  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptPVVoltage }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 31 }
+
+trapMpptPVPower  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptPVPower }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 32 }
+
+trapMpptPVPowerOk  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptPVPower }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 33 }
+
+trapMpptPVCurrent  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptPVCurrent }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 34 }
+
+trapMpptPVCurrentOk  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptPVCurrent }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 35 }
+
+trapMpptBatteryVoltage  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptBatteryVoltage }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 36 }
+
+trapMpptBatteryVoltageOk  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptBatteryVoltage }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 37 }
+
+trapMpptCurrentSensor1  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptCurrentSensor1 }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 38 }
+
+trapMpptCurrentSensor1Ok  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptCurrentSensor1 }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 39 }
+
+trapMpptCurrentSensor2  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptCurrentSensor2 }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 40 }
+
+trapMpptCurrentSensor2Ok  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptCurrentSensor2 }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 41 }
+
+trapMpptEnergy  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptEnergy }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 42 }
+
+trapMpptInternalTemperature  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptInternalTemperature }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 43 }
+
+trapMpptInternalTemperatureOk  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptInternalTemperature }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 44 }
+
+trapMpptBatteryTemperature  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptBatteryTemperature }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 45 }
+
+trapMpptBatteryTemperatureOk  NOTIFICATION-TYPE
+	OBJECTS { mpptNo, 
+		mpptBatteryTemperature }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 46 }
+
+trapMalinaTime  NOTIFICATION-TYPE
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { notifications 47 }
+
+trapBatteryMpptPower  NOTIFICATION-TYPE
+	OBJECTS { batteryMpptPower }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 49 }
+
+trapBatteryMpptPowerOk  NOTIFICATION-TYPE
+	OBJECTS { batteryMpptPower }
+	STATUS     current
+	DESCRIPTION 
+		"Event Manager trap"
+	::= { notifications 50 }
+
+inputVoltage  OBJECT-TYPE
+	SYNTAX     Integer32 (0..1000)
+	UNITS 	"V"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Input AC voltage"
+	::= { input 1 }
+
+inputCurrent  OBJECT-TYPE
+	SYNTAX     FloatValue
+	UNITS 	"A"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"AC input current "
+	::= { input 2 }
+
+inputPower  OBJECT-TYPE
+	SYNTAX     Integer32 (0..20000)
+	UNITS 	"VA"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"input AC Power"
+	::= { input 3 }
+
+inputFrequency  OBJECT-TYPE
+	SYNTAX     FloatValue
+	UNITS 	"Hz"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"AC input frequency"
+	::= { input 4 }
+
+outputFrequency  OBJECT-TYPE
+	SYNTAX     FloatValue
+	UNITS 	"Hz"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"AC output frequency"
+	::= { output 1 }
+
+outputVoltage  OBJECT-TYPE
+	SYNTAX     Integer32 (0..400)
+	UNITS 	"V"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"AC output voltage"
+	::= { output 2 }
+
+batteryVoltage  OBJECT-TYPE
+	SYNTAX     FloatValue
+	UNITS 	"V"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Battery DC voltage"
+	::= { battery 1 }
+
+batteryCurrent  OBJECT-TYPE
+	SYNTAX     FloatValue
+	UNITS 	"W"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Battery DC current"
+	::= { battery 2 }
+
+batteryPower  OBJECT-TYPE
+	SYNTAX     Integer32
+	UNITS 	"W"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Battery DC power"
+	::= { battery 3 }
+
+batteryMpptCurrent  OBJECT-TYPE
+	SYNTAX     FloatValue
+	UNITS 	"A"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Summary current to the battery form MPPTs. Taken via I2C"
+	::= { battery 4 }
+
+batteryMpptPower  OBJECT-TYPE
+	SYNTAX     Integer32
+	UNITS 	"W"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Summary power to the battery form MPPTs. Taken via I2C"
+	::= { battery 5 }
+
+countersENET  OBJECT-TYPE
+	SYNTAX     KwhValue
+	UNITS 	"kWh"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Energy from the mains."
+	::= { counters 1 }
+
+countersEACC  OBJECT-TYPE
+	SYNTAX     KwhValue
+	UNITS 	"kWh"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Energy drawn form the battery"
+	::= { counters 2 }
+
+countersECHG  OBJECT-TYPE
+	SYNTAX     KwhValue
+	UNITS 	"kWh"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Energy for battery charge"
+	::= { counters 3 }
+
+statusMODE  OBJECT-TYPE
+	SYNTAX     Integer32 (0..20)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"MAC operation mode"
+	::= { status 1 }
+
+statusModeText  OBJECT-TYPE
+	SYNTAX     DisplayString
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Status in text"
+	::= { status 2 }
+
+statusRelay1  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { status 3 }
+
+statusRelay2  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { status 4 }
+
+statusCooler  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Cooler mode 
+		off - med - hi"
+	::= { status 5 }
+
+statusTACC  OBJECT-TYPE
+	SYNTAX     Integer32
+	UNITS 	"degrees Celsius"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Battery temperature"
+	::= { status 6 }
+
+statusTMAC  OBJECT-TYPE
+	SYNTAX     Integer32
+	UNITS 	"degrees Celsius"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"MAC internal temperature"
+	::= { status 7 }
+
+fwRev  OBJECT-TYPE
+	SYNTAX     DisplayString
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"firmware revision"
+	::= { info 1 }
+
+hwRev  OBJECT-TYPE
+	SYNTAX     DisplayString
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		" Hardware revision"
+	::= { info 2 }
+
+macPower  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(2..3))
+	UNITS 	"kW"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"MAC power"
+	::= { info 3 }
+
+dcVoltage  OBJECT-TYPE
+	SYNTAX     Integer32
+	UNITS 	"V"
+	MAX-ACCESS read-write
+	STATUS     current
+	DESCRIPTION 
+		"Rated DC voltage"
+	::= { info 4 }
+
+batteryMonitorSoC  OBJECT-TYPE
+	SYNTAX     Integer32 (0..100)
+	UNITS 	"%"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Battery current State of Charge (0-100%)"
+	::= { batteryMonitor 1 }
+
+batteryMonitorDoD  OBJECT-TYPE
+	SYNTAX     Integer32 (0..100)
+	UNITS 	"%"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Depth of Discharge"
+	::= { batteryMonitor 2 }
+
+batteryMonitorCurrentCapacity  OBJECT-TYPE
+	SYNTAX     Integer32
+	UNITS 	"Ah"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Temperature-corrected C20"
+	::= { batteryMonitor 3 }
+
+batteryMonitorTTG  OBJECT-TYPE
+	SYNTAX     Integer32
+	UNITS 	"minutes"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Battery Time To Go (TTG). Appears while discharging only"
+	::= { batteryMonitor 4 }
+
+batteryMonitorConsumedAh  OBJECT-TYPE
+	SYNTAX     Integer32
+	UNITS 	"Ah"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Consumed Ampere-hours"
+	::= { batteryMonitor 5 }
+
+batteryMonitorUsersCounter  OBJECT-TYPE
+	SYNTAX     Integer32
+	UNITS 	"Ah"
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"User's counter. Ah"
+	::= { batteryMonitor 6 }
+
+batteryMonitorStatus  OBJECT-TYPE
+	SYNTAX     DisplayString (SIZE(3))
+	MAX-ACCESS read-write
+	STATUS     current
+	DESCRIPTION 
+		"Battery Monitor status. If ON you may read all the values. If OFF - all the values are true"
+	::= { batteryMonitor 7 }
+
+mppt1PVVoltage  OBJECT-TYPE
+	SYNTAX     Integer32 (0..400)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 1 }
+
+mppt1PVPower  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 2 }
+
+mppt1PVCurrent  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 3 }
+
+mppt1BatteryVoltage  OBJECT-TYPE
+	SYNTAX     FloatValue
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 4 }
+
+mppt1CurrentSensor1  OBJECT-TYPE
+	SYNTAX     Integer32 (-500..500)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 5 }
+
+mppt1CurrentSensor2  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 6 }
+
+mppt1Energy  OBJECT-TYPE
+	SYNTAX     KwhValue
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 7 }
+
+mppt1InternalTemperature  OBJECT-TYPE
+	SYNTAX     Integer32 (-50..50)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 8 }
+
+mppt1BatteryTemperature  OBJECT-TYPE
+	SYNTAX     Integer32 (-50..50)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 9 }
+
+mppt1Mode  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 10 }
+
+mppt1Sign  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 11 }
+
+mppt1Mpp  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt1 12 }
+
+mppt1Fw  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Firmware version"
+	::= { mppt1 13 }
+
+mppt1Relay1  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt1 14 }
+
+mppt1Relay2  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt1 15 }
+
+mppt1Relay3  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt1 16 }
+
+mppt1Windspeed  OBJECT-TYPE
+	SYNTAX     Integer32 (0..65535)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"RPM sensor
+		65535 = not available"
+	::= { mppt1 17 }
+
+mppt2PVVoltage  OBJECT-TYPE
+	SYNTAX     Integer32 (0..400)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 1 }
+
+mppt2PVPower  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 2 }
+
+mppt2PVCurrent  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 3 }
+
+mppt2BatteryVoltage  OBJECT-TYPE
+	SYNTAX     FloatValue
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 4 }
+
+mppt2CurrentSensor1  OBJECT-TYPE
+	SYNTAX     Integer32 (-500..500)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 5 }
+
+mppt2CurrentSensor2  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 6 }
+
+mppt2Energy  OBJECT-TYPE
+	SYNTAX     KwhValue
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 7 }
+
+mppt2InternalTemperature  OBJECT-TYPE
+	SYNTAX     Integer32 (-50..50)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 8 }
+
+mppt2BatteryTemperature  OBJECT-TYPE
+	SYNTAX     Integer32 (-50..50)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 9 }
+
+mppt2Mode  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 10 }
+
+mppt2Sign  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 11 }
+
+mppt2Mpp  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt2 12 }
+
+mppt2Fw  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Firmware version"
+	::= { mppt2 13 }
+
+mppt2Relay1  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt2 14 }
+
+mppt2Relay2  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt2 15 }
+
+mppt2Relay3  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt2 16 }
+
+mppt2Windspeed  OBJECT-TYPE
+	SYNTAX     Integer32 (0..65535)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"RPM sensor
+		65535 = not available"
+	::= { mppt2 17 }
+
+mppt3PVVoltage  OBJECT-TYPE
+	SYNTAX     Integer32 (0..400)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 1 }
+
+mppt3PVPower  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 2 }
+
+mppt3PVCurrent  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 3 }
+
+mppt3BatteryVoltage  OBJECT-TYPE
+	SYNTAX     FloatValue
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 4 }
+
+mppt3CurrentSensor1  OBJECT-TYPE
+	SYNTAX     Integer32 (-500..500)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 5 }
+
+mppt3CurrentSensor2  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 6 }
+
+mppt3Energy  OBJECT-TYPE
+	SYNTAX     KwhValue
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 7 }
+
+mppt3InternalTemperature  OBJECT-TYPE
+	SYNTAX     Integer32 (-50..50)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 8 }
+
+mppt3BatteryTemperature  OBJECT-TYPE
+	SYNTAX     Integer32 (-50..50)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 9 }
+
+mppt3Mode  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 10 }
+
+mppt3Sign  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 11 }
+
+mppt3Mpp  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt3 12 }
+
+mppt3Fw  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Firmware version"
+	::= { mppt3 13 }
+
+mppt3Relay1  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt3 14 }
+
+mppt3Relay2  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt3 15 }
+
+mppt3Relay3  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt3 16 }
+
+mppt3Windspeed  OBJECT-TYPE
+	SYNTAX     Integer32 (0..65535)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"RPM sensor
+		65535 = not available"
+	::= { mppt3 17 }
+
+mppt4PVVoltage  OBJECT-TYPE
+	SYNTAX     Integer32 (0..400)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 1 }
+
+mppt4PVPower  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 2 }
+
+mppt4PVCurrent  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 3 }
+
+mppt4BatteryVoltage  OBJECT-TYPE
+	SYNTAX     FloatValue
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 4 }
+
+mppt4CurrentSensor1  OBJECT-TYPE
+	SYNTAX     Integer32 (-500..500)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 5 }
+
+mppt4CurrentSensor2  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 6 }
+
+mppt4Energy  OBJECT-TYPE
+	SYNTAX     KwhValue
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 7 }
+
+mppt4InternalTemperature  OBJECT-TYPE
+	SYNTAX     Integer32 (-50..50)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 8 }
+
+mppt4BatteryTemperature  OBJECT-TYPE
+	SYNTAX     Integer32 (-50..50)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 9 }
+
+mppt4Mode  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 10 }
+
+mppt4Sign  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 11 }
+
+mppt4Mpp  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt4 12 }
+
+mppt4Fw  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Firmware version"
+	::= { mppt4 13 }
+
+mppt4Relay1  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt4 14 }
+
+mppt4Relay2  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt4 15 }
+
+mppt4Relay3  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(3))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"Relay 1 mode (on-off)"
+	::= { mppt4 16 }
+
+mppt4Windspeed  OBJECT-TYPE
+	SYNTAX     Integer32 (0..65535)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"RPM sensor
+		65535 = not available"
+	::= { mppt4 17 }
+
+mpptNo  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-write
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 5 }
+
+mpptPVVoltage  OBJECT-TYPE
+	SYNTAX     Integer32 (0..400)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 6 }
+
+mpptPVPower  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 7 }
+
+mpptPVCurrent  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 8 }
+
+mpptBatteryVoltage  OBJECT-TYPE
+	SYNTAX     FloatValue
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 9 }
+
+mpptCurrentSensor1  OBJECT-TYPE
+	SYNTAX     Integer32 (-500..500)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 10 }
+
+mpptCurrentSensor2  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 11 }
+
+mpptEnergy  OBJECT-TYPE
+	SYNTAX     KwhValue
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 12 }
+
+mpptInternalTemperature  OBJECT-TYPE
+	SYNTAX     Integer32 (-50..50)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 13 }
+
+mpptBatteryTemperature  OBJECT-TYPE
+	SYNTAX     Integer32 (-50..50)
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 14 }
+
+mpptMode  OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE(0..10))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 15 }
+
+notificationsGroup  NOTIFICATION-GROUP
+	NOTIFICATIONS { trapBatteryCurrent, 
+		trapBatteryCurrentOk, 
+		trapBatteryMoitorUsersCounter, 
+		trapBatteryMonitorConsumedAh, 
+		trapBatteryMonitorDoD, 
+		trapBatteryMonitorSoC, 
+		trapBatteryMpptCurrent, 
+		trapBatteryMpptCurrentOk, 
+		trapBatteryPower, 
+		trapBatteryPowerOk, 
+		trapBatteryVoltage, 
+		trapBatteryVoltageOk, 
+		trapCountersEACC, 
+		trapCountersECHG, 
+		trapCountersENET, 
+		trapInputCurrent, 
+		trapInputCurrentOk, 
+		trapInputPower, 
+		trapInputPowerOk, 
+		trapInputVoltage, 
+		trapInputVoltageOk, 
+		trapMalinaTime, 
+		trapMpptBatteryTemperature, 
+		trapMpptBatteryTemperatureOk, 
+		trapMpptBatteryVoltage, 
+		trapMpptBatteryVoltageOk, 
+		trapMpptCurrentSensor1, 
+		trapMpptCurrentSensor1Ok, 
+		trapMpptCurrentSensor2, 
+		trapMpptCurrentSensor2Ok, 
+		trapMpptEnergy, 
+		trapMpptInternalTemperature, 
+		trapMpptInternalTemperatureOk, 
+		trapMpptMode, 
+		trapMpptPVCurrent, 
+		trapMpptPVCurrentOk, 
+		trapMpptPVPower, 
+		trapMpptPVPowerOk, 
+		trapMpptPVVoltageOk, 
+		trapOutputVoltage, 
+		trapOutputVoltageOk, 
+		trapStatusMode, 
+		trapStatusTacc, 
+		trapStatusTaccOk, 
+		trapStatusTMac, 
+		trapStatusTMacOk }
+	STATUS     current
+	DESCRIPTION 
+		"MAC notifications group"
+	::= { notifications 48 }
+
+macObjectsGroup  OBJECT-GROUP
+	OBJECTS { batteryCurrent, 
+		batteryMonitorConsumedAh, 
+		batteryMonitorCurrentCapacity, 
+		batteryMonitorDoD, 
+		batteryMonitorSoC, 
+		batteryMonitorStatus, 
+		batteryMonitorTTG, 
+		batteryMonitorUsersCounter, 
+		batteryMpptCurrent, 
+		batteryPower, 
+		batteryVoltage, 
+		countersEACC, 
+		countersECHG, 
+		countersENET, 
+		dcVoltage, 
+		fwRev, 
+		hwRev, 
+		inputCurrent, 
+		inputFrequency, 
+		inputPower, 
+		inputVoltage, 
+		macPower, 
+		outputFrequency, 
+		outputVoltage, 
+		statusCooler, 
+		statusMODE, 
+		statusModeText, 
+		statusRelay1, 
+		statusRelay2, 
+		statusTACC, 
+		statusTMAC }
+	STATUS     current
+	DESCRIPTION 
+		"MAC Objects Group"
+	::= { mac 8 }
+
+mpptObjectsGroup  OBJECT-GROUP
+	OBJECTS { mppt1BatteryTemperature, 
+		mppt1BatteryVoltage, 
+		mppt1CurrentSensor1, 
+		mppt1CurrentSensor2, 
+		mppt1Energy, 
+		mppt1Fw, 
+		mppt1InternalTemperature, 
+		mppt1Mode, 
+		mppt1Mpp, 
+		mppt1PVCurrent, 
+		mppt1PVPower, 
+		mppt1PVVoltage, 
+		mppt1Relay1, 
+		mppt1Relay2, 
+		mppt1Relay3, 
+		mppt1Sign, 
+		mppt1Windspeed, 
+		mppt2BatteryTemperature, 
+		mppt2BatteryVoltage, 
+		mppt2CurrentSensor1, 
+		mppt2CurrentSensor2, 
+		mppt2Energy, 
+		mppt2Fw, 
+		mppt2InternalTemperature, 
+		mppt2Mode, 
+		mppt2Mpp, 
+		mppt2PVCurrent, 
+		mppt2PVPower, 
+		mppt2PVVoltage, 
+		mppt2Relay1, 
+		mppt2Relay2, 
+		mppt2Relay3, 
+		mppt2Sign, 
+		mppt2Windspeed, 
+		mppt3BatteryTemperature, 
+		mppt3BatteryVoltage, 
+		mppt3CurrentSensor1, 
+		mppt3CurrentSensor2, 
+		mppt3Energy, 
+		mppt3Fw, 
+		mppt3InternalTemperature, 
+		mppt3Mode, 
+		mppt3Mpp, 
+		mppt3PVCurrent, 
+		mppt3PVPower, 
+		mppt3PVVoltage, 
+		mppt3Relay1, 
+		mppt3Relay2, 
+		mppt3Relay3, 
+		mppt3Sign, 
+		mppt3Windspeed, 
+		mppt4BatteryTemperature, 
+		mppt4BatteryVoltage, 
+		mppt4CurrentSensor1, 
+		mppt4CurrentSensor2, 
+		mppt4Energy, 
+		mppt4Fw, 
+		mppt4InternalTemperature, 
+		mppt4Mode, 
+		mppt4Mpp, 
+		mppt4PVCurrent, 
+		mppt4PVPower, 
+		mppt4PVVoltage, 
+		mppt4Relay1, 
+		mppt4Relay2, 
+		mppt4Relay3, 
+		mppt4Sign, 
+		mppt4Windspeed, 
+		mpptBatteryTemperature, 
+		mpptBatteryVoltage, 
+		mpptCurrentSensor1, 
+		mpptCurrentSensor2, 
+		mpptEnergy, 
+		mpptInternalTemperature, 
+		mpptMode, 
+		mpptNo, 
+		mpptPVCurrent, 
+		mpptPVPower, 
+		mpptPVVoltage }
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { mppt 17 }
+
+microartModCompliance  MODULE-COMPLIANCE
+	STATUS     current
+	DESCRIPTION 
+		"Compliance chapter"
+	MODULE
+		MANDATORY-GROUPS { notificationsGroup,
+				macObjectsGroup,
+					mpptObjectsGroup } 
+	::= { microart 4 }
+END
+
+
+-- This MIB was created using NuDesign Team's Visual MIBuilder (Ver 4.7).
+
