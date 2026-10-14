@@ -2,7 +2,7 @@
 
 Статус: **реализовано в `malina-web`** (эмуляция), источник контракта — **реверс
 бэкапа `.68`** (`daemons/batmond`, `daemons/*.pl`, `html/js/master_node.js`).
-Связано: `docs/legacy-api.md` (§7 ручки КЭС), `docs/legacy/master-node.md`
+Связано: `docs/legacy/legacy-api.md` (§7 ручки КЭС), `docs/legacy/master-node.md`
 (агрегатор «Мастер-Узел»), `docs/legacy/event-manager.md` (события АКБ).
 
 ## 1. Назначение
@@ -188,7 +188,7 @@ USB-шине) его нет.
 
 ## 6. Зачем это нужно (паритет поведения)
 
-`check_daemons` узла (`docs/legacy-api.md` §5) отдаёт **`batmond:0` только при
+`check_daemons` узла (`docs/legacy/legacy-api.md` §5) отдаёт **`batmond:0` только при
 наличии КЭС** (`presentKesCount() > 0`): агрегатор «Мастер-Узел» уходит в ветку
 batmon и берёт `mppt_day_E` (**Вт·ч**, целое → корректное деление). В ветке «нет
 batmon» агрегатор суммирует строковые `Pwr_kW` через `+=` и делит на 1000 → `NaN`

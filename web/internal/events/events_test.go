@@ -183,4 +183,58 @@ func TestResolveParam(t *testing.T) {
 	if v, _ := ResolveParam("uacc", f); v != (1*256+200)/10.0 {
 		t.Fatalf("uacc=%v", v)
 	}
+	// Единый слой measure: inet с учётом INET, pnet/PLoad по L/H, iacc со знаком.
+	g := map[string]uint32{
+		"INET": 20, "INET_16_4": 16, // INET≥16 → /4
+		"PNET_L": 36, "PNET_H": 0, // 3600 Вт
+		"PLoad_L": 10, "PLoad_H": 1, // (10+256)*100
+		"IAcc_med_A_u16_L": 160, "IAcc_med_A_u16_H": 0, "MODE_RAM": 5, // заряд → +10
+	}
+	if v, _ := ResolveParam("inet", g); v != 4 {
+		t.Fatalf("inet=%v", v)
+	}
+	if v, _ := ResolveParam("pnet", g); v != 3600 {
+		t.Fatalf("pnet=%v", v)
+	}
+	if v, _ := ResolveParam("pacc", g); v != (10+256)*100 {
+		t.Fatalf("pacc=%v", v)
+	}
+	if v, _ := ResolveParam("iacc", g); v != 10 {
+		t.Fatalf("iacc(charge)=%v", v)
+	}
+	g["MODE_RAM"] = 0
+	if v, _ := ResolveParam("iacc", g); v != -10 {
+		t.Fatalf("iacc(discharge)=%v", v)
+	}
+}
+
+func TestResolveParamKes(t *testing.T) {
+	g := map[string]uint32{
+		"VcPV": 1234, "IcPV": 567, "VBat": 4800, "PPV": 900,
+		"TempBat": 10, "TempInt": 25, "Windspeed": 120, "Mode": 105,
+	}
+	if v, _ := ResolveParam("k_vcpv", g); v != 12.34 {
+		t.Fatalf("k_vcpv=%v", v)
+	}
+	if v, _ := ResolveParam("k_icpv", g); v != 5.67 {
+		t.Fatalf("k_icpv=%v", v)
+	}
+	if v, _ := ResolveParam("k_ppv", g); v != 900 {
+		t.Fatalf("k_ppv=%v", v)
+	}
+	if v, _ := ResolveParam("k_tbat", g); v != -40 {
+		t.Fatalf("k_tbat=%v", v)
+	}
+	if v, _ := ResolveParam("k_tint", g); v != -25 {
+		t.Fatalf("k_tint=%v", v)
+	}
+	if v, _ := ResolveParam("k_mode", g); v != 105 {
+		t.Fatalf("k_mode=%v", v)
+	}
+	if _, ok := ResolveParam("k_unknown", g); ok {
+		t.Fatal("k_unknown не должен резолвиться")
+	}
+	if !IsParam("kes", "k_vcpv") || IsParam("map", "k_vcpv") || !IsParam("map", "unet") || IsParam("kes", "unet") {
+		t.Fatal("IsParam: неверная привязка параметров к типу")
+	}
 }

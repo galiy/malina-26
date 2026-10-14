@@ -1,7 +1,9 @@
-# КЭС: `kes-reader` — требования (согласование)
+# КЭС: `kes-reader`
 
 Статус: **реализован и задеплоен** (см. `daemons/kes-reader/`, `deploy/`); `web`-модуль
-отдаёт часть ручек через legacy-совместимость (`docs/legacy-api.md` §7).
+отдаёт часть ручек через legacy-совместимость (`docs/legacy/legacy-api.md` §7).
+**См. также:** `docs/kes-memory.md` (карта памяти), `docs/kes-contract.md` (бинарный
+контракт shm), `docs/legacy/kes-legacy-malina2.md` и `docs/legacy/kes-memory-not-accepted.md`.
 Связано: `docs/kes-memory.md` (карта измерений и **настроек** КЭС, модели),
 `docs/kes-contract.md` (бинарный контракт shm/слота),
 `docs/map-reader.md`, `docs/map-contract.md`, `docs/events.md` (§11 — заглушки КЭС),
@@ -49,7 +51,7 @@
 
 **Источники истины (только два):** `Карта Памяти_MPPT_WG_2021_01_18.xlsx` и наши
 подтверждённые ячейки — сведены в **`docs/kes-memory.md`**. Всё непроверенное (карта настроек,
-имена из МАП, паспорта, гипотезы) — **`docs/kes-memory-not-accepted.md`**. Дубли ячеек здесь
+имена из МАП, паспорта, гипотезы) — **`docs/legacy/kes-memory-not-accepted.md`**. Дубли ячеек здесь
 не храним.
 
 - **Probe:** `_Device (0x0000) == 5` — штатное MicroArt-чтение 1 байта; провал → не КЭС
@@ -92,7 +94,7 @@
 - `1/2/4/5/9` (ON/OFF/Charge*/DischOff) — **только МАП**.
 
 **Карта КЭС и подтверждённые ячейки** — только в `docs/kes-memory.md`
-(неподтверждённое — `docs/kes-memory-not-accepted.md`).
+(неподтверждённое — `docs/legacy/kes-memory-not-accepted.md`).
 
 ## 4.2. Запись в КЭС (target API)
 
@@ -245,7 +247,7 @@ MicroArt: посылка `w P A1 A0 D0..Dp S \n`; ответ `o S \n` (подт�
 
 ## 6.1. Публикация сырья в raw-хранилище (требование)
 
-**Статус:** требования (согласование); реализация — по отдельной отмашке.
+**Статус:** **реализовано** (`kes-reader/publish_raw.go`, контракт `kes` v1).
 
 - После **каждого цикла** опроса (после обновления shm) пулер **отдаёт raw-снапшот** —
   `{тип, id, время, значения полей}` по контракту `kes` v1 (`docs/stat.md`; RAM-блок

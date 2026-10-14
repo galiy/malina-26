@@ -1,6 +1,11 @@
 package events
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/galiy/malina-26/web/internal/measure"
+)
 
 // ParamSpec — курированный параметр события (МАП) с локализованной подписью.
 type ParamSpec struct {
@@ -8,8 +13,8 @@ type ParamSpec struct {
 	Label string // i18n-ключ подписи
 }
 
-// Params — курированный список параметров (см. docs/events.md §4).
-var Params = []ParamSpec{
+// ParamsMap — курированный список параметров МАП (см. docs/events.md §4).
+var ParamsMap = []ParamSpec{
 	{"unet", "events.f_unet"},
 	{"inet", "events.f_inet"},
 	{"pnet", "events.f_pnet"},
@@ -23,9 +28,34 @@ var Params = []ParamSpec{
 	{"t1", "events.f_t1"},
 }
 
-// IsParam — ключ входит в курированный список.
-func IsParam(key string) bool {
-	for _, p := range Params {
+// ParamsKes — курированный список параметров КЭС (ключи с префиксом «k_»).
+var ParamsKes = []ParamSpec{
+	{"k_vcpv", "events.k_vcpv"},
+	{"k_icpv", "events.k_icpv"},
+	{"k_vbat", "events.k_vbat"},
+	{"k_ich", "events.k_ich"},
+	{"k_iout", "events.k_iout"},
+	{"k_ppv", "events.k_ppv"},
+	{"k_pout", "events.k_pout"},
+	{"k_pload", "events.k_pload"},
+	{"k_pcurr", "events.k_pcurr"},
+	{"k_tint", "events.k_tint"},
+	{"k_tbat", "events.k_tbat"},
+	{"k_windspeed", "events.k_windspeed"},
+	{"k_mode", "events.k_mode"},
+}
+
+// ParamsFor — курированный список параметров по типу источника.
+func ParamsFor(kind string) []ParamSpec {
+	if kind == "kes" {
+		return ParamsKes
+	}
+	return ParamsMap
+}
+
+// IsParam — ключ входит в курированный список своего типа источника.
+func IsParam(kind, key string) bool {
+	for _, p := range ParamsFor(kind) {
 		if p.Key == key {
 			return true
 		}
@@ -33,26 +63,26 @@ func IsParam(key string) bool {
 	return false
 }
 
-// ResolveParam — значение параметра из сырых полей снимка МАП.
+// ResolveParam — значение параметра из сырых полей снимка (МАП или КЭС).
+// Ключи КЭС имеют префикс «k_».
 func ResolveParam(key string, f map[string]uint32) (float64, bool) {
+	if strings.HasPrefix(key, "k_") {
+		return resolveKes(key, f)
+	}
 	u := func(n string) uint32 { return f[n] }
 	switch key {
 	case "unet":
-		v := u("UNET")
-		if v == 0 {
-			return 0, true // нет сети
-		}
-		return float64(v) + 100, true
+		return measure.Volt220(u("UNET")), true
 	case "inet":
-		return float64(u("INET_16_4")) / 16, true
+		return measure.Inet(u("INET"), u("INET_16_4")), true
 	case "pnet":
-		return float64(u("PNET_8")) * 10, true
+		return measure.Power100(u("PNET_L"), u("PNET_H")), true
 	case "uacc":
-		return float64(u("UAcc_med_VH")*256+u("UAcc_med_VL")) / 10, true
+		return measure.BattVolt(u("UAcc_med_VH"), u("UAcc_med_VL")), true
 	case "iacc":
-		return float64(u("IAcc_med_A_u16_L")+u("IAcc_med_A_u16_H")*256) / 16, true
+		return measure.Iacc(u("IAcc_med_A_u16_L")+u("IAcc_med_A_u16_H")*256, u("MODE_RAM")), true
 	case "pacc":
-		return float64(u("PLoad_H")*256+u("PLoad_L")) * 100, true
+		return measure.Power100(u("PLoad_L"), u("PLoad_H")), true
 	case "imppt":
 		var sum float64
 		cnt := 0
@@ -62,7 +92,7 @@ func ResolveParam(key string, f map[string]uint32) (float64, bool) {
 			if !ok1 || !ok2 {
 				continue
 			}
-			sum += float64(l+(h&0x7F)*256) / 16
+			sum += measure.MpptCurrent(l, h)
 			cnt++
 		}
 		if cnt == 0 {
@@ -74,11 +104,45 @@ func ResolveParam(key string, f map[string]uint32) (float64, bool) {
 		ua, _ := ResolveParam("uacc", f)
 		return ua * ia, true
 	case "tmap":
-		return float64(u("Temp_Grad2")) - 50, true
+		return measure.Temp(u("Temp_Grad2")), true
 	case "tbat":
-		return float64(u("Temp_Grad0")) - 50, true
+		return measure.Temp(u("Temp_Grad0")), true
 	case "t1":
-		return float64(u("Temp_Grad1")) - 50, true
+		return measure.Temp(u("Temp_Grad1")), true
+	}
+	return 0, false
+}
+
+// resolveKes — параметры КЭС из раcпакованных полей снимка (docs/events.md §4).
+func resolveKes(key string, f map[string]uint32) (float64, bool) {
+	u := func(n string) uint32 { return f[n] }
+	switch key {
+	case "k_vcpv":
+		return measure.Centi(u("VcPV")), true
+	case "k_icpv":
+		return measure.Centi(u("IcPV")), true
+	case "k_vbat":
+		return measure.Centi(u("VBat")), true
+	case "k_ich":
+		return measure.Centi(u("ICh")), true
+	case "k_iout":
+		return measure.Centi(u("IOut")), true
+	case "k_ppv":
+		return float64(u("PPV")), true
+	case "k_pout":
+		return float64(u("POut")), true
+	case "k_pload":
+		return float64(u("PLoad")), true
+	case "k_pcurr":
+		return float64(u("PCurr")), true
+	case "k_tint":
+		return measure.Temp(u("TempInt")), true
+	case "k_tbat":
+		return measure.Temp(u("TempBat")), true
+	case "k_windspeed":
+		return float64(u("Windspeed")), true
+	case "k_mode":
+		return float64(u("Mode")), true
 	}
 	return 0, false
 }

@@ -29,6 +29,29 @@ type statsCol struct {
 	Type uint8  `json:"type"`
 	Unit string `json:"unit"` // единица измерения (пусто — коды/битфилды)
 	Raw  bool   `json:"raw"`  // значение показывается без пересчёта (код/битфилд)
+	Desc string `json:"desc"` // i18n-ключ описания (всплывающий хинт)
+}
+
+// descKeyFor — i18n-ключ описания поля («stats.f.<тип>.<имя>»); тип в ключе, чтобы
+// одноимённые поля разных устройств (напр. `PLoad`/`RSErrSis`) не смешивались.
+// У BMS имя содержит номер ячейки — берём базовое. Неизвестное поле — пустой ключ.
+func descKeyFor(typ string, id uint16, name string) string {
+	switch typ {
+	case "map":
+		return "stats.f.map." + name
+	case "kes":
+		return "stats.f.kes." + name
+	case "mbms":
+		switch id % 3 {
+		case 1:
+			return "stats.f.mbms.UakbCell"
+		case 2:
+			return "stats.f.mbms.TakbCell"
+		default:
+			return "stats.f.mbms.Q_Cell"
+		}
+	}
+	return ""
 }
 
 // statsRow — строка таблицы для клиента (значения: число или символ).
@@ -46,6 +69,7 @@ type fieldPlan struct {
 	fc    fieldConv
 	name  string
 	ftype uint8
+	desc  string
 }
 
 // verPlan — контракт версии + предвычисленные поля (кэш, R4).
@@ -195,12 +219,13 @@ func (s *Server) statsTable(typ, id string, from, to int64, dir uint8, limit int
 			if fc.Kind == kindRelay3 {
 				for i := 1; i <= 3; i++ {
 					p.cols = append(p.cols, fieldPlan{id: f.ID, bit: i, key: relayKey(f.ID, i),
-						fc: fieldConv{Kind: kindRelay3}, name: fmt.Sprintf("Relay%d", i), ftype: uint8(f.Type)})
+						fc: fieldConv{Kind: kindRelay3}, name: fmt.Sprintf("Relay%d", i), ftype: uint8(f.Type),
+						desc: descKeyFor(typ, f.ID, f.Name)})
 				}
 				continue
 			}
 			p.cols = append(p.cols, fieldPlan{id: f.ID, key: strconv.Itoa(int(f.ID)), fc: fc,
-				name: f.Name, ftype: uint8(f.Type)})
+				name: f.Name, ftype: uint8(f.Type), desc: descKeyFor(typ, f.ID, f.Name)})
 		}
 		planCache[ver] = p
 		return p
@@ -216,7 +241,7 @@ func (s *Server) statsTable(typ, id string, from, to int64, dir uint8, limit int
 		}
 		for _, pl := range p.cols {
 			if _, seen := cols[pl.key]; !seen {
-				cols[pl.key] = statsCol{ID: pl.key, Name: pl.name, Type: pl.ftype, Unit: pl.fc.Unit, Raw: pl.fc.Raw}
+				cols[pl.key] = statsCol{ID: pl.key, Name: pl.name, Type: pl.ftype, Unit: pl.fc.Unit, Raw: pl.fc.Raw, Desc: pl.desc}
 			}
 		}
 		vals, err := p.c.Decode(r.Payload)

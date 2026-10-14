@@ -1,6 +1,7 @@
 # UI записи в МАП (G1) — требования
 
-Статус: **v1 реализовано** (вкладка «Управление» на `/map`; данные — `control-data.js`,
+Статус: **v1 реализовано** (вкладка «Управление» на `/map`; **см. также**
+`docs/map-write.md`, `docs/map-write-api.md`; данные — `control-data.js`,
 генерируется `web/tools/gen_control.py` из `~/src/mapsettings/catalog.json` + легаси-набора;
 логика — `web/assets/static/control.js`; запись — `POST /api/map/write`).
 

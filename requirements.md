@@ -273,7 +273,7 @@ symlink `/var/lib/dbus/machine-id` → `/etc/machine-id`.
   берём первый попавшийся МАП с серийником `0`.
 
 ### 8.5. Поля
-Все поля считаются server-side по `docs/legacy_read_json_map.md` §1–§3:
+Все поля считаются server-side по `docs/legacy/legacy_read_json_map.md` §1–§3:
 - **Прямые ячейки** (`==`): `_Status_Char`, `_UNET`, `_INET`, `_Temp_Grad*`, …;
 - **Формулы §1**: `_Uacc`, `_Iacc`, `_PLoad`, `_Uch_T`, `_Ubuf_T`, `_TFNET`,
   `_ThFMAP`, `_INET_16_4`, `_I_ph1..3`, `fw`, `_UID`, …;

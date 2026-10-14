@@ -30,7 +30,7 @@ Legacy-модуль **закрепляется за одним МАП** (по ч
 - `device=map` — единственный поддерживаемый (иначе `400 {"error":"unsupported device"}`).
 - Ответ: `text/html; charset=UTF-8`, тело — **JSON-объект** с полями МАП
   (расчётный снимок, обновляется раз в секунду в основном цикле модуля).
-- Формат/семантика полей — `docs/legacy_read_json_map.md` (реверс старого JSON).
+- Формат/семантика полей — `docs/legacy/legacy_read_json_map.md` (реверс старого JSON).
 
 Пример:
 ```
@@ -225,7 +225,7 @@ Basic+PAM; это повторяет МАП-политику (`docs/api-auth.md`
 
 - `docs/api-auth.md` — авторизация (read открыт, write Basic+PAM).
 - `docs/map-write.md`, `docs/map-write-api.md` — контракт записи в МАП.
-- `docs/legacy_read_json_map.md` — формат `read_json.php` (реверс).
-- `docs/legacy-endpoints.md` — инвентаризация legacy-API (что есть и не перенесено).
+- `docs/legacy/legacy_read_json_map.md` — формат `read_json.php` (реверс).
+- `docs/legacy/legacy-endpoints.md` — инвентаризация legacy-API (что есть и не перенесено).
 - `docs/legacy/bms-api.md` — контракт `read_bms.php`.
 - `web/README.md` — реализация.

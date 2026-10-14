@@ -2,8 +2,22 @@
 (function () {
   var tbody = document.getElementById("evRows");
   var add = document.getElementById("evAdd");
-  var L = window.EV_I18N || {}, P = window.EV_PARAMS || [], M = window.EV_MODES || [], A = window.EV_ACTIONS || [], SERIALS = window.EV_SERIALS || [];
+  var L = window.EV_I18N || {}, P = window.EV_PARAMS || {}, M = window.EV_MODES || [], A = window.EV_ACTIONS || [], SERIALS = window.EV_SERIALS || {};
   if (!tbody || !add) return;
+  // Набор серийников для комбобокса по типу устройства строки (map/kes).
+  function serialList(inp) {
+    var tr = inp.closest("tr");
+    var kind = "map";
+    if (inp.name === "source_serial") {
+      var sk = tr && tr.querySelector('select[name="source_kind"]');
+      kind = sk ? sk.value : "map";
+    } else {
+      var tk = tr && tr.querySelector('select[name="target_kind"]');
+      if (tk && tk.value) { kind = tk.value; }
+      else { var sk2 = tr && tr.querySelector('select[name="source_kind"]'); kind = sk2 ? sk2.value : "map"; }
+    }
+    return (SERIALS && SERIALS[kind]) || [];
+  }
 
   // Комбобокс: выпадающий список серийников + возможность ввести своё.
   function enhanceCombo(inp) {
@@ -24,9 +38,10 @@
     }
     function build() {
       var q = (inp.value || "").toLowerCase();
+      var arr = serialList(inp);
       list.innerHTML = "";
-      for (var i = 0; i < SERIALS.length; i++) {
-        var s = String(SERIALS[i]);
+      for (var i = 0; i < arr.length; i++) {
+        var s = String(arr[i]);
         if (q && s.toLowerCase().indexOf(q) < 0) continue;
         var d = document.createElement("div"); d.className = "ev-combo-opt"; d.textContent = s;
         d.addEventListener("mousedown", function (e) { e.preventDefault(); inp.value = this.textContent; list.hidden = true; inp.dispatchEvent(new Event("change", { bubbles: true })); });
@@ -69,6 +84,20 @@
     for (var i = 0; i < arr.length; i++) { h += '<option value="' + arr[i][0] + '"' + (String(arr[i][0]) === String(cur) ? " selected" : "") + ">" + arr[i][1] + "</option>"; }
     return h;
   }
+  // Опции параметров двумя группами (map/kes); чужая группа гасится в toggle().
+  function fieldOpts(cur) {
+    var kinds = [["map", L.kind_map || "MAP"], ["kes", L.kind_kes || "KES"]];
+    var h = '<option value=""></option>';
+    for (var i = 0; i < kinds.length; i++) {
+      h += '<optgroup label="' + esc(kinds[i][1]) + '" data-kind="' + kinds[i][0] + '">';
+      var arr = P[kinds[i][0]] || [];
+      for (var j = 0; j < arr.length; j++) {
+        h += '<option value="' + esc(arr[j][0]) + '"' + (String(arr[j][0]) === String(cur || "") ? " selected" : "") + ">" + esc(arr[j][1]) + "</option>";
+      }
+      h += "</optgroup>";
+    }
+    return h;
+  }
   function isMac(a) { return a === "mac_stop_gen" || a === "mac_stop" || a === "mac_start"; }
   function isRelay(a) { return a.indexOf("relay") === 0; }
   function needsTarget(a) { return isMac(a) || isRelay(a); }
@@ -82,6 +111,14 @@
     row.querySelector(".ev-recipient").hidden = a !== "email";
     row.querySelector(".ev-target").hidden = !needsTarget(a);
     row.querySelector(".ev-trap").hidden = a !== "snmp";
+    // Параметры — только своего типа источника.
+    var fsel = row.querySelector('select[name="field"]');
+    var sk = row.querySelector('select[name="source_kind"]');
+    if (fsel && sk) {
+      Array.prototype.forEach.call(fsel.querySelectorAll("optgroup"), function (g) {
+        g.disabled = g.getAttribute("data-kind") !== sk.value;
+      });
+    }
     var tk = row.querySelector('select[name="target_kind"]');
     var ts = row.querySelector('input[name="target_serial"]');
     if (ts) {
@@ -104,7 +141,7 @@
     h += '<td><input type="hidden" name="id" value=""><select name="source_kind">' + opts(kinds, "map") +
       '</select><input name="source_serial" size="7" placeholder="' + esc(L.serial_ph) + '"></td>';
     h += "<td><select name=\"type\" class=\"ev-type\">" + opts(types, "param") + "</select></td>";
-    h += '<td class="ev-ctl"><span class="ev-param"><select name="field">' + opts([["", ""]].concat(P), "") + "</select>" +
+    h += '<td class="ev-ctl"><span class="ev-param"><select name="field">' + fieldOpts("") + "</select>" +
       '<select name="op">' + opts(ops, "le") + '</select><input name="value" size="8"></span>' +
       '<span class="ev-time" hidden><input name="time" type="time"></span>' +
       '<span class="ev-mode" hidden><select name="mode">' + opts(modeArr, "0") + "</select></span></td>";
@@ -140,7 +177,7 @@
     if (e.target && e.target.classList.contains("ev-del")) { var tr = e.target.closest("tr"); if (tr) { tr.remove(); setDirty(true); updateClear(); } }
   });
   tbody.addEventListener("change", function (e) {
-    if (e.target && (e.target.classList.contains("ev-type") || e.target.classList.contains("ev-action") || e.target.name === "target_kind")) { toggle(e.target.closest("tr")); }
+    if (e.target && (e.target.classList.contains("ev-type") || e.target.classList.contains("ev-action") || e.target.name === "target_kind" || e.target.name === "source_kind")) { toggle(e.target.closest("tr")); }
   });
   Array.prototype.forEach.call(tbody.querySelectorAll(".ev-row"), toggle);
   enhanceAll(tbody);

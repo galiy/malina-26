@@ -34,7 +34,7 @@ Legacy-запись `write_eeprom` **реализована**: `POST data=[[addr
 цикле legacy-модуля (см. `web/README.md`), ответ — текст `Ok`/`error`.
 **Rate-limit/lockout не делаем** (согласовано).
 
-Контракт legacy-API (чтение и запись) — `docs/legacy-api.md`.
+Контракт legacy-API (чтение и запись) — `docs/legacy/legacy-api.md`.
 
 ## 2. Веб-сессия и токены — общий механизм
 

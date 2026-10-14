@@ -1,8 +1,10 @@
-# Запись в МАП через map-reader — требования (черновик)
+# Запись в МАП через map-reader
 
-Статус: **требования согласованы; базовая реализация сделана** — native (Микроарт)
+Статус: **реализовано** — native (Микроарт)
 полностью; Modbus — команды (0x06) и выровненные блоки (0x10, чётный адрес +
 чётная длина), нечётные блоки отклоняются (§6).
+**См. также:** `docs/map-write-api.md` (API/контракт), `docs/map-write-ui.md` (UI),
+`docs/map-reader.md` (демон).
 Источники: `docs/map-reader.md`, `docs/map.md`, `docs/map-contract.md`,
 `protocol_MAP_cells_2026_07_15.doc`, референс `sunReceiver/docs/map/mapread/mapread.py`.
 

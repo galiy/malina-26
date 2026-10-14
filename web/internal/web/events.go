@@ -34,8 +34,9 @@ func (s *Server) eventsData(r *http.Request) map[string]any {
 		"mac_stop_gen", "mac_stop", "mac_start", "snmp",
 	}
 	data["Kinds"] = []string{"map", "kes"}
-	data["MapSerials"] = mapSerials()
-	data["Params"] = events.Params
+	data["Params"] = events.ParamsMap
+	data["ParamsKes"] = events.ParamsKes
+	data["EvSerials"] = map[string][]string{"map": mapSerials(), "kes": kesSerials()}
 	lang := s.lang(r)
 	// Все коды 0..18; для 9 — статический текст из событий (панель у 9 динамическая).
 	modePairs := make([][2]string, 0, 19)
@@ -56,10 +57,14 @@ func (s *Server) eventsData(r *http.Request) map[string]any {
 		"serial_ph": s.tr(lang, "events.serial_ph"), "del": s.tr(lang, "events.del"),
 		"confirm_clear": s.tr(lang, "events.confirm_clear"),
 	}
-	// Списки для JS-шаблона новой строки.
-	params := make([][2]string, 0, len(events.Params))
-	for _, p := range events.Params {
+	// Списки для JS-шаблона новой строки (по типам источника).
+	params := make([][2]string, 0, len(events.ParamsMap))
+	for _, p := range events.ParamsMap {
 		params = append(params, [2]string{p.Key, s.tr(lang, p.Label)})
+	}
+	paramsKes := make([][2]string, 0, len(events.ParamsKes))
+	for _, p := range events.ParamsKes {
+		paramsKes = append(paramsKes, [2]string{p.Key, s.tr(lang, p.Label)})
 	}
 	actLabel := map[string]string{
 		"email": "events.act_email", "snmp": "events.act_snmp",
@@ -72,10 +77,19 @@ func (s *Server) eventsData(r *http.Request) map[string]any {
 	for _, a := range data["Actions"].([]string) {
 		acts = append(acts, [2]string{a, s.tr(lang, actLabel[a])})
 	}
-	data["EvParams"] = params
+	data["EvParams"] = map[string][][2]string{"map": params, "kes": paramsKes}
 	data["EvModes"] = modePairs
 	data["EvActions"] = acts
 	return data
+}
+
+// kesSerials — серийники подключённых КЭС (для combo в правилах событий).
+func kesSerials() []string {
+	out := []string{}
+	for _, k := range loadKesList().Kes {
+		out = append(out, k.SerialLabel())
+	}
+	return out
 }
 
 // handleEvents — «Система → Менеджер событий».

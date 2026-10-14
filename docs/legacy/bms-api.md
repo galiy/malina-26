@@ -2,7 +2,7 @@
 
 Статус: **реализовано в `malina-web`** (`/read_bms.php`). Источник контракта —
 **реверс бэкапа** (`html/read_bms.php` + строки формата бинаря `/usr/sbin/bmslistener`).
-Связано: `docs/legacy-api.md` (список legacy-эндпоинтов), `docs/legacy-endpoints.md`
+Связано: `docs/legacy/legacy-api.md` (список legacy-эндпоинтов), `docs/legacy/legacy-endpoints.md`
 (инвентаризация), `docs/legacy/batmon-api.md` (АКБ/BMS-эмуляция), `docs/legacy/master-node.md`.
 
 ## 1. Назначение
@@ -92,6 +92,6 @@ GET /read_bms.php
 
 ## 5. Ссылки
 
-- `docs/legacy-api.md` — список реализованных legacy-эндпоинтов.
+- `docs/legacy/legacy-api.md` — список реализованных legacy-эндпоинтов.
 - `docs/legacy/batmon-api.md` — эмуляция `read_json.php?device=bat`.
 - `web/internal/web/legacy.go` (`renderBMS`), `web/internal/web/ocv.go` (оценка SoC).

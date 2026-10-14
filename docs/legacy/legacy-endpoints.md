@@ -4,7 +4,7 @@
 `titanator_malina_fixed_20261007`, раздел `settings/html`), которые у нас **пока не
 реализованы**. HTML-страницы не включены.
 
-Уже перенесено (см. `docs/legacy-api.md`): `read_json.php` (вкл. `device=mppt`,
+Уже перенесено (см. `docs/legacy/legacy-api.md`): `read_json.php` (вкл. `device=mppt`,
 `device=bat` — **эмуляция batmon**, `docs/legacy/batmon-api.md`), `read_memory.php`,
 `check_daemons.php`, `write_eeprom.php`, `read_sec.php`, `write_sec.php`,
 `read_bms.php` (**stateless**, из снимка МАП — `docs/legacy/bms-api.md`).

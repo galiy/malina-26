@@ -206,8 +206,8 @@ func Validate(c Config) error {
 			if !allowedOps[e.Op] {
 				return fmt.Errorf("правило %d: недопустимое условие %q", i+1, e.Op)
 			}
-			if !IsParam(e.Field) {
-				return fmt.Errorf("правило %d: недопустимый параметр %q", i+1, e.Field)
+			if !IsParam(e.Source.Kind, e.Field) {
+				return fmt.Errorf("правило %d: недопустимый параметр %q для типа %q", i+1, e.Field, e.Source.Kind)
 			}
 			if _, err := strconv.ParseFloat(strings.TrimSpace(e.Value), 64); err != nil {
 				return fmt.Errorf("правило %d: значение — число", i+1)

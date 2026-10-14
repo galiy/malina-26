@@ -10,7 +10,7 @@ import (
 
 // legacy-API КЭС: read_sec.php (чтение диапазона из виртуального адресного
 // пространства) и write_sec.php (реле + произвольные ячейки). read_json.php?device=mppt
-// — расширение handleReadJSON (см. legacyapi.go). Контракт — docs/legacy-api.md §7.
+// — расширение handleReadJSON (см. legacyapi.go). Контракт — docs/legacy/legacy-api.md §7.
 
 // kesWriteResp — ответ kes-reader (write).
 type kesWriteResp struct {

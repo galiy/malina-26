@@ -16,6 +16,40 @@
   var upBtn = document.getElementById("stats-up");
   var downBtn = document.getElementById("stats-down");
 
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // Всплывающая подсказка заголовка колонки (по щелчку): i18n-ключ описания,
+  // fallback — имя поля. Открывается возле заголовка, повторный клик/клик вне — закрыть.
+  function hintText(key, fallback) {
+    if (!key) return "";
+    var v = I[key];
+    return (v && v !== key) ? v : (fallback || "");
+  }
+  var hintEl = null, hintTh = null;
+  function hideHint() { if (hintEl) { hintEl.remove(); hintEl = null; hintTh = null; } }
+  function toggleHint(th) {
+    var txt = hintText(th.getAttribute("data-desc"), th.getAttribute("data-name"));
+    if (!txt) return;
+    if (hintEl && hintTh === th) { hideHint(); return; }
+    hideHint();
+    hintEl = document.createElement("div");
+    hintEl.className = "stats-hint";
+    hintEl.textContent = txt;
+    document.body.appendChild(hintEl);
+    var r = th.getBoundingClientRect();
+    var left = Math.min(Math.max(4, r.left), Math.max(4, window.innerWidth - hintEl.offsetWidth - 4));
+    hintEl.style.left = left + "px";
+    hintEl.style.top = (r.bottom + 4) + "px";
+    hintTh = th;
+  }
+  document.addEventListener("click", function (e) {
+    if (hintEl && !(e.target.closest && e.target.closest(".stats-hint"))) hideHint();
+  });
+
   function url(q) { return "/api/stats/table?" + q; }
 
   async function api(u) {
@@ -93,18 +127,29 @@
   function renderTable(rows, cols) {
     if (!rows.length) { tableEl.innerHTML = '<div class="muted">' + T("stats.no_data") + "</div>"; edge.top = edge.bottom = 0; return; }
     // колонки — по контракту (имя поля + единица второй строкой); fallback — union field_id
-    var names = {}, units = {}, raws = {};
-    (cols || []).forEach(function (c) { names[c.id] = c.name; units[c.id] = c.unit || ""; raws[c.id] = !!c.raw; });
+    var names = {}, units = {}, raws = {}, descs = {};
+    (cols || []).forEach(function (c) {
+      names[c.id] = c.name; units[c.id] = c.unit || ""; raws[c.id] = !!c.raw; descs[c.id] = c.desc || "";
+    });
     var colIds = (cols || []).map(function (c) { return String(c.id); });
     if (!colIds.length) {
       var s = {}; rows.forEach(function (r) { Object.keys(r.f || {}).forEach(function (k) { s[k] = true; }); });
       colIds = Object.keys(s).sort(function (a, b) { return (+a) - (+b); });
     }
-    var html = '<table class="tbl"><thead><tr><th>' + T("stats.time") + "</th><th>" + verHdr + "</th>";
+    // У BMS «версия» — это число ячеек (Vn); подписываем колонку соответственно.
+    var isCells = !!(active && active.type === "mbms");
+    var verHdr = T(isCells ? "stats.cells" : "stats.version");
+    var timeHdr = T("stats.time");
+    var html = '<table class="tbl"><thead><tr>' +
+      '<th class="has-hint" data-desc="stats.hint.time" data-name="' + esc(timeHdr) + '">' + timeHdr + "</th>" +
+      '<th class="has-hint" data-desc="' + (isCells ? "stats.hint.cells" : "stats.hint.version") +
+      '" data-name="' + esc(verHdr) + '">' + verHdr + "</th>";
     colIds.forEach(function (c) {
       // «сырое» поле (без пересчёта) помечаем звёздочкой с подсказкой (R6)
-      var mark = raws[c] ? ' <sup title="' + T("stats.raw_field") + '">*</sup>' : "";
-      html += "<th>" + (names[c] || "f" + c) + mark + (units[c] ? '<div class="unit">' + units[c] + "</div>" : "") + "</th>";
+      var mark = raws[c] ? ' <sup title="' + esc(T("stats.raw_field")) + '">*</sup>' : "";
+      var nm = names[c] || ("f" + c);
+      html += '<th class="has-hint" data-desc="' + esc(descs[c] || "") + '" data-name="' + esc(nm) + '">' +
+        nm + mark + (units[c] ? '<div class="unit">' + units[c] + "</div>" : "") + "</th>";
     });
     html += "</tr></thead><tbody>";
     rows.forEach(function (r) {
@@ -117,6 +162,13 @@
     edge.top = rows[0].t;
     edge.bottom = rows[rows.length - 1].t;
   }
+
+  // Хинт открывается по щелчку на заголовке колонки (таблица перерисовывается —
+  // слушатель на контейнере, не на ячейках).
+  tableEl.addEventListener("click", function (e) {
+    var th = e.target.closest && e.target.closest("th.has-hint");
+    if (th) { e.stopPropagation(); toggleHint(th); }
+  });
 
   async function query(from, to, dir) {
     if (!active) return;

@@ -5,8 +5,12 @@
 //
 // Формулы — по эталону панели 1 МАП (`web/assets/static/map.js`, функция
 // `compute`), а также docs/stat.md (КЭС) и docs/legacy/bms-api.md (BMS).
+// Общие формулы МАП вынесены в `web/internal/measure` (единый слой с менеджером
+// событий); здесь — только привязка «поле → единица/пересчёт» и КЭС/BMS.
 // Где масштаб не задокументирован — поле без единицы и без пересчёта.
 package web
+
+import "github.com/galiy/malina-26/web/internal/measure"
 
 // fieldKind — способ представления значения поля.
 type fieldKind uint8
@@ -48,63 +52,47 @@ func linConv(unit string, scale, offset float64) fieldConv {
 	return numConv(unit, func(v float64, _ map[uint16]float64) (float64, bool) { return v*scale + offset, true })
 }
 
-// voltPlus100 — напряжение сети/выхода МАП: `0` = нет сети (показываем `0`),
-// иначе `V+100` (В) — как в панели 1.
+// voltPlus100 — напряжение сети/выхода МАП (measure.Volt220).
 func voltPlus100() fieldConv {
 	return numConv("В", func(v float64, _ map[uint16]float64) (float64, bool) {
-		if v == 0 {
-			return 0, true
-		}
-		return v + 100, true
+		return measure.Volt220(uint32(v)), true
 	})
 }
 
-// freq6250 — частота МАП: `6250/V` (Гц); `0` — нет данных.
+// freq6250 — частота МАП (measure.Freq6250); 0 — нет данных.
 func freq6250() fieldConv {
 	return numConv("Гц", func(v float64, _ map[uint16]float64) (float64, bool) {
-		if v == 0 {
-			return 0, false
-		}
-		return 6250 / v, true
+		return measure.Freq6250(uint32(v))
 	})
 }
 
-// inet164 — ток сети (МАП): `V/(INET≥16 ? 4 : 16)` А (панель 1). Без INET — нет данных.
+// inet164 — ток сети (МАП, measure.Inet). Без INET — нет данных.
 func inet164() fieldConv {
 	return numConv("А", func(v float64, row map[uint16]float64) (float64, bool) {
 		inet, ok := row[2] // INET
 		if !ok {
 			return 0, false
 		}
-		d := 16.0
-		if inet >= 16 {
-			d = 4
-		}
-		return v / d, true
+		return measure.Inet(uint32(inet), uint32(v)), true
 	})
 }
 
-// iaccU16 — ток АКБ (МАП): `V/16` А, знак по режиму (`MODE` 4..9 — заряд → «+»).
-// Без MODE знак неизвестен — нет данных.
+// iaccU16 — ток АКБ (МАП, measure.Iacc; знак по MODE_RAM). Без MODE — нет данных.
 func iaccU16() fieldConv {
 	return numConv("А", func(v float64, row map[uint16]float64) (float64, bool) {
 		mode, ok := row[19] // MODE_RAM
 		if !ok {
 			return 0, false
 		}
-		a := v / 16
-		if !isCharge(mode) {
-			a = -a
-		}
-		return a, true
+		return measure.Iacc(uint32(v), uint32(mode)), true
 	})
 }
 
-func isCharge(mode float64) bool { return mode >= 4 && mode <= 9 }
-
-// tempShift50 — температуры МАП/КЭС: `V−50` (°C).
+// tempShift50 — температуры МАП/КЭС (measure.Temp).
 func tempShift50() fieldConv {
-	return numConv("°C", func(v float64, _ map[uint16]float64) (float64, bool) { return v - 50, true })
+	return numConv("°C", func(v float64, _ map[uint16]float64) (float64, bool) {
+		return measure.Temp(uint32(v)), true
+	})
 }
 
 // tempBms — температура ячейки BMS: `255` — нет датчика → нет данных («—»),

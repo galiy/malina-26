@@ -353,7 +353,7 @@ func kesModeString(f *kesFields) string {
 ## 6. Формулы значений (сервер)
 
 Все значения — из поля снимка МАП (`f` = `decodeMapFields`, см. таблицу соответствий
-`docs/legacy_read_json_map.md` §1) и полей КЭС (`kf` = `parseKesPayload`).
+`docs/legacy/legacy_read_json_map.md` §1) и полей КЭС (`kf` = `parseKesPayload`).
 
 ### 6.1 МАП — «Сеть»
 
@@ -727,7 +727,7 @@ func kesModeString(f *kesFields) string {
 6. Сборка/тесты: `cd web && go build ./... && go vet ./... && go test ./...`
    (из корня — `go build ./web/... ./daemons/...`).
 7. При изменении референсов (если менялась логика) — обновить
-   `docs/legacy_read_json_map.md` / `docs/batmon-api.md` / `docs/kes-memory.md`.
+   `docs/legacy/legacy_read_json_map.md` / `docs/batmon-api.md` / `docs/kes-memory.md`.
 
 ---
 

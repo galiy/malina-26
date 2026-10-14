@@ -34,7 +34,7 @@
         </select></td>
         <td class="ev-ctl">
           <span class="ev-param" {{if ne .Type "param"}}hidden{{end}}>
-            <select name="field"><option value=""></option>{{range $.Params}}<option value="{{.Key}}" {{if eq .Key $e.Field}}selected{{end}}>{{index $.T .Label}}</option>{{end}}</select>
+            <select name="field"><option value=""></option><optgroup label="{{index $.T "events.kind_map"}}" data-kind="map">{{range $.Params}}<option value="{{.Key}}" {{if eq .Key $e.Field}}selected{{end}}>{{index $.T .Label}}</option>{{end}}</optgroup><optgroup label="{{index $.T "events.kind_kes"}}" data-kind="kes">{{range $.ParamsKes}}<option value="{{.Key}}" {{if eq .Key $e.Field}}selected{{end}}>{{index $.T .Label}}</option>{{end}}</optgroup></select>
             <select name="op">
               <option value="le" {{if eq $e.Op "le"}}selected{{end}}>&#8804;</option>
               <option value="ge" {{if eq $e.Op "ge"}}selected{{end}}>&#8805;</option>
@@ -82,6 +82,6 @@
   </div>
 </form>
 
-<script>window.EV_I18N = {{json .EvI18N}}; window.EV_PARAMS = {{json .EvParams}}; window.EV_MODES = {{json .EvModes}}; window.EV_ACTIONS = {{json .EvActions}}; window.EV_SERIALS = {{json .MapSerials}};</script>
+<script>window.EV_I18N = {{json .EvI18N}}; window.EV_PARAMS = {{json .EvParams}}; window.EV_MODES = {{json .EvModes}}; window.EV_ACTIONS = {{json .EvActions}}; window.EV_SERIALS = {{json .EvSerials}};</script>
 <script src="{{asset "events.js"}}"></script>
 {{end}}

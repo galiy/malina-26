@@ -11,7 +11,7 @@ import (
 )
 
 // legacy-api: совместимость со старым read_json.php?device=map (mapd).
-// Формат/формулы сверены с живым mapd на боевом узле (см. docs/legacy_read_json_map.md).
+// Формат/формулы сверены с живым mapd на боевом узле (см. docs/legacy/legacy_read_json_map.md).
 
 // legacyFieldIdx — имя поля -> id в контракте MapData (порядок mapFieldNames).
 var legacyFieldIdx = func() map[string]int {

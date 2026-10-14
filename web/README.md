@@ -73,7 +73,7 @@
 - `GET /read_json.php?device=map`, `GET /read_memory.php`, `GET /check_daemons.php` —
   legacy-чтение (**без авторизации**).
 
-Полное описание legacy API — `docs/legacy-api.md`.
+Полное описание legacy API — `docs/legacy/legacy-api.md`.
 - `GET /api/system` — системные данные (JSON). Список процессов **не входит**.
 - `GET /api/processes` — снимок процессов (по запросу; не автообновляется).
 - `GET /api/services` — состояние управляемых служб; `POST /services/action` — start/stop.

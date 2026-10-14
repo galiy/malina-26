@@ -71,9 +71,56 @@ func findMapBySerial(serial string) (MapInfo, bool) {
 	return MapInfo{}, false
 }
 
+// findKesBySerial — запись kes-list по серийнику.
+func findKesBySerial(serial string) (KesInfo, bool) {
+	for _, k := range loadKesList().Kes {
+		if strconv.FormatUint(uint64(k.Serial), 10) == serial {
+			return k, true
+		}
+	}
+	return KesInfo{}, false
+}
+
+// kesSnapFields — поля снимка КЭС (имена как в контракте kes-reader / docs/stat.md).
+func kesSnapFields(f *kesFields) map[string]uint32 {
+	return map[string]uint32{
+		"VcPV": uint32(f.VcPV), "IcPV": uint32(f.IcPV), "VBat": uint32(f.VBat),
+		"PPV": uint32(f.PPV), "POut": uint32(f.POut), "PLoad": uint32(f.PLoad), "PCurr": uint32(f.PCurr),
+		"ICh": uint32(f.ICh), "IOut": uint32(f.IOut),
+		"TempInt": uint32(f.TempInt), "TempBat": uint32(f.TempBat),
+		"Mode": uint32(f.Mode), "Windspeed": uint32(f.Windspeed), "RelayC": uint32(f.RelayC),
+	}
+}
+
+// kesSnapshot — снимок КЭС по серийнику из shm kes-reader.
+func (p *mapEventsProvider) kesSnapshot(serial string) (events.Snapshot, bool) {
+	key := "kes:" + serial
+	if p.blacklisted(key) {
+		return events.Snapshot{}, false
+	}
+	k, ok := findKesBySerial(serial)
+	if !ok {
+		p.addBlack(key)
+		return events.Snapshot{}, false
+	}
+	payload := kesRawPayload(k.ID)
+	if payload == nil {
+		return events.Snapshot{}, false
+	}
+	f, ok := parseKesPayload(payload)
+	if !ok {
+		return events.Snapshot{}, false
+	}
+	p.clearBlack(key)
+	return events.Snapshot{Serial: serial, Kind: "kes", Model: "kes", Fields: kesSnapFields(f), OK: true}, true
+}
+
 func (p *mapEventsProvider) Snapshot(serial, kind string) (events.Snapshot, bool) {
+	if kind == "kes" {
+		return p.kesSnapshot(serial)
+	}
 	if kind != "" && kind != "map" {
-		return events.Snapshot{}, false // КЭС — пока не реализован
+		return events.Snapshot{}, false
 	}
 	key := kind + ":" + serial
 	if p.blacklisted(key) {
@@ -94,8 +141,20 @@ func (p *mapEventsProvider) Snapshot(serial, kind string) (events.Snapshot, bool
 
 // Available — существует ли устройство (target); не найден → блэклист.
 func (p *mapEventsProvider) Available(serial, kind string) bool {
+	if kind == "kes" {
+		key := "kes:" + serial
+		if p.blacklisted(key) {
+			return false
+		}
+		if _, ok := findKesBySerial(serial); ok {
+			p.clearBlack(key)
+			return true
+		}
+		p.addBlack(key)
+		return false
+	}
 	if kind != "" && kind != "map" {
-		return false // КЭС — заглушка
+		return false
 	}
 	key := kind + ":" + serial
 	if p.blacklisted(key) {

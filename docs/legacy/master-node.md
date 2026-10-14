@@ -224,8 +224,8 @@ PHP-страница рендерит форму-заготовку: конте�
 маркера `#EOF` → отдаёт как JSON-объект (поля `_Uacc`, `_UNET`, `_UOUTmed`,
 `_INET_16_4`, `_PNET_calc`, `_IAcc_med_A_u16`, `_PLoad_calc`, `_Relay1/2`,
 `_flagUnet2`, `_Temp_Grad0/2`, `_MODE`, `_I_mppt_avg`, счётчики RS-ошибок,
-`time` и т.д.). Формат полей — `docs/legacy_read_json_map.md`.
-Наш `malina-web` реализует только `device=map` (см. `docs/legacy-api.md`).
+`time` и т.д.). Формат полей — `docs/legacy/legacy_read_json_map.md`.
+Наш `malina-web` реализует только `device=map` (см. `docs/legacy/legacy-api.md`).
 
 ### 7.3 `GET /read_json.php?device=bat`
 
@@ -269,14 +269,14 @@ JS по каждому элементу читает `Vc_PV`, `P_Out`, `Temp_Int
   `check_daemons.php`; реальный BMS/batmon — функционал иной подсистемы
   (вне профиля — эмулируем только нужные панели поля).
 - Для совместимости «Мастер-Узла» `check_daemons.php` обязан отдавать
-  `mpptd0..3=0` для присутствующих КЭС (`docs/legacy-api.md` §5); иначе агрегатор
+  `mpptd0..3=0` для присутствующих КЭС (`docs/legacy/legacy-api.md` §5); иначе агрегатор
   не опрашивает `read_json.php?device=mppt` и КЭС не рисуются.
 - Введённый в валидацию лимит **10 узлов** и символьный санитайз имени — часть
   контракта экрана настройки.
 
 ## 9. Ссылки
 
-- `docs/legacy-api.md` — что уже перенесено (`read_json`, `check_daemons`, …).
-- `docs/legacy-endpoints.md` — инвентаризация legacy-API.
-- `docs/legacy_read_json_map.md` — формат снимка МАП.
+- `docs/legacy/legacy-api.md` — что уже перенесено (`read_json`, `check_daemons`, …).
+- `docs/legacy/legacy-endpoints.md` — инвентаризация legacy-API.
+- `docs/legacy/legacy_read_json_map.md` — формат снимка МАП.
 - `docs/map-memory.md`, `docs/map-contract.md` — контракт shm.
