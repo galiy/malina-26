@@ -166,7 +166,7 @@ SNMP v2c, чтобы внешняя система мониторинга (Zabbi
 | 5 | Протокол/community | v2c, community `public` (см. §1.4.5, §1.6) |
 | 6 | Аутентификация/доступ | только чтение (ro); при необходимости — ограничить списком адресов опрашивающих |
 | 7 | Конфиг агента | версионируемый файл на `/malina` вкл/порт/community; применение без пересборки (перезапуск web или реконфиг) |
-| 8 | Юнит/systemd | **без отдельного юнита** — часть `malina-web.service`; порт 161 — через `CAP_NET_BIND_SERVICE` (см. §1.6) |
+| 8 | Юнит/systemd | **без отдельного юнита** — часть `malina-web.service`; порт 161 <1024 (web работает от root, привилегии не ограничиваются) |
 | 9 | Данные при отсутствии устройства | возвращать «нет значения»/`noSuch` корректно, не ошибку агента |
 | 10 | Единицы/множители | значения в фиксированных физ. единицах (как в `mainlist`/`map-contract`), множители — явно в MIB/схеме |
 
@@ -201,7 +201,7 @@ SNMP v2c, чтобы внешняя система мониторинга (Zabbi
 |---|---|
 | Транспорт | UDP (SNMP-агент). Слушатель — отдельный goroutine внутри `malina-web`. |
 | Порт | **UDP 161** — канонический SNMP, Zabbix по умолчанию. |
-| Привилегия | `CAP_NET_BIND_SERVICE` в юните `malina-web.service`: `AmbientCapabilities=CAP_NET_BIND_SERVICE`, `CapabilityBoundingSet=CAP_NET_BIND_SERVICE` (порт <1024). Доп. root не требуется. |
+| Привилегия | Порт <1024 (SNMP UDP 161, HTTP 80) и системные операции (chpasswd/`mount` в `malina-rw`) — web-админка работает от root, набор привилегий в юните **не ограничивается** (`CapabilityBoundingSet` ломал `pam_chauthtok` при смене пароля — см. `manuals/ui.md`). |
 | Ответы | GET / GETNEXT / WALK по одному и тому же маппингу §2.6/§2.7; типы — по MIB (`Integer32`, `OCTET STRING`, `Counter32/64` для счётчиков кВт·ч). |
 | Community | `public`, v2c — по §1.4.5. |
 | Отсутствие устройства | `noSuchInstance`/`noSuchName` — корректный ответ, не ошибка. |
@@ -456,7 +456,7 @@ SNMP-трапа на заданный приёмник — заведена ка
 | Маппинг MIB → КЭС | **составлен** — §2.7 |
 | SNMP-trap (события, МАП) | **реализовано** — `web/internal/snmp` + `internal/web/snmptrap.go` (v2c, порт 162, community `public`, множитель по MIB, Ок-трапы при наличии Ok-нотификации) |
 | SNMP-trap (события, КЭС) | маппинг §2.7 готов; события КЭС — заглушки (источник не реализован), trapping в общем блоке готов |
-| SNMP-агент (в `malina-web`) | **реализовано** — `web/internal/snmp` (свой BER/ASN.1, UDP 161, ленивый GET/GETNEXT/WALK, `noSuchInstance`/`endOfMibView`); встроен в `malina-web`, общий маппинг с trap; порт через `CAP_NET_BIND_SERVICE` в юните |
+| SNMP-агент (в `malina-web`) | **реализовано** — `web/internal/snmp` (свой BER/ASN.1, UDP 161, ленивый GET/GETNEXT/WALK, `noSuchInstance`/`endOfMibView`); встроен в `malina-web`, общий маппинг с trap; порт <1024 (web от root, привилегии не ограничиваются) |
 | Ограничение «1 МАП на хост» | **принято** — первый МАП в списке; §1.4.7, §2.4 |
 | Несколько КЭС (`mpptN`) | **принято** — индексы КЭС в `kes-list` 1..4 (на .60 — три КЭС); >4 — первые 4; §2.7 |
 | Общий путь `mpptNo(5)`/`.2.6..2.15` | **не реализуем** — только фиксированные `mpptN`; §0.4, §2.7 |
@@ -471,7 +471,7 @@ SNMP-трапа на заданный приёмник — заведена ка
 - `web/internal/web/snmpmapping.go` — маппинг MIB → значения из shm МАП/КЭС (общий для агента и trap).
 - `web/internal/web/snmptrap.go` — событийные trap (фронт + Ок) и периодическая отправка.
 - `web/internal/web/snmpmonitoring.go` — настройка «Мониторинг» и цикл периодической отправки.
-- `system/systemd/malina-web.service` — `CAP_NET_BIND_SERVICE` для порта 161.
+- `system/systemd/malina-web.service` — web от root, привилегии не ограничиваются (порт <1024 + системные операции).
 
 Флаг/настройки: SNMP-агент (`-snmp-port`, `-snmp-community`) и периодические трапы
 (`/malina/etc/malina/snmp-monitoring.json`) — включаются по необходимости.

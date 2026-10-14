@@ -3,6 +3,7 @@ package auth
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -85,5 +86,10 @@ func ChangePassword(password string, users ...string) error {
 	}
 	cmd := exec.Command("/malina/usr/local/sbin/malina-rw", "run", "chpasswd")
 	cmd.Stdin = strings.NewReader(b.String())
-	return cmd.Run()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("chpasswd: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
 }

@@ -322,7 +322,7 @@ func (s *Server) handleSystemPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	// Смена пароля — обновляем и web/linux-пользователя (s.opts.User), и root.
 	if err := auth.ChangePassword(p1, s.opts.User, "root"); err != nil {
-		s.audit.Event("password_change", map[string]any{"result": "err", "reason": "password", "ip": clientIP(r)})
+		s.audit.Event("password_change", map[string]any{"result": "err", "reason": "password", "detail": err.Error(), "ip": clientIP(r)})
 		s.redirectSystem(w, r, "err=password")
 		return
 	}
