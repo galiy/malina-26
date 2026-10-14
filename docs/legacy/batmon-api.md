@@ -3,7 +3,7 @@
 Статус: **реализовано в `malina-web`** (эмуляция), источник контракта — **реверс
 бэкапа `.68`** (`daemons/batmond`, `daemons/*.pl`, `html/js/master_node.js`).
 Связано: `docs/legacy/legacy-api.md` (§7 ручки КЭС), `docs/legacy/master-node.md`
-(агрегатор «Мастер-Узел»), `docs/legacy/event-manager.md` (события АКБ).
+(агрегатор «Мастер-Узел»), `docs/event-manager.md` (события АКБ).
 
 ## 1. Назначение
 

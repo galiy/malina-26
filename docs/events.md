@@ -1,7 +1,7 @@
 # «Менеджер событий» (наш, на malina-web) — требования
 
 Статус: **реализовано** (движок, UI, E-mail, реле/команды МАП, SNMP-trap; источник КЭС).
-Разбор legacy — `docs/legacy/event-manager.md`.
+Разбор legacy — `docs/event-manager.md`.
 
 ## 1. Что делаем
 

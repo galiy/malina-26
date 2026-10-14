@@ -1,7 +1,7 @@
 # SNMP — требования (агент и trap)
 
 Статус: **реализовано** (см. §4). Разбор legacy —
-`docs/legacy/event-manager.md`, `docs/events.md`, `hardware.md`.
+`docs/event-manager.md`, `docs/events.md`, `hardware.md`.
 
 > **Артефакт:** официальный `MICROART-MIB.txt` (1545 строк, md5
 > `5f3fff51e82d7c4996e5c6690a50ecf5`) перенесён в репозиторий — `docs/snmp/MICROART-MIB.txt`.
@@ -233,11 +233,11 @@ SNMP — тоже слать при выходе условия в норму, �
 |---|---|---|
 | 1 | Действие `action:"snmp"` — в контракте правила | `docs/events.md` §5 |
 | 2 | `trap_host` — IP приёмника trap, поле **видно только** для `snmp` | §5, §8 |
-| 3 | Протокол **v2c**, community `public`, порт **162** | `docs/legacy/event-manager.md` §5, `docs/events.md` §6.5, §11 |
+| 3 | Протокол **v2c**, community `public`, порт **162** | `docs/event-manager.md` §5, `docs/events.md` §6.5, §11 |
 | 4 | OID-схема — **MICROART-MIB** (как в legacy) | `docs/events.md` §6.5, §11 |
-| 5 | В trap кладётся **значение параметра с множителем** (×10/×100) и **номер MPPT** | `docs/legacy/event-manager.md` §5 |
+| 5 | В trap кладётся **значение параметра с множителем** (×10/×100) и **номер MPPT** | `docs/event-manager.md` §5 |
 | 6 | OID события + OID параметра со значением | `docs/events.md` §12 |
-| 7 | Фронт: срабатывание при входе в условие; «Ok» при выходе (если действие `email`/`trap`) | `docs/events.md` §6, `docs/legacy/event-manager.md` §8.3 |
+| 7 | Фронт: срабатывание при входе в условие; «Ok» при выходе (если действие `email`/`trap`) | `docs/events.md` §6, `docs/event-manager.md` §8.3 |
 | 8 | Кулдаун на правило (по умолчанию 30 c) — общий для всех действий | `docs/events.md` §5.9 |
 | 9 | Логировать отправку trap в отдельный лог (как ключевые события web) | `docs/events.md` §7 |
 

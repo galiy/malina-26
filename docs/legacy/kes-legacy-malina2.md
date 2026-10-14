@@ -1,7 +1,7 @@
 # КЭС/MPPT в legacy ПАК «Малина-2» (разбор бэкапа .60)
 
 > **Карта ячеек КЭС живёт в двух документах:** подтверждённое — `docs/kes-memory.md`,
-> неподтверждённое/гипотезы — `docs/legacy/kes-memory-not-accepted.md`. Ячейки ниже — как их
+> неподтверждённое/гипотезы — `docs/kes-memory-not-accepted.md`. Ячейки ниже — как их
 > видел legacy; источник истины — только `kes-memory.md`.
 
 Анализ боевого образа ПАК «Малина» (192.168.13.60) и человека-читаемых артефактов
@@ -18,7 +18,7 @@
     sudo mount -o loop,ro part3_settings.ext4.img /mnt/settings
 
 Связано: `docs/kes-reader.md` (§4 — контракт КЭС), `docs/events.md` (§11 — заглушки КЭС),
-`docs/map-memory.md`. Общий обзор legacy — `docs/legacy/event-manager.md`,
+`docs/map-memory.md`. Общий обзор legacy — `docs/event-manager.md`,
 `docs/legacy/master-node.md`.
 
 Внимание: это **legacy-реализация на C/Perl/PHP поверх SysV IPC** — не наш стек.
@@ -442,7 +442,7 @@ P_Out, P_Load, P_curr, I_Ch, I_Out, Temp_Int, Temp_Bat, P_EXTS0, P_EXTS1, windsp
   Для эмулятора: задавать `FW` = значение ID-ячейки (напр. `0x63` для «6.3»).
 - **Модель** — **опровергнуто** (было «не ячейка»): подтверждено `Вт = 0x05×100`, ячейки
   радио `Модель`/`Версия Модели` в `0x000..0x1FF` (точные адреса **не зафиксированы** —
-  см. `docs/legacy/kes-memory-not-accepted.md`).
+  см. `docs/kes-memory-not-accepted.md`).
 
 **Итог по шагу 4:** новых RS-ячеек нет; закрыто окно `0x02C2` (не используется) и энергия;
 по-прежнему открыты: семантика команды реле `0x0E3D` (подтверждена снифом, не на железе),
