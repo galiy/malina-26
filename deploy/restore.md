@@ -23,7 +23,7 @@
      `isc-dhcp-client`, `gcc` (для сборки pamcheck) и т.п.
 2. **Доводка на устройстве (`deploy/`)** — после прошивки:
    - создание раздела `/malina` (p3) и его ФС/монтирование;
-   - установка артефактов по `deploy/manifest.tsv` (`deploy/install.sh`);
+   - установка артефактов по `deploy/manifest.tsv` (`deploy/deploy.sh --first-run`);
    - бинарники `malina-web`, `malina-netd`, `malina-pamcheck`;
    - сетевые конфиги режимов, стартовый `active=mode1`.
 
@@ -46,7 +46,7 @@
   mini-UART). Ранее дублировалось шагом 1b в архивном `deploy/provision.sh`.
   Описание — `docs/map.md`.
 - `web/` — исходники сервиса (web+netd) и `pamcheck.c`.
-- `deploy/manifest.tsv`, `deploy/install.sh`.
+- `deploy/manifest.tsv`, `deploy/deploy.sh`.
 
 ## Статус
 Реализовано в `deploy/local/stage2.sh` + `deploy/manifest.tsv` (исторически —
@@ -65,11 +65,11 @@
 
 Пакеты проекта из репозиториев запекаются в образ (`image/stage-malina/00-packages`
 + `apt update/upgrade`); **кастомные артефакты (бинарники/юниты/ассеты) в образ не
-запекаются** — устанавливаются из репозитория (`deploy/local/stage2.sh` / `install.sh`)
-после загрузки. Тиражирование образов — вне рамок текущей задачи.
+запекаются** — устанавливаются из репозитория (`deploy/local/stage2.sh` /
+`deploy/deploy.sh --first-run`) после загрузки. Тиражирование образов — вне рамок текущей задачи.
 
 ### Прочее
-- `deploy/install.sh` требует `MALINA_PASS` (env) или `MALINA_PASS=…` в `.kilo/secrets`.
+- `deploy/deploy.sh` требует `MALINA_PASS` (env) или `MALINA_PASS=…` в `.kilo/secrets`.
 
 ## Порядок восстановления (локально) и SSH-путь
 
@@ -115,11 +115,20 @@ REPO=/opt/malina-repo /opt/malina-repo/deploy/provision.sh
 (предпочтительно — вообще не использовать: артефакты ставить локально Этапом 2;
 пакеты уже в образе).
 
+> **Какие юниты включаются.** При первичном развёртывании (`deploy/deploy.sh
+> --first-run`) включаются только базовые: `dhclient-eth0`, `malina-web`,
+> `malina-net`, `malina-net-fallback.timer`, `malina-logrotate.timer`, `map-reader`,
+> `kes-reader`, `malina-tsdb`, `malina-tsdb-raw`. Юниты режимов/сети
+> (`malina-hostapd`, `malina-dnsmasq`, `malina-wpa`, `malina-net-wifi`,
+> `malina-dhclient-wlan0`, `malina-net-monitor`, `malina-net-scan`,
+> `malina-net-fallback.service`, `malina-logrotate.service`) включаются/выключаются
+> **по режиму сети** (`malina-netd`) и здесь намеренно не трогаются.
+
 **5. Пароли.** Сменить дефолтные на рабочие (как принято на устройстве):
 ```
 passwd root ; passwd malina        # или задать согласованный пароль
 ```
-(пароль SSH для `deploy/install.sh` — `MALINA_PASS` / `.kilo/secrets`, не коммитится).
+(пароль SSH для `deploy/deploy.sh` — `MALINA_PASS` / `.kilo/secrets`, не коммитится).
 
 **6. Идентификация роли: имя хоста и часовой пояс.** Хранятся в `/etc`
 (`/etc/hostname`, `/etc/timezone`, симлинк `/etc/localtime`). Стартовые значения
@@ -139,10 +148,11 @@ ls -l /dev/shm/malina-kes-state           # shm kes-reader
 findmnt /malina                           # rw-раздел
 ```
 При необходимости — **первичная установка** артефактов из репо с ноутбука:
-`deploy/install.sh <user@host>` (ставит бинарники/ассеты/manifest и перезапускает web);
-`--build` пересобирает arm-бинарники перед выкладкой. **`install.sh` — только для
-первичного развёртывания**; на уже развёрнутом устройстве обновления делают
-**точечно** (см. `deploy/local-deploy.md`, «Обновления на развёрнутом устройстве»).
+`deploy/deploy.sh --first-run <user@host>` (ставит бинарники/ассеты/manifest и
+перезапускает сервисы); `--build` пересобирает arm-бинарники перед выкладкой.
+**`--first-run` — только для первичного развёртывания**; на уже развёрнутом
+устройстве обновления делают точечно (`deploy/deploy.sh` без флага; см.
+`deploy/local-deploy.md`, «Обновления на развёрнутом устройстве»).
 
 **9. Пакеты.** Набор из репозиториев, который нужен проекту, уже запечён в образ
 (`image/stage-malina/00-packages`): `mc`, `rsyslog`, `iw`, `rfkill`, `hostapd`,

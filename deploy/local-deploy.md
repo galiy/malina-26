@@ -151,7 +151,7 @@ install -m0444 $PROV/machine-id $ROOT/etc/machine-id
 install -m0644 $PROV/hostname   $ROOT/etc/hostname
 ```
 
-**2.7. Артефакты `system/*` по manifest** (как `install.sh`):
+**2.7. Артефакты `system/*` по manifest** (как `deploy.sh --first-run`):
 для каждой строки `src dst mode policy` — `install -D -o root -g root -m <mode> $REPO/$src $ROOT$dst`
 (политика `if_absent` — не перезаписывать существующее).
 
@@ -347,9 +347,18 @@ deploy/local/stage2.sh /dev/sdX
 
 ## Обновления на развёрнутом устройстве (точечно)
 
-`deploy/install.sh` и `stage2.sh` — **только для первичного развёртывания** (полный
+`deploy/deploy.sh --first-run` и `deploy/local/stage2.sh` — **только для первичного
+развёртывания** (полный
 прогон `manifest.tsv`, компиляция `pamcheck` и т.п.). На уже работающем устройстве
-так делать не нужно и не следует: обновляют **только изменившиеся артефакты**.
+так делать не нужно и не следует: обновляют **только изменившиеся артефакты**
+(штатно — `deploy/deploy.sh` без флага).
+
+`deploy/deploy.sh` (точечное обновление) выкладывает бинарники (`malina-web`,
+`malina-netd`, `map-reader`, `kes-reader`, `malina-tsdb`) + веб-ассеты и обновляет
+**unit-файлы сервисов** — `malina-tsdb`, `malina-tsdb-raw`, `map-reader`,
+`kes-reader` (коротким rw-окном под `/etc`). Локальные **drop-in**'ы
+(`*.service.d/*.conf`, напр. `map-reader.service.d/sim.conf`) — отдельный каталог,
+этим не затрагиваются. `malina-netd` не перезапускается (сетевой стек).
 
 Пример — обновление веб-сервиса (типовой случай):
 

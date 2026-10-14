@@ -23,8 +23,9 @@
 - `image/` — сборка образа (pi-gen, стейдж `stage-malina`).
 - `system/` — артефакты системы: systemd-юниты, конфиги, seed-конфиги сети,
   snapshot провижининга (`fstab`, `cmdline.txt`, `config.txt`, списки пакетов/масок).
-- `deploy/` — установка/провижининг: `manifest.tsv`, `install.sh`, локальный
-  деплой `local/stage2.sh` (+ `local-deploy.md`), восстановление `restore.md`.
+- `deploy/` — установка/провижининг: `manifest.tsv`, единый `deploy.sh`
+  (обновление / `--first-run` — первичное), локальный деплой `local/stage2.sh`
+  (+ `local-deploy.md`), восстановление `restore.md`.
   Устаревшие скрипты — в `archive/` (вне git).
 - `web/` — Go-сервисы (`cmd/malina-web`, `cmd/malina-netd`, `internal/*`),
   статика/шаблоны/i18n, PAM-хелпер.
@@ -66,15 +67,14 @@ image/build.sh
 # веб-сервисы (ARMv7)
 make -C web arm
 
+# ОБНОВЛЕНИЕ работающего устройства (по умолчанию):
+MALINA_PASS=<пароль> deploy/deploy.sh --build <user@host>
+
 # ПЕРВИЧНОЕ развёртывание — только один раз, на голое устройство/образ:
-MALINA_PASS=<пароль> deploy/install.sh <user@host>       # + --build для сборки на месте
+MALINA_PASS=<пароль> deploy/deploy.sh --build --first-run <user@host>
 
 # локальный деплой на SD (этап 2 после записи образа) — см. deploy/local-deploy.md
 deploy/local/stage2.sh /dev/sdX
-
-# (устаревший SSH-провижининг deploy/provision.sh перенесён в archive/)
-# ОБНОВЛЕНИЯ уже развёрнутого устройства: deploy/install.sh НЕ используется —
-# обновляют точечно (копия бинаря/юнита/ассетов + restart), см. deploy/local-deploy.md
 ```
 
 ## Доступы по умолчанию

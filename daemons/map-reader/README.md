@@ -121,8 +121,8 @@ make arm      # dist/map-reader-armv7 (Linux/armv7, статический)
 Пере-деплой: собрать `make -C daemons/map-reader arm` и разложить штатным деплоем:
 - локально на SD — `deploy/local/stage2.sh /dev/sdX` (см. `deploy/local-deploy.md`) —
   ставит бинарник map-reader;
-- по SSH — `deploy/install.sh` ставит web/netd и ассеты (бинарник map-reader —
-  отдельно); исторический провижининг — в `archive/`.
+- по SSH — `deploy/deploy.sh --first-run` ставит web/netd/пулеры и ассеты;
+  исторический провижининг — в `archive/`.
 
 (Устаревшие скрипты `daemons/map-reader/deploy.sh` и `deploy/provision.sh` — в `archive/`.)
 

@@ -58,7 +58,7 @@ go test ./tsdb/   # из каталога модуля daemons
 ```
 
 Установка — по общим правилам проекта (`deploy/manifest.tsv`, `stage2.sh`,
-`deploy/update.sh`): бинарник → `/malina/usr/local/sbin/malina-tsdb`, юнит
+`deploy/deploy.sh`): бинарник → `/malina/usr/local/sbin/malina-tsdb`, юнит
 `malina-tsdb.service`.
 
 ## Контракты

@@ -158,9 +158,9 @@ MALINA_WEB_DEV_PASSWORD=secret MALINA_WEB_LISTEN=:8080 go run ./cmd/malina-web
 - Хелперы: `/malina/usr/local/libexec/malina-pamcheck`, `…/malina-remote-syslog`,
   `/malina/usr/local/sbin/malina-rw`.
 - Юниты/PAM/конфиги — из `system/` по `deploy/manifest.tsv` (**первичное**
-  развёртывание: `deploy/local/stage2.sh` локально; `deploy/install.sh` по SSH).
+  развёртывание: `deploy/local/stage2.sh` локально; `deploy/deploy.sh --first-run` по SSH).
 - **Обновления** уже развёрнутого устройства — точечно (бинарник + юнит + ассеты +
-  restart), `install.sh` для этого не используется (см. `deploy/local-deploy.md`).
+  restart), `deploy.sh --first-run` для этого не используется (см. `deploy/local-deploy.md`).
 - Установка требует `MALINA_PASS` (env) или строки `MALINA_PASS=…` в `.kilo/secrets`.
 
 ## Флаги / переменные

@@ -240,7 +240,7 @@ MicroArt: посылка `w P A1 A0 D0..Dp S \n`; ответ `o S \n` (подт�
 - **Деплой:** бинарник → `/malina/usr/local/sbin/kes-reader`, юнит `kes-reader.service`
   → `/etc/systemd/system/`; CPU-приоритет как у `map-reader` (`Nice=-5`, `CPUWeight=1000`).
   Включён в общий деплой ПАК (`deploy/manifest.tsv`, `deploy/local/stage2.sh`,
-  `deploy/restore.md`); `install.sh` демон точечно ставится отдельно (как `map-reader`).
+  `deploy/restore.md`); `deploy.sh` ставит демон (как `map-reader`).
   **`kes-emu` в деплой не входит** (см. §5) — только dev/test стенд.
 
 ## 6.1. Публикация сырья в raw-хранилище (требование)
