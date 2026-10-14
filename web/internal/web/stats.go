@@ -316,6 +316,99 @@ func splitColID(s string) (int, int) {
 	return a, 0
 }
 
+// statsSeries — ряды запрошенных полей (ключи колонок) за период. Источник
+// выбирается автоматически: диапазон ≤ 20 мин → raw (детально), иначе avg.
+// Сервер отдаёт только значения полей контракта (в человеческих единицах);
+// вычисляемые величины (мощности, ток MPPT-сумма и т.п.) — на клиенте (§3.2).
+func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) (map[string][][2]any, string) {
+	sock := s.opts.TsdbSock
+	src := "avg"
+	if to > from && to-from <= 20*60*1000 {
+		sock = s.opts.TsdbRawSock
+		src = "raw"
+	}
+	st, rows, err := tsdbclient.New(sock).Query(tsdbclient.ModeWholeOne, typ, []string{id}, nil, from, to, tsdbclient.DirectionFrom, 0)
+	if err != nil || st != tsdbclient.StatusOK {
+		return nil, src
+	}
+	all := len(fields) == 0 // без fields — вернуть все поля ряда
+	want := map[string]bool{}
+	out := map[string][][2]any{}
+	for _, k := range fields {
+		want[k] = true
+		out[k] = [][2]any{}
+	}
+	addPt := func(key string, t int64, v float64) {
+		if all {
+			out[key] = append(out[key], [2]any{t, v})
+		} else if want[key] {
+			out[key] = append(out[key], [2]any{t, v})
+		}
+	}
+	reg := tscontract.NewDefaultRegistry()
+	for _, r := range rows {
+		c, ok := reg.Get(typ, r.Version)
+		if !ok {
+			continue
+		}
+		vals, err := c.Decode(r.Payload)
+		if err != nil {
+			continue
+		}
+		rawRow := make(map[uint16]float64, len(vals))
+		for _, v := range vals {
+			rawRow[v.ID] = rawNum(v)
+		}
+		for _, v := range vals {
+			fc, ok := fieldConvFor(typ, r.Version, v.ID)
+			if !ok {
+				continue
+			}
+			raw := rawRow[v.ID]
+			switch fc.Kind {
+			case kindRelay3:
+				for i := 0; i < 3; i++ {
+					addPt(relayKey(v.ID, i+1), r.Time, float64((int64(raw)>>uint(i))&1))
+				}
+			case kindSymbol:
+				// символы в графики не выводим
+			default:
+				if hv, ok := fc.Num(raw, rawRow); ok {
+					addPt(strconv.Itoa(int(v.ID)), r.Time, hv)
+				}
+			}
+		}
+	}
+	return out, src
+}
+
+// handleAPIStatsSeries — ряды для графиков: ?type=&id=&from=&to=&fields=a,b,c
+func (s *Server) handleAPIStatsSeries(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.currentUser(r); !ok {
+		writeJSONStatus(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
+		return
+	}
+	q := r.URL.Query()
+	typ, id := q.Get("type"), q.Get("id")
+	if typ == "" || id == "" {
+		http.Error(w, "type/id required", http.StatusBadRequest)
+		return
+	}
+	from, errF := strconv.ParseInt(q.Get("from"), 10, 64)
+	to, errT := strconv.ParseInt(q.Get("to"), 10, 64)
+	if errF != nil || errT != nil || from > to {
+		http.Error(w, "bad from/to", http.StatusBadRequest)
+		return
+	}
+	var fields []string
+	if f := q.Get("fields"); f != "" {
+		fields = strings.Split(f, ",")
+	}
+	series, src := s.statsSeries(typ, id, from, to, fields)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(map[string]any{"source": src, "series": series})
+}
+
 // --- handlers ---
 
 func (s *Server) handleStatsCharts(w http.ResponseWriter, r *http.Request) {

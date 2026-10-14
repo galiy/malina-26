@@ -91,7 +91,8 @@ var mapRules = map[uint16]rule{
 	9: rAvg, 10: rAvg, 11: rLast, 12: rOr, 13: rAvg, 14: rAvg, 15: rAvg,
 	16: rAvg, 17: rOr, 18: rAvg, 19: rLast, 20: rLast, 21: rOr, 22: rOr,
 	23: rOr, 24: rOr, 25: rOr, 26: rUnet2,
-	27: rOr, // Relay (map v2): битовая маска → ИЛИ
+	27: rOr,                                                     // Relay (map v2): битовая маска → ИЛИ
+	28: rAvg, 29: rAvg, 30: rAvg, 31: rAvg, 32: rAvg, 33: rLast, // ThFMAP + MPPT0..3 + PNET_Sign_P (map v3)
 }
 
 // kesRules — правила для полей контракта kes v1.

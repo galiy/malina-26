@@ -17,7 +17,7 @@ func initStatsink(sock string) {
 	statsink = stat.New(sock)
 }
 
-// publishRaw отдаёт сырой снапшот МАП в raw-хранилище: контракт `map` v2 (26
+// publishRaw отдаёт сырой снапшот МАП в raw-хранилище: контракт `map` v3 (26
 // полей + реле) и, при числе ячеек BMS 1..32, `mbms` Vn. В пулере расчётов нет —
 // только сборка payload и неблокирующий Publish (docs/map-reader.md,
 // docs/telemetry-store.md §14.2).
@@ -26,8 +26,8 @@ func publishRaw(serial uint16, t int64, mem memMap) {
 		return
 	}
 	id := fmt.Sprintf("%d", serial)
-	if p := buildMapV2(mem); p != nil {
-		statsink.Publish("map", id, t, 2, p)
+	if p := buildMapV3(mem); p != nil {
+		statsink.Publish("map", id, t, 3, p)
 	}
 	if n, p := buildMbms(mem); p != nil {
 		statsink.Publish("mbms", id, t, uint16(n), p)
@@ -39,10 +39,10 @@ var tsreg = tscontract.NewDefaultRegistry()
 
 func registry() *tscontract.Registry { return tsreg }
 
-// buildMapV2 собирает payload контракта `map` v2 (26 полей + реле, docs/stat.md)
+// buildMapV3 собирает payload контракта `map` v3 (26 полей + реле + ThFMAP + 4 канала MPPT, docs/stat.md)
 // из карты памяти МАП. Присутствуют только прочитанные ячейки (presence — по ним).
-func buildMapV2(mem memMap) []byte {
-	vals := make([]tscontract.Value, 0, 27)
+func buildMapV3(mem memMap) []byte {
+	vals := make([]tscontract.Value, 0, 32)
 	add8 := func(id uint16, addr int) {
 		if b, ok := mem[addr]; ok {
 			vals = append(vals, tscontract.Value{ID: id, Type: tscontract.FTU8, Int: int64(b)})
@@ -82,10 +82,16 @@ func buildMapV2(mem memMap) []byte {
 	add8(25, 0x42D)         // RSWarning
 	add8(26, 0x527)         // flagUnet2
 	add8(27, 0x586)         // Relay (Status_RELEdop: биты реле 1/2/3)
+	add8(28, 0x426)         // ThFMAP (частота выхода)
+	add16(29, 0x530, 0x531) // I_Akb_MPPT0
+	add16(30, 0x532, 0x533) // I_Akb_MPPT1
+	add16(31, 0x534, 0x535) // I_Akb_MPPT2
+	add16(32, 0x536, 0x537) // I_Akb_MPPT3
+	add8(33, 0x587)         // PNET_Sign_P (знак мощности сети)
 	if len(vals) == 0 {
 		return nil
 	}
-	c, ok := registry().Get("map", 2)
+	c, ok := registry().Get("map", 3)
 	if !ok {
 		return nil
 	}

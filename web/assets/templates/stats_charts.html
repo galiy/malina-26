@@ -2,5 +2,30 @@
 <div class="page-head">
   <h1>{{index .T "menu.charts"}}</h1>
 </div>
-<p class="muted">{{index .T "stats.charts_todo"}}</p>
+
+<div id="stats-tabs" class="stats-tabs"></div>
+
+<div class="stats-controls">
+  <button class="btn" data-period="24h">{{index .T "stats.p24h"}}</button>
+  <button class="btn" data-period="today">{{index .T "stats.p_today"}}</button>
+  <button class="btn" data-period="yesterday">{{index .T "stats.p_yesterday"}}</button>
+  <button class="btn" data-period="7d">{{index .T "stats.p_7d"}}</button>
+  <button class="btn" data-period="month">{{index .T "stats.p_month"}}</button>
+  <button class="btn" data-period="last">{{index .T "stats.p_last"}}</button>
+  <span class="stats-custom">
+    <input type="datetime-local" id="ch-from">
+    <input type="datetime-local" id="ch-to">
+    <button class="btn" id="ch-show">{{index .T "stats.show"}}</button>
+  </span>
+  <button class="btn" id="ch-reload">{{index .T "stats.refresh"}}</button>
+</div>
+
+<div id="stats-charts" class="stats-charts"></div>
+
+<script>window.I18N = {{json .T}};</script>
+<script src="{{asset "vendor/chartjs/chart.umd.min.js"}}"></script>
+<script src="{{asset "vendor/chartjs/chartjs-adapter-date-fns.bundle.min.js"}}"></script>
+<script src="{{asset "vendor/chartjs/hammer.min.js"}}"></script>
+<script src="{{asset "vendor/chartjs/chartjs-plugin-zoom.min.js"}}"></script>
+<script src="{{asset "js/stats_charts.js"}}"></script>
 {{end}}

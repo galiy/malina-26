@@ -301,6 +301,17 @@ var mapV1Fields = []Field{
 // TestSchemasRegistered).
 var mapV2Fields = append(append([]Field(nil), mapV1Fields...), Field{27, FTU8, "Relay"})
 
+// mapV3Fields — map v2 + частота выхода (`ThFMAP`) и первые 4 канала MPPT
+// (`I_Akb_MPPT0..3`) для графиков (docs/stat.md §map v3, docs/ui-stat.md §3.2).
+var mapV3Fields = append(append([]Field(nil), mapV2Fields...),
+	Field{28, FTU8, "ThFMAP"},       // 0x426
+	Field{29, FTU16, "I_Akb_MPPT0"}, // 0x530L+0x531H
+	Field{30, FTU16, "I_Akb_MPPT1"}, // 0x532L+0x533H
+	Field{31, FTU16, "I_Akb_MPPT2"}, // 0x534L+0x535H
+	Field{32, FTU16, "I_Akb_MPPT3"}, // 0x536L+0x537H
+	Field{33, FTU8, "PNET_Sign_P"},  // 0x587: 0 — знак мощности сети отрицательный
+)
+
 // kesV1 — 15 колонок ячеек КЭС (u8/u16).
 var kesV1Fields = []Field{
 	{1, FTU16, "VcPV"},
@@ -342,6 +353,7 @@ func NewDefaultRegistry() *Registry {
 	r := NewRegistry()
 	r.Register("map", newSchemaContract(1, mapV1Fields))
 	r.Register("map", newSchemaContract(2, mapV2Fields))
+	r.Register("map", newSchemaContract(3, mapV3Fields))
 	r.Register("kes", newSchemaContract(1, kesV1Fields))
 	for n := 1; n <= mbmsMaxCells; n++ {
 		r.Register("mbms", newSchemaContract(uint16(n), mbmsFields(n)))

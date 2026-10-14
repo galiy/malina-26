@@ -29,6 +29,8 @@ func TestFieldConvNum(t *testing.T) {
 		{"map", 10, 160, map[uint16]float64{19: 0}, -10, "А", true}, // не заряд → −
 		{"map", 10, 160, nil, 0, "А", false},                        // R1: без MODE — нет данных
 		{"map", 9, 7, nil, 7, "", true},                             // IAcc_med_A_2 — без масштаба (raw)
+		{"map", 28, 50, nil, 125, "Гц", true},                       // ThFMAP: 6250/50
+		{"map", 29, 0x0100, nil, 16, "А", true},                     // I_Akb_MPPT0: (0x0100&0x7FFF)/16
 		{"kes", 1, 1234, nil, 12.34, "В", true},
 		{"kes", 8, 75, nil, 25, "°C", true},
 		{"kes", 4, 65535, nil, 0, "", false}, // Windspeed: 0xFFFF — н/д

@@ -362,6 +362,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/api/stats/devices", s.handleAPIStatsDevices)
 	mux.HandleFunc("/api/stats/extremes", s.handleAPIStatsExtremes)
 	mux.HandleFunc("/api/stats/table", s.handleAPIStatsTable)
+	mux.HandleFunc("/api/stats/series", s.handleAPIStatsSeries)
 	mux.HandleFunc("/services", s.handleServices)
 	mux.HandleFunc("/api/services", s.handleAPIServices)
 	mux.HandleFunc("/services/action", s.handleServiceAction)

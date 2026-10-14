@@ -161,8 +161,16 @@ func fieldConvFor(typ string, _ uint16, id uint16) (fieldConv, bool) {
 			return tempShift50(), true // Temp_Grad0/1/2
 		case 27: // Relay (map v2)
 			return fieldConv{Kind: kindRelay3}, true
-		default: // коды/битфилды/недокументированное (9, 11..13, 17..26)
+		case 28: // ThFMAP (map v3) — частота выхода, Гц
+			return freq6250(), true
+		case 29, 30, 31, 32: // I_Akb_MPPT0..3 (map v3) — ток канала, А ((v&0x7FFF)/16)
+			return numConv("А", func(v float64, _ map[uint16]float64) (float64, bool) {
+				return float64(int64(v)&0x7FFF) / 16, true
+			}), true
+		case 33: // PNET_Sign_P (map v3) — флаг знака мощности сети
 			return rawConv(), true
+		default: // коды/битфилды/недокументированное (9, 11..13, 17..26)
+			return rawConv(), true // код/битфилд/недокументированное (9, 11..13, 17..26)
 		}
 	case "kes":
 		switch id {

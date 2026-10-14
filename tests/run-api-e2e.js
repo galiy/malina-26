@@ -179,6 +179,8 @@ async function login(password) {
     ok(r.status === 401, "no auth /api/stats/table -> 401 (got " + r.status + ")");
     r = await req("/api/stats/extremes?type=map&id=1");
     ok(r.status === 401, "no auth /api/stats/extremes -> 401 (got " + r.status + ")");
+    r = await req("/api/stats/series?type=map&id=1&from=0&to=1");
+    ok(r.status === 401, "no auth /api/stats/series -> 401 (got " + r.status + ")");
 
     const dv = await req("/api/stats/devices", { cookie: globalThis.cookie });
     ok(dv.status === 200, "cookie /api/stats/devices -> 200 (got " + dv.status + ")");
@@ -206,6 +208,13 @@ async function login(password) {
       let eb = {};
       try { eb = await ex.json(); } catch (e) { /* ignore */ }
       ok(eb && typeof eb.raw === "object" && typeof eb.avg === "object", "/api/stats/extremes returns {raw,avg}");
+      const se = await req("/api/stats/series?type=" + encodeURIComponent(d.type) + "&id=" + encodeURIComponent(d.id) +
+        "&from=" + (Date.now() - 3600000) + "&to=" + Date.now(), { cookie: globalThis.cookie });
+      ok(se.status === 200, "cookie /api/stats/series -> 200 (got " + se.status + ")");
+      let sbody = {};
+      try { sbody = await se.json(); } catch (e) { /* ignore */ }
+      ok(sbody && typeof sbody.series === "object" && (sbody.source === "raw" || sbody.source === "avg"),
+        "/api/stats/series returns {source,series}");
     } else {
       console.log("skip: устройств в tsdb нет — /api/stats/table не проверяем");
     }

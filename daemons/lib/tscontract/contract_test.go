@@ -24,6 +24,10 @@ func TestSchemasRegistered(t *testing.T) {
 	if c, ok := reg.Get("map", 2); !ok || len(c.Fields()) != 27 {
 		t.Fatalf("map v2: ok=%v", ok)
 	}
+	// map v3 = v2 + ThFMAP (28) + I_Akb_MPPT0..3 (29..32) + PNET_Sign_P (33)
+	if c, ok := reg.Get("map", 3); !ok || len(c.Fields()) != 33 {
+		t.Fatalf("map v3: ok=%v", ok)
+	}
 }
 
 // TestMapV2Relay — map v2 кодирует/декодирует поле реле (id 27).
