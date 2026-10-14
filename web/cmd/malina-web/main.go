@@ -47,6 +47,7 @@ func main() {
 	rawRoot := flag.String("ts-raw-root", envOr("MALINA_TS_RAW_ROOT", "/run/malina-ts-raw"), "каталог raw-tsdb (tmpfs)")
 	rawSock := flag.String("ts-raw-sock", envOr("MALINA_TS_RAW_SOCK", "/run/malina-ts-raw/tsdb.sock"), "Unix-сокет raw-tsdb")
 	avgSock := flag.String("ts-avg-sock", envOr("MALINA_TS_SOCK", "/run/malina-ts/tsdb.sock"), "Unix-сокет avg-tsdb")
+	avgRoot := flag.String("ts-avg-root", envOr("MALINA_TS_AVG_ROOT", "/malina/var/malina-ts"), "каталог avg-tsdb")
 	accCfg := flag.String("acc-config", envOr("MALINA_WEB_ACC_CFG", accumulator.DefaultConfigPath), "настройка аккумулятора (json)")
 	flag.Parse()
 
@@ -83,6 +84,11 @@ func main() {
 		SNMPMonitoring: *snmpMonitoring,
 
 		AccConfigPath: *accCfg,
+
+		TsdbRawRoot: *rawRoot,
+		TsdbRawSock: *rawSock,
+		TsdbSock:    *avgSock,
+		TsdbAvgRoot: *avgRoot,
 	})
 	if err != nil {
 		log.Fatalf("init: %v", err)

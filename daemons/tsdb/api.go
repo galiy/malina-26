@@ -62,9 +62,28 @@ func (srv *Server) handle(buf []byte, bw *bufio.Writer) error {
 		return srv.doWrite(buf, bw)
 	case magicReadReq:
 		return srv.doQuery(buf, bw)
+	case magicMetaReq:
+		return srv.doMeta(buf, bw)
 	default:
 		return errWireFrame
 	}
+}
+
+// doMeta — мета-запросы: список устройств и крайние точки (из памяти, без чтения
+// сегментов).
+func (srv *Server) doMeta(buf []byte, bw *bufio.Writer) error {
+	m, err := decodeMetaReq(buf)
+	if err != nil {
+		return err
+	}
+	switch m.Cmd {
+	case metaList:
+		return writeFrame(bw, encodeMetaList(srv.store.ListDevices()))
+	case metaExtremes:
+		min, max, ok := srv.store.Extremes(m.Type, m.ID)
+		return writeFrame(bw, encodeMetaExtremes(ok, min, max))
+	}
+	return errWireFrame
 }
 
 func writeFrame(bw *bufio.Writer, payload []byte) error {
@@ -112,7 +131,7 @@ func (srv *Server) doQuery(buf []byte, bw *bufio.Writer) error {
 	if q.Type == "" || !validMode(q) {
 		return writeFrame(bw, encodeReadReply(statusBadMode, nil))
 	}
-	rows, err := srv.store.Query(Query{Type: q.Type, IDs: q.IDs, From: q.From, To: q.To, Metrics: q.Metrics})
+	rows, err := srv.store.Query(Query{Type: q.Type, IDs: q.IDs, From: q.From, To: q.To, Metrics: q.Metrics, Direction: q.Direction, Limit: int(q.Limit)})
 	if err != nil {
 		status := statusBadMode
 		switch {

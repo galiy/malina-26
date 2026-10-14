@@ -60,6 +60,20 @@ function assert(cond, msg) {
     assert(nh.includes(n), "/network has " + n);
   }
 
+  // Статистика -> Таблицы: страница, закладки (из /api/stats/devices), таблица.
+  await page.goto(BASE + "/stats/tables", { waitUntil: "domcontentloaded" });
+  assert(new URL(page.url()).pathname === "/stats/tables", "stats/tables page (" + page.url() + ")");
+  const stHtml = await page.content();
+  assert(stHtml.includes('id="stats-tabs"') && stHtml.includes('id="stats-table"') && stHtml.includes("stats.js"),
+    "stats/tables has tabs/table/stats.js");
+  page.on("pageerror", e => console.log("pageerror:", e.message));
+  try { await page.waitForSelector("#stats-tabs .stats-tab", { timeout: 6000 }); } catch (e) { /* нет устройств/ошибка */ }
+  const tabs = await page.$$("#stats-tabs .stats-tab");
+  assert(tabs.length >= 1, "stats tabs rendered (" + tabs.length + ")");
+  // Статистика -> Графики: каркас
+  await page.goto(BASE + "/stats/charts", { waitUntil: "domcontentloaded" });
+  assert(new URL(page.url()).pathname === "/stats/charts", "stats/charts page (" + page.url() + ")");
+
   await browser.close();
   console.log(process.exitCode ? "SMOKE: FAIL" : "SMOKE: PASS");
 })().catch(e => { console.error("ERR:", e.message); process.exit(1); });

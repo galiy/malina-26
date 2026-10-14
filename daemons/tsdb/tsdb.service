@@ -10,7 +10,9 @@ Type=simple
 # Каталог под Unix-сокет (tmpfs); сам сокет — 0600.
 RuntimeDirectory=malina-ts
 RuntimeDirectoryMode=0755
-ExecStart=/malina/usr/local/sbin/malina-tsdb
+# avg-инстанс: суточная обрезка — при свободном месте < 500 МБ удаляется ≥ 100 МБ
+# старейших сегментов (флаги -min-free/-free-evict, см. docs/telemetry-store.md §14).
+ExecStart=/malina/usr/local/sbin/malina-tsdb -min-free 500
 # Переопределяемо при необходимости (по умолчанию — только локальный сокет):
 #   MALINA_TS_ROOT=/malina/var/malina-ts
 #   MALINA_TS_SOCK=/run/malina-ts/tsdb.sock

@@ -39,6 +39,8 @@ func main() {
 	row := flag.Bool("row", false, "raw-режим: row-раскладка сегмента (tmpfs)")
 	retention := flag.Duration("retention", 0, "raw: возраст очистки сегментов (0 = выкл.)")
 	limitMB := flag.Int64("limit", 0, "raw: лимит объёма данных, МБ (0 = без лимита)")
+	minFreeMB := flag.Int64("min-free", 0, "avg: порог свободного места на ФС, МБ (0 = выкл.)")
+	freeEvictMB := flag.Int64("free-evict", 100, "avg: минимум освобождаемого за суточный проход, МБ")
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
@@ -52,6 +54,9 @@ func main() {
 		Row:        *row,
 		Retention:  *retention,
 		LimitBytes: *limitMB << 20,
+
+		MinFreeBytes:   *minFreeMB << 20,
+		FreeEvictBytes: *freeEvictMB << 20,
 	}, tscontract.NewDefaultRegistry())
 	if err != nil {
 		log.Fatalf("открытие хранилища %s: %v", *root, err)

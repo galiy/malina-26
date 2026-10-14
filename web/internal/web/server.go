@@ -55,6 +55,10 @@ type Options struct {
 	SNMPCommunity    string        // community агента (public)
 	SNMPMonitoring   string        // путь к настройке периодических трапов
 	AccConfigPath    string        // настройка аккумулятора (json)
+	TsdbRawRoot      string        // каталог raw-tsdb (перечисление устройств)
+	TsdbRawSock      string        // сокет raw-tsdb
+	TsdbSock         string        // сокет avg-tsdb
+	TsdbAvgRoot      string        // каталог avg-tsdb (перечисление устройств)
 }
 
 // Server — HTTP-сервер.
@@ -174,6 +178,18 @@ func New(o Options) (*Server, error) {
 	if o.AccConfigPath == "" {
 		o.AccConfigPath = "/malina/etc/malina/accumulator.json"
 	}
+	if o.TsdbRawRoot == "" {
+		o.TsdbRawRoot = "/run/malina-ts-raw"
+	}
+	if o.TsdbRawSock == "" {
+		o.TsdbRawSock = "/run/malina-ts-raw/tsdb.sock"
+	}
+	if o.TsdbSock == "" {
+		o.TsdbSock = "/run/malina-ts/tsdb.sock"
+	}
+	if o.TsdbAvgRoot == "" {
+		o.TsdbAvgRoot = "/malina/var/malina-ts"
+	}
 	// Источник строк — русский; недостающие ключи добираются из него.
 	bundle, err := i18n.Load(os.DirFS(o.AssetsDir), "i18n", "ru", o.Langs)
 	if err != nil {
@@ -216,6 +232,8 @@ func New(o Options) (*Server, error) {
 		"master_settings": "master_settings.html",
 		"email":           "email.html",
 		"events":          "events.html",
+		"stats_charts":    "stats_charts.html",
+		"stats_tables":    "stats_tables.html",
 	} {
 		t, err := template.New("").Funcs(funcs).
 			ParseFiles(layout, filepath.Join(tplDir, page))
@@ -339,6 +357,11 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/system/password", s.handleSystemPassword)
 	mux.HandleFunc("/system/map-time-sync", s.handleSystemMapTimeSync)
 	mux.HandleFunc("/system/accumulator", s.handleSystemAccumulator)
+	mux.HandleFunc("/stats/charts", s.handleStatsCharts)
+	mux.HandleFunc("/stats/tables", s.handleStatsTables)
+	mux.HandleFunc("/api/stats/devices", s.handleAPIStatsDevices)
+	mux.HandleFunc("/api/stats/extremes", s.handleAPIStatsExtremes)
+	mux.HandleFunc("/api/stats/table", s.handleAPIStatsTable)
 	mux.HandleFunc("/services", s.handleServices)
 	mux.HandleFunc("/api/services", s.handleAPIServices)
 	mux.HandleFunc("/services/action", s.handleServiceAction)

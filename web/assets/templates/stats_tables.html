@@ -1,0 +1,36 @@
+{{define "content"}}
+<div class="page-head">
+  <h1>{{index .T "menu.agg"}}</h1>
+  <div class="page-head-right">
+    <label class="check"><input type="checkbox" id="stats-detail"> {{index .T "stats.detail"}}</label>
+  </div>
+</div>
+
+<div id="stats-tabs" class="stats-tabs"></div>
+<div id="stats-extremes" class="stats-extremes muted"></div>
+
+<div class="stats-controls">
+  <button class="btn" data-period="24h">{{index .T "stats.p24h"}}</button>
+  <button class="btn" data-period="today">{{index .T "stats.p_today"}}</button>
+  <button class="btn" data-period="yesterday">{{index .T "stats.p_yesterday"}}</button>
+  <button class="btn" data-period="7d">{{index .T "stats.p_7d"}}</button>
+  <button class="btn" data-period="month">{{index .T "stats.p_month"}}</button>
+  <button class="btn" data-period="last">{{index .T "stats.p_last"}}</button>
+  <span class="stats-custom">
+    <input type="datetime-local" id="st-from">
+    <input type="datetime-local" id="st-to">
+    <button class="btn" id="st-show">{{index .T "stats.show"}}</button>
+  </span>
+  <span class="stats-custom">
+    <input type="date" id="st-day">
+    <button class="btn" id="st-day-show">{{index .T "stats.show"}}</button>
+  </span>
+</div>
+
+<button id="stats-up" class="stats-nav" title="{{index .T "stats.up"}}">▲</button>
+<div id="stats-table" class="stats-table"></div>
+<button id="stats-down" class="stats-nav" title="{{index .T "stats.down"}}">▼</button>
+
+<script>window.I18N = {{json .T}};</script>
+<script src="{{asset "js/stats.js"}}"></script>
+{{end}}

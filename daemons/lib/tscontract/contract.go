@@ -28,6 +28,7 @@ import (
 	"errors"
 	"math"
 	"sort"
+	"strconv"
 )
 
 var errShort = errors.New("короткий буфер")
@@ -47,6 +48,7 @@ const (
 type Field struct {
 	ID   uint16
 	Type FieldType
+	Name string // имя поля (для UI); семантику значений хранилище не знает
 }
 
 // Value — разобранное значение поля.
@@ -262,51 +264,51 @@ func (c schemaContract) Encode(vals []Value) ([]byte, error) {
 
 // mapV1 — 26 колонок регистров МАП (u8/u16).
 var mapV1Fields = []Field{
-	{1, FTU8},   // UNET           0x422
-	{2, FTU8},   // INET           0x423
-	{3, FTU8},   // INET_16_4      0x431
-	{4, FTU16},  // PNET           0x424L+0x457H
-	{5, FTU16},  // PLoad          0x409L+0x456H
-	{6, FTU8},   // UOUTmed        0x427
-	{7, FTU8},   // TFNET          0x425
-	{8, FTU16},  // UAcc_med       0x405VH+0x406VL
-	{9, FTU8},   // IAcc_med_A_2   0x408
-	{10, FTU16}, // IAcc_med_A_u16 0x432L+0x433H
-	{11, FTU8},  // StateUAcc      0x404
-	{12, FTU8},  // F_AccOver      0x41C
-	{13, FTU8},  // MPPT_toCh      0x524
-	{14, FTU8},  // Temp_Grad0     0x42E
-	{15, FTU8},  // Temp_Grad1     0x42F
-	{16, FTU8},  // Temp_Grad2     0x430
-	{17, FTU8},  // Temp_off       0x43C
-	{18, FTU8},  // CulerSpead     0x458
-	{19, FTU8},  // MODE_RAM       0x400
-	{20, FTU8},  // StatusCh       0x402
-	{21, FTU8},  // RSErrSis       0x42A
-	{22, FTU8},  // RSErrJobM      0x42B
-	{23, FTU8},  // RSErrJob       0x42C
-	{24, FTU8},  // RSErrDop       0x447
-	{25, FTU8},  // RSWarning      0x42D
-	{26, FTU8},  // flagUnet2      0x527
+	{1, FTU8, "UNET"},             // 0x422
+	{2, FTU8, "INET"},             // 0x423
+	{3, FTU8, "INET_16_4"},        // 0x431
+	{4, FTU16, "PNET"},            // 0x424L+0x457H
+	{5, FTU16, "PLoad"},           // 0x409L+0x456H
+	{6, FTU8, "UOUTmed"},          // 0x427
+	{7, FTU8, "TFNET"},            // 0x425
+	{8, FTU16, "UAcc_med"},        // 0x405VH+0x406VL
+	{9, FTU8, "IAcc_med_A_2"},     // 0x408
+	{10, FTU16, "IAcc_med_A_u16"}, // 0x432L+0x433H
+	{11, FTU8, "StateUAcc"},       // 0x404
+	{12, FTU8, "F_AccOver"},       // 0x41C
+	{13, FTU8, "MPPT_toCh"},       // 0x524
+	{14, FTU8, "Temp_Grad0"},      // 0x42E
+	{15, FTU8, "Temp_Grad1"},      // 0x42F
+	{16, FTU8, "Temp_Grad2"},      // 0x430
+	{17, FTU8, "Temp_off"},        // 0x43C
+	{18, FTU8, "CulerSpead"},      // 0x458
+	{19, FTU8, "MODE_RAM"},        // 0x400
+	{20, FTU8, "StatusCh"},        // 0x402
+	{21, FTU8, "RSErrSis"},        // 0x42A
+	{22, FTU8, "RSErrJobM"},       // 0x42B
+	{23, FTU8, "RSErrJob"},        // 0x42C
+	{24, FTU8, "RSErrDop"},        // 0x447
+	{25, FTU8, "RSWarning"},       // 0x42D
+	{26, FTU8, "flagUnet2"},       // 0x527
 }
 
 // kesV1 — 15 колонок ячеек КЭС (u8/u16).
 var kesV1Fields = []Field{
-	{1, FTU16},  // VcPV
-	{2, FTU16},  // IcPV
-	{3, FTU16},  // PPV
-	{4, FTU16},  // Windspeed
-	{5, FTU16},  // VBat
-	{6, FTU16},  // ICh
-	{7, FTU16},  // PCurr
-	{8, FTU8},   // TempBat
-	{9, FTU16},  // POut
-	{10, FTU16}, // PLoad
-	{11, FTU16}, // IOut
-	{12, FTU8},  // TempInt
-	{13, FTU8},  // Mode
-	{14, FTU8},  // RelayC
-	{15, FTU8},  // RSErrSis
+	{1, FTU16, "VcPV"},
+	{2, FTU16, "IcPV"},
+	{3, FTU16, "PPV"},
+	{4, FTU16, "Windspeed"},
+	{5, FTU16, "VBat"},
+	{6, FTU16, "ICh"},
+	{7, FTU16, "PCurr"},
+	{8, FTU8, "TempBat"},
+	{9, FTU16, "POut"},
+	{10, FTU16, "PLoad"},
+	{11, FTU16, "IOut"},
+	{12, FTU8, "TempInt"},
+	{13, FTU8, "Mode"},
+	{14, FTU8, "RelayC"},
+	{15, FTU8, "RSErrSis"},
 }
 
 // mbmsFields — схема BMS на n ячеек: ячейка i (1..n) → UakbCell u16,
@@ -315,7 +317,11 @@ func mbmsFields(n int) []Field {
 	f := make([]Field, 0, 3*n)
 	for i := 1; i <= n; i++ {
 		base := uint16(3 * (i - 1))
-		f = append(f, Field{base + 1, FTU16}, Field{base + 2, FTU8}, Field{base + 3, FTU8})
+		suf := strconv.Itoa(i)
+		f = append(f,
+			Field{base + 1, FTU16, "UakbCell" + suf},
+			Field{base + 2, FTU8, "TakbCell" + suf},
+			Field{base + 3, FTU8, "Q_Cell" + suf})
 	}
 	return f
 }

@@ -15,7 +15,16 @@ const (
 	magicReadReply = 0x4153544D // "MTSA"
 	magicReadEnd   = 0x4553544D // "MTSE"
 
+	magicMetaReq   = 0x4953544D // "MTSI" — мета-запрос (list/extremes)
+	magicMetaReply = 0x4F53544D // "MTSO" — мета-ответ
+
 	maxFrame = 64 << 20
+)
+
+// Мета-команды (meta_req.cmd).
+const (
+	metaList     = 1 // список устройств
+	metaExtremes = 2 // крайние точки устройства
 )
 
 // Режимы запроса (§1.4).
@@ -38,12 +47,14 @@ var errWire = errors.New("битый кадр API")
 
 // queryReq — разобранный кадр чтения.
 type queryReq struct {
-	Mode    uint8
-	Type    string
-	IDs     []string
-	Metrics []uint16
-	From    int64
-	To      int64
+	Mode      uint8
+	Type      string
+	IDs       []string
+	Metrics   []uint16
+	From      int64
+	To        int64
+	Direction uint8  // 0 = from (вперёд), 1 = to (назад) — §9
+	Limit     uint32 // 0 = без лимита
 }
 
 func finish(b []byte) []byte { return binary.LittleEndian.AppendUint32(b, crc32.ChecksumIEEE(b)) }
@@ -146,7 +157,72 @@ func decodeReadReq(b []byte) (queryReq, error) {
 	}
 	q.From = int64(binary.LittleEndian.Uint64(body[pos : pos+8]))
 	q.To = int64(binary.LittleEndian.Uint64(body[pos+8 : pos+16]))
+	pos += 16
+	if pos+1+4 > len(body) {
+		return q, errWire
+	}
+	q.Direction = body[pos]
+	if q.Direction > 1 { // допустимы только from(0)/to(1) — §9
+		return q, errWire
+	}
+	q.Limit = binary.LittleEndian.Uint32(body[pos+1 : pos+5])
 	return q, nil
+}
+
+// --- мета (list / extremes) ---
+
+type metaReq struct {
+	Cmd  uint8
+	Type string
+	ID   string
+}
+
+// meta_req := magic u32 | cmd u8 | type str | id str | crc32
+func decodeMetaReq(b []byte) (metaReq, error) {
+	var m metaReq
+	if len(b) < 4+1+4 || binary.LittleEndian.Uint32(b[0:4]) != magicMetaReq || !checkCRC(b) {
+		return m, errWire
+	}
+	body := b[:len(b)-4]
+	pos := 4
+	m.Cmd = body[pos]
+	pos++
+	var err error
+	if m.Type, pos, err = readStrAt(body, pos); err != nil {
+		return m, errWire
+	}
+	if m.ID, pos, err = readStrAt(body, pos); err != nil {
+		return m, errWire
+	}
+	return m, nil
+}
+
+// meta_reply (list) := magic | cmd | count u16 | {type str, id str}* | crc32
+func encodeMetaList(devs []devMeta) []byte {
+	b := make([]byte, 0, 64+len(devs)*16)
+	b = binary.LittleEndian.AppendUint32(b, magicMetaReply)
+	b = append(b, metaList)
+	b = binary.LittleEndian.AppendUint16(b, uint16(len(devs)))
+	for _, d := range devs {
+		b = appendStr(b, d.Type)
+		b = appendStr(b, d.ID)
+	}
+	return finish(b)
+}
+
+// meta_reply (extremes) := magic | cmd | found u8 | min i64 | max i64 | crc32
+func encodeMetaExtremes(found bool, min, max int64) []byte {
+	b := make([]byte, 0, 32)
+	b = binary.LittleEndian.AppendUint32(b, magicMetaReply)
+	b = append(b, metaExtremes)
+	if found {
+		b = append(b, 1)
+	} else {
+		b = append(b, 0)
+	}
+	b = binary.LittleEndian.AppendUint64(b, uint64(min))
+	b = binary.LittleEndian.AppendUint64(b, uint64(max))
+	return finish(b)
 }
 
 // --- чтение (ответ) ---

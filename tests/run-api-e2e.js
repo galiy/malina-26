@@ -171,6 +171,44 @@ async function login(password) {
     ok(g.status === 405, "write_eeprom GET -> 405 (got " + g.status + ")");
   }
 
+  // 8.5. Статистика: /api/stats/devices, /api/stats/table (docs/ui-stat.md)
+  {
+    let r = await req("/api/stats/devices");
+    ok(r.status === 401, "no auth /api/stats/devices -> 401 (got " + r.status + ")");
+    r = await req("/api/stats/table?type=map&id=1&from=0&to=1&dir=from&limit=2");
+    ok(r.status === 401, "no auth /api/stats/table -> 401 (got " + r.status + ")");
+    r = await req("/api/stats/extremes?type=map&id=1");
+    ok(r.status === 401, "no auth /api/stats/extremes -> 401 (got " + r.status + ")");
+
+    const dv = await req("/api/stats/devices", { cookie: globalThis.cookie });
+    ok(dv.status === 200, "cookie /api/stats/devices -> 200 (got " + dv.status + ")");
+    let devs = [];
+    try { devs = (await dv.json()).devices || []; } catch (e) { /* ignore */ }
+    ok(Array.isArray(devs), "/api/stats/devices returns devices[]");
+
+    if (devs.length) {
+      const d = devs[0];
+      const now = Date.now();
+      const t = await req("/api/stats/table?type=" + encodeURIComponent(d.type) + "&id=" + encodeURIComponent(d.id) +
+        "&from=0&to=" + now + "&dir=from&limit=2", { cookie: globalThis.cookie });
+      ok(t.status === 200, "cookie /api/stats/table -> 200 (got " + t.status + ")");
+      let body = {};
+      try { body = await t.json(); } catch (e) { /* ignore */ }
+      ok(Array.isArray(body.rows) && Array.isArray(body.columns), "/api/stats/table rows[]+columns[]");
+      const bd = await req("/api/stats/table?type=" + encodeURIComponent(d.type) + "&id=" + encodeURIComponent(d.id) +
+        "&from=200&to=100&dir=from&limit=2", { cookie: globalThis.cookie });
+      ok(bd.status === 400, "/api/stats/table from>to -> 400 (got " + bd.status + ")");
+      const ex = await req("/api/stats/extremes?type=" + encodeURIComponent(d.type) + "&id=" + encodeURIComponent(d.id),
+        { cookie: globalThis.cookie });
+      ok(ex.status === 200, "cookie /api/stats/extremes -> 200 (got " + ex.status + ")");
+      let eb = {};
+      try { eb = await ex.json(); } catch (e) { /* ignore */ }
+      ok(eb && typeof eb.raw === "object" && typeof eb.avg === "object", "/api/stats/extremes returns {raw,avg}");
+    } else {
+      console.log("skip: устройств в tsdb нет — /api/stats/table не проверяем");
+    }
+  }
+
   // 9. Смена пароля -> PurgeAll (мутирующий; только при MALINA_NEWPASS)
   if (NEWPASS) {
     const ch = await req("/system/password", { method: "POST", cookie: globalThis.cookie, form: { password_new: NEWPASS, password_confirm: NEWPASS } });

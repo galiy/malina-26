@@ -40,6 +40,8 @@ func encodeReadReqForTest(mode uint8, typ string, ids []string, metrics []uint16
 	}
 	b = binary.LittleEndian.AppendUint64(b, uint64(from))
 	b = binary.LittleEndian.AppendUint64(b, uint64(to))
+	b = append(b, 0)                           // direction = from
+	b = binary.LittleEndian.AppendUint32(b, 0) // limit = 0 (без лимита)
 	return finish(b)
 }
 

@@ -37,6 +37,12 @@ const (
 	StatusTooMany = 3
 )
 
+// Направление выборки (§9).
+const (
+	DirectionFrom uint8 = 0 // вперёд от from
+	DirectionTo   uint8 = 1 // назад от to
+)
+
 var errFrame = errors.New("битый кадр tsdb")
 
 // Row — строка для записи/чтения.
@@ -116,6 +122,18 @@ func appendStr(b []byte, s string) []byte {
 
 func finish(b []byte) []byte { return binary.LittleEndian.AppendUint32(b, crc32.ChecksumIEEE(b)) }
 
+func readStrAt(b []byte, pos int) (string, int, error) {
+	if pos >= len(b) {
+		return "", pos, errFrame
+	}
+	n := int(b[pos])
+	pos++
+	if pos+n > len(b) {
+		return "", pos, errFrame
+	}
+	return string(b[pos : pos+n]), pos + n, nil
+}
+
 func checkCRC(b []byte) bool {
 	if len(b) < 4 {
 		return false
@@ -142,7 +160,7 @@ func EncodeWriteReq(rows []Row) []byte {
 }
 
 // EncodeReadReq собирает кадр чтения.
-func EncodeReadReq(mode uint8, typ string, ids []string, metrics []uint16, from, to int64) []byte {
+func EncodeReadReq(mode uint8, typ string, ids []string, metrics []uint16, from, to int64, direction uint8, limit uint32) []byte {
 	b := make([]byte, 0, 64)
 	b = binary.LittleEndian.AppendUint32(b, magicReadReq)
 	b = append(b, mode)
@@ -157,6 +175,8 @@ func EncodeReadReq(mode uint8, typ string, ids []string, metrics []uint16, from,
 	}
 	b = binary.LittleEndian.AppendUint64(b, uint64(from))
 	b = binary.LittleEndian.AppendUint64(b, uint64(to))
+	b = append(b, direction)
+	b = binary.LittleEndian.AppendUint32(b, limit)
 	return finish(b)
 }
 
@@ -175,12 +195,82 @@ func (c *Client) Write(rows []Row) (uint8, uint32, error) {
 }
 
 // Query выполняет чтение; возвращает статус и строки.
-func (c *Client) Query(mode uint8, typ string, ids []string, metrics []uint16, from, to int64) (uint8, []Row, error) {
-	rb, err := c.roundtrip(EncodeReadReq(mode, typ, ids, metrics, from, to))
+func (c *Client) Query(mode uint8, typ string, ids []string, metrics []uint16, from, to int64, direction uint8, limit uint32) (uint8, []Row, error) {
+	rb, err := c.roundtrip(EncodeReadReq(mode, typ, ids, metrics, from, to, direction, limit))
 	if err != nil {
 		return 0, nil, err
 	}
 	return ParseReadReply(rb)
+}
+
+// --- мета: список устройств и крайние точки (MTSI/MTSO) ---
+
+const (
+	magicMetaReq   = 0x4953544D // "MTSI"
+	magicMetaReply = 0x4F53544D // "MTSO"
+	MetaList       = 1
+	MetaExtremes   = 2
+)
+
+// DevInfo — устройство в списке.
+type DevInfo struct {
+	Type string
+	ID   string
+}
+
+func encodeMetaReq(cmd uint8, typ, id string) []byte {
+	b := make([]byte, 0, 16)
+	b = binary.LittleEndian.AppendUint32(b, magicMetaReq)
+	b = append(b, cmd)
+	b = appendStr(b, typ)
+	b = appendStr(b, id)
+	return finish(b)
+}
+
+// List возвращает список устройств (из памяти сервера).
+func (c *Client) List() ([]DevInfo, error) {
+	rb, err := c.roundtrip(encodeMetaReq(MetaList, "", ""))
+	if err != nil {
+		return nil, err
+	}
+	if len(rb) < 4+1+2+4 || binary.LittleEndian.Uint32(rb[0:4]) != magicMetaReply || !checkCRC(rb) || rb[4] != MetaList {
+		return nil, errFrame
+	}
+	body := rb[:len(rb)-4]
+	pos := 5
+	count := int(binary.LittleEndian.Uint16(body[pos : pos+2]))
+	pos += 2
+	out := make([]DevInfo, 0, count)
+	for i := 0; i < count; i++ {
+		var t, id string
+		var e error
+		if t, pos, e = readStrAt(body, pos); e != nil {
+			return nil, errFrame
+		}
+		if id, pos, e = readStrAt(body, pos); e != nil {
+			return nil, errFrame
+		}
+		out = append(out, DevInfo{Type: t, ID: id})
+	}
+	return out, nil
+}
+
+// Extremes возвращает [min,max] времени устройства; found=false — данных нет.
+func (c *Client) Extremes(typ, id string) (int64, int64, bool, error) {
+	rb, err := c.roundtrip(encodeMetaReq(MetaExtremes, typ, id))
+	if err != nil {
+		return 0, 0, false, err
+	}
+	if len(rb) < 4+1+1+8+8+4 || binary.LittleEndian.Uint32(rb[0:4]) != magicMetaReply || !checkCRC(rb) || rb[4] != MetaExtremes {
+		return 0, 0, false, errFrame
+	}
+	body := rb[:len(rb)-4]
+	pos := 5
+	found := body[pos] == 1
+	pos++
+	min := int64(binary.LittleEndian.Uint64(body[pos : pos+8]))
+	max := int64(binary.LittleEndian.Uint64(body[pos+8 : pos+16]))
+	return min, max, found, nil
 }
 
 // ParseReadReply разбирает ответ чтения (MTSA | status | rows | MTSE | crc).

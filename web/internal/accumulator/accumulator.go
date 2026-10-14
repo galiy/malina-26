@@ -285,8 +285,11 @@ func Run(ctx context.Context, rawRoot, rawSock, avgSock, cfgPath string, logf fu
 		}
 		now = time.Now()
 		if cfg.Enabled && !now.After(deadline) { // только в окне [fire, deadline]
+			// Окно [windowEnd-period, windowEnd): `to` — начало СЛЕДУЮЩЕГО окна
+			// минус минимальный тик (1 мс), иначе строка ровно на границе попала бы
+			// и в текущее, и в следующее окно (перекрытие).
 			from := windowEnd.Add(-period).UnixMilli()
-			to := windowEnd.UnixMilli()
+			to := windowEnd.UnixMilli() - 1
 			processWindow(raw, avg, rawRoot, from, to, logf)
 		}
 		// ждать до границы следующего окна (+5 c) — без busy-loop
@@ -306,7 +309,7 @@ func processWindow(raw, avg *tsdbclient.Client, rawRoot string, from, to int64, 
 	devs := enumerateRaw(rawRoot)
 	written, rowsOut, errs := 0, 0, 0
 	for _, dev := range devs {
-		status, rows, err := raw.Query(tsdbclient.ModeWholeOne, dev.Type, []string{dev.ID}, nil, from, to)
+		status, rows, err := raw.Query(tsdbclient.ModeWholeOne, dev.Type, []string{dev.ID}, nil, from, to, tsdbclient.DirectionFrom, 0)
 		if err != nil || status != tsdbclient.StatusOK {
 			errs++
 			continue

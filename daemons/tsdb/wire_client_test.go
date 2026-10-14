@@ -27,12 +27,13 @@ func TestWireCompatClientServer(t *testing.T) {
 	}
 
 	// чтение: клиентский энкодер → серверный декодер
-	q, err := decodeReadReq(tsdbclient.EncodeReadReq(tsdbclient.ModeSelectedOne, "map", []string{"5", "6"}, []uint16{3, 4}, 100, 200))
+	q, err := decodeReadReq(tsdbclient.EncodeReadReq(tsdbclient.ModeSelectedOne, "map", []string{"5", "6"}, []uint16{3, 4}, 100, 200, tsdbclient.DirectionTo, 200))
 	if err != nil {
 		t.Fatalf("decodeReadReq: %v", err)
 	}
 	if q.Mode != modeSelectedOne || q.Type != "map" || len(q.IDs) != 2 || q.IDs[0] != "5" || q.IDs[1] != "6" ||
-		len(q.Metrics) != 2 || q.Metrics[0] != 3 || q.Metrics[1] != 4 || q.From != 100 || q.To != 200 {
+		len(q.Metrics) != 2 || q.Metrics[0] != 3 || q.Metrics[1] != 4 || q.From != 100 || q.To != 200 ||
+		q.Direction != tsdbclient.DirectionTo || q.Limit != 200 {
 		t.Fatalf("запрос: %+v", q)
 	}
 

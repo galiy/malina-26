@@ -93,7 +93,11 @@ type Store struct {
 	row        bool          // raw-режим: row-раскладка сегмента
 	retention  time.Duration // raw: возраст очистки (0 = выкл.)
 	limitBytes int64         // raw: лимит объёма (0 = без лимита)
-	reg        *tscontract.Registry
+
+	minFreeBytes   int64 // порог свободного места на ФС, байт (0 = выкл.)
+	freeEvictBytes int64 // минимум освобождаемого за суточный проход, байт
+
+	reg *tscontract.Registry
 
 	mu     sync.RWMutex
 	series map[seriesKey]*series
@@ -116,6 +120,9 @@ type Options struct {
 	Row        bool          // raw-режим (row-раскладка)
 	Retention  time.Duration // raw: возраст очистки (0 = выкл.)
 	LimitBytes int64         // raw: лимит объёма (0 = без лимита)
+
+	MinFreeBytes   int64 // порог свободного места на ФС, байт (0 = выкл.)
+	FreeEvictBytes int64 // минимум освобождаемого за суточный проход, байт
 }
 
 func defaultOptions() Options {
@@ -138,18 +145,20 @@ func NewStore(root string, opt Options, reg *tscontract.Registry) (*Store, error
 		reg = tscontract.NewDefaultRegistry()
 	}
 	s := &Store{
-		root:       root,
-		bucketSize: opt.BucketSize,
-		segMax:     opt.SegMax,
-		maxRows:    opt.MaxRows,
-		maxRangeMS: opt.MaxRangeMS,
-		row:        opt.Row,
-		retention:  opt.Retention,
-		limitBytes: opt.LimitBytes,
-		reg:        reg,
-		series:     make(map[seriesKey]*series),
-		wch:        make(chan writeOp, 1024),
-		stop:       make(chan struct{}),
+		root:           root,
+		bucketSize:     opt.BucketSize,
+		segMax:         opt.SegMax,
+		maxRows:        opt.MaxRows,
+		maxRangeMS:     opt.MaxRangeMS,
+		row:            opt.Row,
+		retention:      opt.Retention,
+		limitBytes:     opt.LimitBytes,
+		minFreeBytes:   opt.MinFreeBytes,
+		freeEvictBytes: opt.FreeEvictBytes,
+		reg:            reg,
+		series:         make(map[seriesKey]*series),
+		wch:            make(chan writeOp, 1024),
+		stop:           make(chan struct{}),
 	}
 	if err := s.scan(); err != nil {
 		return nil, err
@@ -159,6 +168,10 @@ func NewStore(root string, opt Options, reg *tscontract.Registry) (*Store, error
 	if s.retention > 0 || s.limitBytes > 0 {
 		s.wg.Add(1)
 		go s.retentionLoop()
+	}
+	if s.minFreeBytes > 0 {
+		s.wg.Add(1)
+		go s.freeRetentionLoop()
 	}
 	return s, nil
 }
@@ -652,17 +665,27 @@ func scanActiveBlocks(f *os.File, size, hsz int64) ([]idxEntry, int64, bool) {
 
 // --- чтение ---
 
+// Направление выборки (§9).
+const (
+	dirFrom uint8 = 0 // вперёд от from
+	dirTo   uint8 = 1 // назад от to
+)
+
 type Query struct {
-	Type    string
-	IDs     []string
-	From    int64
-	To      int64
-	Metrics []uint16 // пусто — ряд целиком
+	Type      string
+	IDs       []string
+	From      int64
+	To        int64
+	Metrics   []uint16 // пусто — ряд целиком
+	Direction uint8    // 0 = из начала периода, 1 = из конца
+	Limit     int      // 0 = без лимита
 }
 
 func (s *Store) Query(q Query) ([]Row, error) {
 	s.Wait() // гарантировать обработку очереди (writer — единый)
-	if s.maxRangeMS > 0 && q.To-q.From > s.maxRangeMS {
+	// Лимит периода — только для запросов без лимита строк; постраничные (limit>0)
+	// узкие по числу строк и период не ограничиваем (§9).
+	if s.maxRangeMS > 0 && q.Limit == 0 && q.To-q.From > s.maxRangeMS {
 		return nil, errRange
 	}
 	s.mu.RLock()
@@ -695,22 +718,45 @@ func (s *Store) Query(q Query) ([]Row, error) {
 		}
 		return out[i].Time < out[j].Time
 	})
+	// Лимит «страницы»: direction=from — первые N, direction=to — последние N (§9).
+	if q.Limit > 0 && len(out) > q.Limit {
+		if q.Direction == dirTo {
+			out = out[len(out)-q.Limit:]
+		} else {
+			out = out[:q.Limit]
+		}
+	}
 	return out, nil
 }
 
 func (s *Store) readSeries(ser *series, q Query) []Row {
 	var out []Row
-	// Отсечение сегментов по [minTime,maxTime] (§9 п.1).
-	for _, ref := range ser.sealed {
+	appendSeg := func(ref *segRef) {
 		if ref.maxTime < q.From || ref.minTime > q.To {
-			continue
+			return
 		}
 		out = append(out, s.readSegRef(ref, ser.key.id, q)...)
 	}
-	if as := ser.active; as != nil {
-		if as.ref.maxTime >= q.From && as.ref.minTime <= q.To {
-			out = append(out, s.readSegRef(as.ref, ser.key.id, q)...)
+	// direction=to — идём с конца (активный, затем запечатанные в обратном порядке),
+	// останавливаясь, когда набрали достаточно строк для страницы. Итоговый порядок
+	// выравнивает Query (сортировка по (ID, time)).
+	if q.Direction == dirTo {
+		if as := ser.active; as != nil {
+			appendSeg(as.ref)
 		}
+		for i := len(ser.sealed) - 1; i >= 0; i-- {
+			appendSeg(ser.sealed[i])
+			if q.Limit > 0 && len(out) >= q.Limit {
+				break
+			}
+		}
+		return out
+	}
+	for _, ref := range ser.sealed {
+		appendSeg(ref)
+	}
+	if as := ser.active; as != nil {
+		appendSeg(as.ref)
 	}
 	return out
 }
@@ -729,22 +775,39 @@ func (s *Store) readSegment(ref *segRef, id string, q Query) []Row {
 		return nil
 	}
 	defer f.Close()
-	// binary search: первый блок, чей интервал достигает q.From (§9).
 	ents := ref.entries
-	start := sort.Search(len(ents), func(i int) bool {
-		last := ref.maxTime
+	blockLast := func(i int) int64 { // «время конца» блока i
 		if i+1 < len(ents) {
-			last = ents[i+1].FirstTime
+			return ents[i+1].FirstTime
 		}
-		return last >= q.From
-	})
+		return ref.maxTime
+	}
 	var out []Row
+	if q.Direction == dirTo {
+		// Последний блок с FirstTime <= q.To; читаем вниз, стоп на limit (§9).
+		start := sort.Search(len(ents), func(i int) bool { return ents[i].FirstTime > q.To }) - 1
+		for i := start; i >= 0; i-- {
+			if blockLast(i) < q.From {
+				break
+			}
+			out = append(s.readBlock(f, ents[i], id, q), out...)
+			if q.Limit > 0 && len(out) >= q.Limit {
+				break
+			}
+		}
+		return out
+	}
+	// direction=from: первый блок, чей интервал достигает q.From, — вперёд, стоп на limit.
+	start := sort.Search(len(ents), func(i int) bool { return blockLast(i) >= q.From })
 	for i := start; i < len(ents); i++ {
 		e := ents[i]
 		if e.FirstTime > q.To {
 			break
 		}
 		out = append(out, s.readBlock(f, e, id, q)...)
+		if q.Limit > 0 && len(out) >= q.Limit {
+			break
+		}
 	}
 	return out
 }
@@ -833,6 +896,69 @@ func decodeColumn(data []byte, t tscontract.FieldType, recCount int) ([]tscontra
 		pos = len(data) - len(rest)
 	}
 	return out, nil
+}
+
+// --- список устройств и крайние точки (из памяти) ---
+
+// devMeta — устройство (тип + идентификатор).
+type devMeta struct {
+	Type string
+	ID   string
+}
+
+// seriesBounds — [min,max] времени серии по её сегментам; ok=false если данных нет.
+func seriesBounds(ser *series) (min, max int64, ok bool) {
+	first := true
+	add := func(a, b int64) {
+		if first {
+			min, max, first = a, b, false
+			return
+		}
+		if a < min {
+			min = a
+		}
+		if b > max {
+			max = b
+		}
+	}
+	for _, ref := range ser.sealed {
+		add(ref.minTime, ref.maxTime)
+	}
+	if as := ser.active; as != nil {
+		add(as.ref.minTime, as.ref.maxTime)
+	}
+	return min, max, !first
+}
+
+// ListDevices — устройства с данными (серии, у которых есть границы); пустые
+// (все сегменты вычищены) пропускаются. Из памяти, без чтения сегментов.
+func (s *Store) ListDevices() []devMeta {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]devMeta, 0, len(s.series))
+	for k, ser := range s.series {
+		if _, _, ok := seriesBounds(ser); ok {
+			out = append(out, devMeta{Type: k.typ, ID: k.id})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+// Extremes — [min,max] времени устройства из памяти; found=false если данных нет.
+func (s *Store) Extremes(typ, id string) (int64, int64, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ser := s.series[seriesKey{typ: typ, id: id}]
+	if ser == nil {
+		return 0, 0, false
+	}
+	return seriesBounds(ser)
 }
 
 // --- flush/sync/close ---

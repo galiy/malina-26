@@ -10,8 +10,9 @@
 #
 # Пароль SSH: env MALINA_PASS или строка MALINA_PASS=... в .kilo/secrets (не коммитится).
 #
-# Что делает: выкладывает бинарники (malina-web, malina-netd, map-reader, kes-reader)
-# и веб-ассеты на rw-раздел /malina, перезапускает сервисы и проверяет их статус.
+# Что делает: выкладывает бинарники (malina-web, malina-netd, map-reader, kes-reader,
+# malina-tsdb) и веб-ассеты на rw-раздел /malina, обновляет unit-файлы tsdb
+# (avg+raw; для применения флагов очистки) и перезапускает сервисы, затем печатает статус.
 # malina-netd НЕ перезапускается автоматически (это сетевой стек; рестарт по SSH
 # может оборвать связь) — новый бинарник вступит в силу при следующей загрузке.
 #
@@ -70,11 +71,14 @@ cp "$BIN_MAP"  "$STAGE/map-reader"
 cp "$BIN_KES"  "$STAGE/kes-reader"
 cp "$BIN_TSDB" "$STAGE/malina-tsdb"
 tar -C "$ROOT/web/assets" -cf "$STAGE/assets.tar" templates static i18n
+cp "$ROOT/daemons/tsdb/tsdb.service"              "$STAGE/malina-tsdb.service"
+cp "$ROOT/system/systemd/malina-tsdb-raw.service" "$STAGE/malina-tsdb-raw.service"
 
 echo "==> выкладка на $HOST"
 # стейдж на /malina (rw, много места); /tmp на устройстве — tmpfs 64 МБ
 "${SSH[@]}" "$HOST" 'sudo mkdir -p /malina/.deploy/tmp && sudo chown -R malina:malina /malina/.deploy/tmp && sudo rm -rf /malina/.deploy/tmp/*'
-"${SCP[@]}" "$STAGE/malina-web" "$STAGE/malina-netd" "$STAGE/map-reader" "$STAGE/kes-reader" "$STAGE/malina-tsdb" "$STAGE/assets.tar" \
+"${SCP[@]}" "$STAGE/malina-web" "$STAGE/malina-netd" "$STAGE/map-reader" "$STAGE/kes-reader" "$STAGE/malina-tsdb" \
+  "$STAGE/assets.tar" "$STAGE/malina-tsdb.service" "$STAGE/malina-tsdb-raw.service" \
   "$HOST:/malina/.deploy/tmp/"
 
 "${SSH[@]}" "$HOST" 'bash -s' <<'REMOTE'
@@ -93,6 +97,13 @@ sudo tar -C /malina/usr/local/share/malina/web -xf assets.tar
 sudo chown -R root:root /malina/usr/local/share/malina/web
 sudo find /malina/usr/local/share/malina/web -type d -exec chmod 0755 {} +
 sudo find /malina/usr/local/share/malina/web -type f -exec chmod 0644 {} +
+# unit-файлы tsdb (avg+raw): корень ro — короткое rw-окно только под /etc
+sudo mount -o remount,rw /
+sudo install -m0644 malina-tsdb.service     /etc/systemd/system/malina-tsdb.service
+sudo install -m0644 malina-tsdb-raw.service /etc/systemd/system/malina-tsdb-raw.service
+sudo systemctl daemon-reload
+sync
+sudo mount -o remount,ro / || true
 # перезапуск сервисов (malina-netd не трогаем: сетевой стек)
 for u in malina-web map-reader kes-reader malina-tsdb malina-tsdb-raw; do
   sudo systemctl restart "$u" 2>/dev/null && echo "restart $u" || echo "skip   $u (не активен/не установлен)"

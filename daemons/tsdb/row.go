@@ -11,6 +11,7 @@ package main
 import (
 	"encoding/binary"
 	"os"
+	"sort"
 )
 
 const rowK = 256 // шаг разреженного индекса (строк)
@@ -147,8 +148,10 @@ func (s *Store) writeRowsLocked(pb *pendBlock) error {
 	return nil
 }
 
-// readSegmentRow читает диапазон из raw-сегмента (row-раскладка). Сегмент мал
-// (tmpfs) — читается целиком, скан с начала (отсечение уже сделано по сегментам).
+// readSegmentRow читает диапазон из raw-сегмента (row-раскладка). Стартовая точка
+// берётся по разреженному индексу (ref.entries), далее скан вперёд с ранним
+// останоном по limit (§9): forwad — первые limit строк от from; to — последние
+// limit строк до to.
 func (s *Store) readSegmentRow(ref *segRef, id string, q Query) []Row {
 	data, err := os.ReadFile(ref.path)
 	if err != nil {
@@ -157,9 +160,29 @@ func (s *Store) readSegmentRow(ref *segRef, id string, q Query) []Row {
 	if _, _, err := decodeSegHeader(data); err != nil {
 		return nil
 	}
-	var out []Row
-	base := uint64(ref.timeBase)
+	limit := q.Limit
+	out := make([]Row, 0, 16)
 	pos := int(ref.hdrSize)
+	base := uint64(ref.timeBase)
+	if n := len(ref.entries); n > 0 {
+		target := q.From
+		if q.Direction == dirTo {
+			target = q.To
+		}
+		idx := sort.Search(n, func(i int) bool { return ref.entries[i].FirstTime > target }) - 1
+		if q.Direction == dirTo && limit > 0 {
+			// «назад»: последние limit строк могут лежать до найденной entry —
+			// отступаем на гарантированно покрывающее число записей.
+			idx -= limit/rowK + 1
+		}
+		if idx >= 0 {
+			e := ref.entries[idx]
+			pos = int(e.Offset)
+			if dt, _, _, _, derr := decodeRowRow(data[pos:]); derr == nil {
+				base = uint64(e.FirstTime) - dt // восстановить базу строки entry
+			}
+		}
+	}
 	for pos < len(data) {
 		dt, ver, payload, rn, e := decodeRowRow(data[pos:])
 		if e != nil || pos+rn > len(data) {
@@ -167,22 +190,33 @@ func (s *Store) readSegmentRow(ref *segRef, id string, q Query) []Row {
 		}
 		base += dt
 		t := int64(base)
+		pos += rn
+		if t < q.From {
+			continue
+		}
 		if t > q.To {
 			break
 		}
-		if t >= q.From {
-			pl := payload
-			if len(q.Metrics) > 0 {
-				proj, ok := s.reg.Project(q.Type, ver, payload, q.Metrics)
-				if !ok {
-					pos += rn
-					continue
-				}
-				pl = proj
+		pl := payload
+		if len(q.Metrics) > 0 {
+			proj, ok := s.reg.Project(q.Type, ver, payload, q.Metrics)
+			if !ok {
+				continue
 			}
-			out = append(out, Row{Type: q.Type, ID: id, Time: t, Version: ver, Payload: pl})
+			pl = proj
 		}
-		pos += rn
+		row := Row{Type: q.Type, ID: id, Time: t, Version: ver, Payload: pl}
+		if q.Direction == dirTo {
+			if limit > 0 && len(out) >= limit {
+				out = out[1:] // держим только последние limit
+			}
+			out = append(out, row)
+		} else {
+			out = append(out, row)
+			if limit > 0 && len(out) >= limit {
+				break
+			}
+		}
 	}
 	return out
 }

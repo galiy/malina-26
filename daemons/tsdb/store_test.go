@@ -222,6 +222,71 @@ func TestStoreRowMode(t *testing.T) {
 	}
 }
 
+// TestStoreLimitDirection — лимит «страницы»: from — первые N, to — последние N.
+func TestStoreLimitDirection(t *testing.T) {
+	st, _ := NewStore(t.TempDir(), defaultOptions(), tscontract.NewDefaultRegistry())
+	defer st.Close()
+	for i := 0; i < 10; i++ {
+		st.Write([]Row{rowT(t, "map", "1", int64(1000+i*10), sample(float64(i))...)})
+	}
+	st.Wait()
+	fwd, _ := st.Query(Query{Type: "map", IDs: []string{"1"}, From: 0, To: 2000000, Direction: dirFrom, Limit: 3})
+	if len(fwd) != 3 || fwd[0].Time != 1000 || fwd[2].Time != 1020 {
+		t.Fatalf("from+limit: %+v", fwd)
+	}
+	back, _ := st.Query(Query{Type: "map", IDs: []string{"1"}, From: 0, To: 2000000, Direction: dirTo, Limit: 3})
+	if len(back) != 3 || back[0].Time != 1070 || back[2].Time != 1090 {
+		t.Fatalf("to+limit: %+v", back)
+	}
+}
+
+// TestStoreRowLimitDirection — row-режим: индекс + лимит страницы (from/to),
+// старт из середины сегмента (проверка разреженного индекса).
+func TestStoreRowLimitDirection(t *testing.T) {
+	st, _ := NewStore(t.TempDir(), Options{Row: true, SegMax: 1 << 30}, tscontract.NewDefaultRegistry())
+	defer st.Close()
+	for i := 0; i < 600; i++ {
+		st.Write([]Row{rowT(t, "map", "1", int64(1000+i*10), sample(float64(i))...)})
+	}
+	st.Wait()
+	fwd, _ := st.Query(Query{Type: "map", IDs: []string{"1"}, From: 1000, To: 1 << 40, Direction: dirFrom, Limit: 5})
+	if len(fwd) != 5 || fwd[0].Time != 1000 || fwd[4].Time != 1040 {
+		t.Fatalf("from+limit: %+v", fwd)
+	}
+	mid, _ := st.Query(Query{Type: "map", IDs: []string{"1"}, From: 3560, To: 1 << 40, Direction: dirFrom, Limit: 4})
+	if len(mid) != 4 || mid[0].Time != 3560 {
+		t.Fatalf("индекс из середины: %+v", mid)
+	}
+	back, _ := st.Query(Query{Type: "map", IDs: []string{"1"}, From: 0, To: 1 << 40, Direction: dirTo, Limit: 3})
+	if len(back) != 3 || back[0].Time != 6970 || back[2].Time != 6990 {
+		t.Fatalf("to+limit: %+v", back)
+	}
+	back2, _ := st.Query(Query{Type: "map", IDs: []string{"1"}, From: 0, To: 3566, Direction: dirTo, Limit: 3})
+	if len(back2) != 3 || back2[2].Time != 3560 {
+		t.Fatalf("to из середины: %+v", back2)
+	}
+}
+
+// TestStoreMeta — список устройств и крайние точки из памяти.
+func TestStoreMeta(t *testing.T) {
+	st, _ := NewStore(t.TempDir(), defaultOptions(), tscontract.NewDefaultRegistry())
+	defer st.Close()
+	st.Write([]Row{rowT(t, "map", "2", 1000, sample(1.0)...)})
+	st.Write([]Row{rowT(t, "kes", "7", 1000, sample(1.0)...)})
+	st.Wait()
+	devs := st.ListDevices()
+	if len(devs) != 2 || devs[0].Type != "kes" || devs[1].Type != "map" {
+		t.Fatalf("list: %+v", devs)
+	}
+	mn, mx, ok := st.Extremes("map", "2")
+	if !ok || mn != 1000 || mx != 1000 {
+		t.Fatalf("extremes: %d..%d ok=%v", mn, mx, ok)
+	}
+	if _, _, ok := st.Extremes("map", "99"); ok {
+		t.Fatal("extremes: несуществующее устройство найдено")
+	}
+}
+
 func TestQueryLimits(t *testing.T) {
 	st, _ := NewStore(t.TempDir(), Options{MaxRows: 2, MaxRangeMS: 100_000}, tscontract.NewDefaultRegistry())
 	defer st.Close()
