@@ -4,9 +4,11 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/galiy/malina-26/daemons/lib/tscontract"
 	"github.com/galiy/malina-26/daemons/lib/tsdbclient"
@@ -18,18 +20,39 @@ type statsDev struct {
 	ID   string `json:"id"`
 }
 
-// statsCol — колонка таблицы (поле контракта).
+// statsCol — колонка таблицы (поле контракта + человеческая единица для UI).
+// ID — строковый ключ: «<field_id>» для обычных полей и «<field_id>.<bit>» для
+// виртуальных колонок битфилда реле.
 type statsCol struct {
-	ID   uint16 `json:"id"`
+	ID   string `json:"id"`
 	Name string `json:"name"`
 	Type uint8  `json:"type"`
+	Unit string `json:"unit"` // единица измерения (пусто — коды/битфилды)
+	Raw  bool   `json:"raw"`  // значение показывается без пересчёта (код/битфилд)
 }
 
-// statsRow — строка таблицы для клиента (поля декодированы).
+// statsRow — строка таблицы для клиента (значения: число или символ).
 type statsRow struct {
-	Time    int64              `json:"t"`
-	Version uint16             `json:"v"`
-	Vals    map[string]float64 `json:"f"` // field_id → значение
+	Time    int64          `json:"t"`
+	Version uint16         `json:"v"`
+	Vals    map[string]any `json:"f"` // ключ колонки → число/строка
+}
+
+// fieldPlan — предвычисленная раскладка поля для рендера (кэш на версию).
+type fieldPlan struct {
+	id    uint16
+	bit   int // >0 — виртуальная колонка битфилда реле
+	key   string
+	fc    fieldConv
+	name  string
+	ftype uint8
+}
+
+// verPlan — контракт версии + предвычисленные поля (кэш, R4).
+type verPlan struct {
+	c     tscontract.Contract
+	convs map[uint16]fieldConv
+	cols  []fieldPlan
 }
 
 // statsDevices — объединение устройств обеих tsdb (list из памяти, без чтения
@@ -155,29 +178,77 @@ func (s *Server) statsTable(typ, id string, from, to int64, dir uint8, limit int
 		}
 	}
 	reg := tscontract.NewDefaultRegistry()
-	cols := map[uint16]statsCol{}
+	planCache := map[uint16]*verPlan{}
+	getPlan := func(ver uint16) *verPlan {
+		if p, seen := planCache[ver]; seen {
+			return p
+		}
+		c, ok := reg.Get(typ, ver)
+		if !ok {
+			planCache[ver] = nil
+			return nil
+		}
+		p := &verPlan{c: c, convs: map[uint16]fieldConv{}}
+		for _, f := range c.Fields() {
+			fc, _ := fieldConvFor(typ, ver, f.ID)
+			p.convs[f.ID] = fc
+			if fc.Kind == kindRelay3 {
+				for i := 1; i <= 3; i++ {
+					p.cols = append(p.cols, fieldPlan{id: f.ID, bit: i, key: relayKey(f.ID, i),
+						fc: fieldConv{Kind: kindRelay3}, name: fmt.Sprintf("Relay%d", i), ftype: uint8(f.Type)})
+				}
+				continue
+			}
+			p.cols = append(p.cols, fieldPlan{id: f.ID, key: strconv.Itoa(int(f.ID)), fc: fc,
+				name: f.Name, ftype: uint8(f.Type)})
+		}
+		planCache[ver] = p
+		return p
+	}
+
+	cols := map[string]statsCol{}
 	out := make([]statsRow, 0, len(times))
 	for _, t := range times {
 		r := byTime[t]
-		c, ok := reg.Get(typ, r.Version)
-		if !ok {
+		p := getPlan(r.Version)
+		if p == nil {
 			continue
 		}
-		for _, f := range c.Fields() {
-			if _, seen := cols[f.ID]; !seen {
-				cols[f.ID] = statsCol{ID: f.ID, Name: f.Name, Type: uint8(f.Type)}
+		for _, pl := range p.cols {
+			if _, seen := cols[pl.key]; !seen {
+				cols[pl.key] = statsCol{ID: pl.key, Name: pl.name, Type: pl.ftype, Unit: pl.fc.Unit, Raw: pl.fc.Raw}
 			}
 		}
-		vals, err := c.Decode(r.Payload)
+		vals, err := p.c.Decode(r.Payload)
 		if err != nil {
 			continue
 		}
-		m := make(map[string]float64, len(vals))
+		rawRow := make(map[uint16]float64, len(vals))
 		for _, v := range vals {
-			if v.Type == tscontract.FTFloat {
-				m[strconv.Itoa(int(v.ID))] = v.Float
-			} else {
-				m[strconv.Itoa(int(v.ID))] = float64(v.Int)
+			rawRow[v.ID] = rawNum(v)
+		}
+		m := make(map[string]any, len(vals))
+		for _, v := range vals {
+			fc, ok := p.convs[v.ID]
+			if !ok {
+				continue
+			}
+			raw := rawRow[v.ID]
+			switch fc.Kind {
+			case kindRelay3: // битфилд реле → 3 колонки 0/1
+				for i := 0; i < 3; i++ {
+					m[relayKey(v.ID, i+1)] = float64((int64(raw) >> uint(i)) & 1)
+				}
+			case kindSymbol: // одиночный печатаемый ASCII-символ (Mode); иначе «—» (R3)
+				b := byte(int64(raw))
+				if b < 0x20 || b > 0x7E {
+					continue
+				}
+				m[strconv.Itoa(int(v.ID))] = string(rune(b))
+			default:
+				if hv, ok := fc.Num(raw, rawRow); ok { // human; иначе «—» (поле пропускаем)
+					m[strconv.Itoa(int(v.ID))] = hv
+				}
 			}
 		}
 		out = append(out, statsRow{Time: t, Version: r.Version, Vals: m})
@@ -186,8 +257,38 @@ func (s *Server) statsTable(typ, id string, from, to int64, dir uint8, limit int
 	for _, c := range cols {
 		colList = append(colList, c)
 	}
-	sort.Slice(colList, func(i, j int) bool { return colList[i].ID < colList[j].ID })
+	sort.Slice(colList, func(i, j int) bool { return colLess(colList[i].ID, colList[j].ID) })
 	return out, colList, 0
+}
+
+func rawNum(v tscontract.Value) float64 {
+	if v.Type == tscontract.FTFloat {
+		return v.Float
+	}
+	return float64(v.Int)
+}
+
+// relayKey — ключ виртуальной колонки реле: «<field_id>.<bit 1..3>».
+func relayKey(id uint16, bit int) string { return fmt.Sprintf("%d.%d", id, bit) }
+
+// colLess — порядок колонок: по field_id, затем по номеру бита (численно).
+func colLess(a, b string) bool {
+	ai, as := splitColID(a)
+	bi, bs := splitColID(b)
+	if ai != bi {
+		return ai < bi
+	}
+	return as < bs
+}
+
+func splitColID(s string) (int, int) {
+	if i := strings.IndexByte(s, '.'); i >= 0 {
+		a, _ := strconv.Atoi(s[:i])
+		b, _ := strconv.Atoi(s[i+1:])
+		return a, b
+	}
+	a, _ := strconv.Atoi(s)
+	return a, 0
 }
 
 // --- handlers ---

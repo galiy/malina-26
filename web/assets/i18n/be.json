@@ -230,6 +230,8 @@
   "stats.no_data": "Няма даных",
   "stats.time": "Час",
   "stats.version": "Версія",
+  "stats.cells": "Ячэек",
+  "stats.raw_field": "значэнне без пераліку (сырое)",
   "stats.raw": "Дэталёвыя",
   "stats.avg": "Усярэдненыя",
   "stats.detail": "Дэталёвыя даныя",

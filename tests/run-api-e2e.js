@@ -195,6 +195,8 @@ async function login(password) {
       let body = {};
       try { body = await t.json(); } catch (e) { /* ignore */ }
       ok(Array.isArray(body.rows) && Array.isArray(body.columns), "/api/stats/table rows[]+columns[]");
+      ok((body.columns || []).every((c) => typeof c.unit === "string"), "/api/stats/table columns have unit");
+      ok((body.columns || []).every((c) => typeof c.raw === "boolean"), "/api/stats/table columns have raw");
       const bd = await req("/api/stats/table?type=" + encodeURIComponent(d.type) + "&id=" + encodeURIComponent(d.id) +
         "&from=200&to=100&dir=from&limit=2", { cookie: globalThis.cookie });
       ok(bd.status === 400, "/api/stats/table from>to -> 400 (got " + bd.status + ")");

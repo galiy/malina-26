@@ -18,6 +18,7 @@
 //
 // Зарегистрированные схемы (docs/stat.md):
 //   - map  v1      — 26 колонок (регистры МАП, u8/u16);
+//   - map  v2      — v1 + реле (id 27 `Relay`, биты 0/1/2 = реле 1/2/3);
 //   - kes  v1      — 15 колонок (ячейки КЭС, u8/u16);
 //   - mbms v1..v32 — BMS отдельным рядом: Vn = n ячеек × (u16+u8+u8),
 //     device_id — тот же, что у МАП.
@@ -292,6 +293,14 @@ var mapV1Fields = []Field{
 	{26, FTU8, "flagUnet2"},       // 0x527
 }
 
+// mapV2Fields — map v1 + реле (id 27: `Relay`, биты 0/1/2 = реле 1/2/3,
+// источник `Status_RELEdop` 0x586; docs/stat.md).
+//
+// ВНИМАНИЕ: v2 — это копия v1 + одно поле. Правка v1 (добавление/перестановка
+// полей) неявно меняет и v2 — держать обе схемы согласованными (проверяется
+// TestSchemasRegistered).
+var mapV2Fields = append(append([]Field(nil), mapV1Fields...), Field{27, FTU8, "Relay"})
+
 // kesV1 — 15 колонок ячеек КЭС (u8/u16).
 var kesV1Fields = []Field{
 	{1, FTU16, "VcPV"},
@@ -332,6 +341,7 @@ const mbmsMaxCells = 32
 func NewDefaultRegistry() *Registry {
 	r := NewRegistry()
 	r.Register("map", newSchemaContract(1, mapV1Fields))
+	r.Register("map", newSchemaContract(2, mapV2Fields))
 	r.Register("kes", newSchemaContract(1, kesV1Fields))
 	for n := 1; n <= mbmsMaxCells; n++ {
 		r.Register("mbms", newSchemaContract(uint16(n), mbmsFields(n)))

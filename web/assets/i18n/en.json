@@ -230,6 +230,8 @@
   "stats.no_data": "No data",
   "stats.time": "Time",
   "stats.version": "Version",
+  "stats.cells": "Cells",
+  "stats.raw_field": "raw value (no scaling)",
   "stats.raw": "Detailed",
   "stats.avg": "Averaged",
   "stats.detail": "Detailed data",

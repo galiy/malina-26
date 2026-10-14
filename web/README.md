@@ -25,8 +25,10 @@
 - `/logs?file=…` — **Логи**: whitelist `/var/log`, автообновление/история.
 - `/stats/charts` — **Статистика → Графики** (каркас; наполнение — позже).
 - `/stats/tables` — **Статистика → Таблицы**: закладки устройств (обе tsdb), выбор
-  периода, постраничная таблица по контракту (`docs/ui-stat.md`; клиентский рендер
-  `web/assets/static/js/stats.js`).
+  периода, постраничная таблица по контракту; значения — в **человеческих единицах**
+  (`web/internal/web/units.go`, эталон — панель 1 `map.js`), единица — второй строкой
+  заголовка; реле — 3 колонки, КЭС `Mode` — символ, у BMS «Ячеек» вместо версии
+  (`docs/ui-stat.md`; рендер — `web/assets/static/js/stats.js`).
 - `/login` — вход по паролю.
 - POST `/system/reboot` → страница ожидания перезагрузки (прогресс 2 мин + опрос каждые 5 c).
 
@@ -50,8 +52,11 @@
   из памяти tsdb, без чтения сегментов; порядок МАП(+BMS)→КЭС→BMS-сироты, `docs/ui-stat.md`).
 - `GET /api/stats/extremes?type=&id=` — крайние точки времени устройства по обеим tsdb
   (`{raw:{found,min,max}, avg:{...}}`; из памяти tsdb).
-- `GET /api/stats/table?type=&id=&from=&to=&dir=from|to&limit=` — страница таблицы
-  (≤200 строк, снэпшоты целиком; обе tsdb с приоритетом raw; `docs/ui-stat.md`).
+- `GET /api/stats/table?type=&id=&from=&to=&dir=from|to&limit=&detail=&rawmin=` — страница
+  таблицы (≤200 строк; обе tsdb, приоритет raw в его зоне; `detail=1` — raw+avg,
+  иначе только avg). Ответ: `columns:[{id,name,type,unit}]` (id строковый; битфилды
+  реле развёрнуты в `Relay1/2/3`) и `rows:[{t,v,f}]` со значениями **в человеческих
+  единицах** (строки — символы, напр. КЭС `Mode`); `docs/ui-stat.md`.
 - `GET /api/kes/devices` — список устройств типа «kes» (JSON `[{type,id,gen,label}]`).
 - `GET /api/kes/raw?id=<id>&gen=<gen>` — бинарный payload слота КЭС
   (`application/octet-stream`; `gen` обязателен, id+gen должны совпасть, иначе 404).

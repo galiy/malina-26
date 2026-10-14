@@ -1167,7 +1167,13 @@ tr.ctl-changed { background: #fff8e1; }
 .stats-controls .stats-custom { display: inline-flex; gap: 4px; align-items: center; }
 .stats-nav { display: block; width: 100%; padding: 8px; font-size: 18px; line-height: 1; border: 1px solid #999; background: linear-gradient(#fbfbfb,#e2e2e2); cursor: pointer; border-radius: 6px; box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(0,0,0,.2); }
 .stats-nav:disabled { opacity: .4; cursor: default; }
-.stats-table { overflow: auto; margin: 4px 0; }
+/* Прокрутка — страничная (контейнер без overflow), чтобы заголовок «прилипал»
+   к экрану при скролле страницы. */
+.stats-table { margin: 4px 0; }
 .stats-table .tbl { border-collapse: collapse; font-size: 13px; }
 .stats-table .tbl th, .stats-table .tbl td { border: 1px solid #ddd; padding: 3px 6px; white-space: nowrap; }
-.stats-table .tbl thead th { position: sticky; top: 0; background: #f2f2f2; }
+.stats-table .tbl thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: #eef2f0; box-shadow: inset 0 -1px 0 #c8d4cd;
+}
+.stats-table .tbl th .unit { font-weight: 400; color: #5b6b63; font-size: 11px; line-height: 1.1; }

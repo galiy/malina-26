@@ -230,6 +230,8 @@
   "stats.no_data": "Нет данных",
   "stats.time": "Время",
   "stats.version": "Версия",
+  "stats.cells": "Ячеек",
+  "stats.raw_field": "значение без пересчёта (сырое)",
   "stats.raw": "Детальные",
   "stats.avg": "Усреднённые",
   "stats.detail": "Детальные данные",

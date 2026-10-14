@@ -230,6 +230,8 @@
   "stats.no_data": "无数据",
   "stats.time": "时间",
   "stats.version": "版本",
+  "stats.cells": "电芯数",
+  "stats.raw_field": "原始值（未换算）",
   "stats.raw": "详细",
   "stats.avg": "平均",
   "stats.detail": "详细数据",

@@ -230,6 +230,8 @@
   "stats.no_data": "Маълумот нест",
   "stats.time": "Вақт",
   "stats.version": "Нусха",
+  "stats.cells": "Ҳуҷайраҳо",
+  "stats.raw_field": "қимати хом бе табдил",
   "stats.raw": "Муфассал",
   "stats.avg": "Миёнакардашуда",
   "stats.detail": "Маълумоти муфассал",

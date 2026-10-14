@@ -287,6 +287,44 @@ func TestStoreMeta(t *testing.T) {
 	}
 }
 
+// TestStoreVersionBoundary — граница перехода map v1→v2 в одной серии (БД):
+// строки разных версий сосуществуют и читаются с сохранением версии.
+func TestStoreVersionBoundary(t *testing.T) {
+	st, _ := NewStore(t.TempDir(), defaultOptions(), tscontract.NewDefaultRegistry())
+	defer st.Close()
+	reg := tscontract.NewDefaultRegistry()
+	c1, _ := reg.Get("map", 1)
+	c2, _ := reg.Get("map", 2)
+	p1, _ := c1.Encode([]tscontract.Value{{ID: 1, Type: tscontract.FTU8, Int: 100}})
+	p2, _ := c2.Encode([]tscontract.Value{
+		{ID: 1, Type: tscontract.FTU8, Int: 110},
+		{ID: 27, Type: tscontract.FTU8, Int: 1},
+	})
+	st.Write([]Row{{Type: "map", ID: "1", Time: 1000, Version: 1, Payload: p1}})
+	st.Write([]Row{{Type: "map", ID: "1", Time: 2000, Version: 2, Payload: p2}})
+	st.Write([]Row{{Type: "map", ID: "1", Time: 3000, Version: 2, Payload: p2}})
+	st.Wait()
+	got, err := st.Query(Query{Type: "map", IDs: []string{"1"}, From: 0, To: 4000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("строк %d, ожидалось 3", len(got))
+	}
+	if got[0].Version != 1 || got[1].Version != 2 || got[2].Version != 2 {
+		t.Fatalf("версии: %d,%d,%d", got[0].Version, got[1].Version, got[2].Version)
+	}
+	// v2-строка декодируется с полем Relay (27)
+	c, _ := reg.Get("map", got[2].Version)
+	vals, derr := c.Decode(got[2].Payload)
+	if derr != nil {
+		t.Fatal(derr)
+	}
+	if len(vals) != 2 {
+		t.Fatalf("v2 полей %d, ожидалось 2", len(vals))
+	}
+}
+
 func TestQueryLimits(t *testing.T) {
 	st, _ := NewStore(t.TempDir(), Options{MaxRows: 2, MaxRangeMS: 100_000}, tscontract.NewDefaultRegistry())
 	defer st.Close()

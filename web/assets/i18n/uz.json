@@ -230,6 +230,8 @@
   "stats.no_data": "Ma'lumot yo'q",
   "stats.time": "Vaqt",
   "stats.version": "Versiya",
+  "stats.cells": "Yacheykalar",
+  "stats.raw_field": "qayta hisoblanmagan xom qiymat",
   "stats.raw": "Batafsil",
   "stats.avg": "O'rtachalashtirilgan",
   "stats.detail": "Batafsil ma'lumotlar",

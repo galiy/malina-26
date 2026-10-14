@@ -230,6 +230,8 @@
   "stats.no_data": "მონაცემები არ არის",
   "stats.time": "დრო",
   "stats.version": "ვერსია",
+  "stats.cells": "უჯრედები",
+  "stats.raw_field": "ნედლი მნიშვნელობა (გადათვლის გარეშე)",
   "stats.raw": "დეტალური",
   "stats.avg": "საშუალო",
   "stats.detail": "დეტალური მონაცემები",

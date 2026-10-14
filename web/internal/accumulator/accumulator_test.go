@@ -51,6 +51,30 @@ func TestAverageMapRules(t *testing.T) {
 	}
 }
 
+// TestAverageMapV2Relay — map v2: реле (id 27) усредняется по правилу ИЛИ.
+func TestAverageMapV2Relay(t *testing.T) {
+	s1 := Sample{Time: 1000, Vals: mkVals(map[uint16]tscontract.Value{
+		27: {ID: 27, Type: tscontract.FTU8, Int: 0x01}, // Relay: реле1
+	})}
+	s2 := Sample{Time: 2000, Vals: mkVals(map[uint16]tscontract.Value{
+		27: {ID: 27, Type: tscontract.FTU8, Int: 0x02}, // Relay: реле2
+	})}
+	res, ok := Average("map", 2, []Sample{s1, s2})
+	if !ok {
+		t.Fatal("Average map v2: ok=false")
+	}
+	c, _ := tscontract.NewDefaultRegistry().Get("map", 2)
+	vals, err := c.Decode(res.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range vals {
+		if v.ID == 27 && v.Int != 0x03 {
+			t.Fatalf("Relay = %d, ожидалось 3 (ИЛИ)", v.Int)
+		}
+	}
+}
+
 func TestConfigPeriod(t *testing.T) {
 	for _, p := range []int{1, 2, 3, 4, 5, 6, 10} {
 		if !ValidatePeriod(p) {

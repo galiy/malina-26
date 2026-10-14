@@ -79,22 +79,37 @@
     return m;
   }
 
+  // Человеческое значение: сервер уже пересчитал в физические единицы; здесь — округление
+  // по единице (В/А/Гц — 2 знака, °C — 1, Вт и коды — целые). null/нет поля → «—».
+  function fmtVal(unit, v) {
+    if (v === null || v === undefined) return "—";
+    if (typeof v === "string") return v; // символ (напр. режим заряда КЭС)
+    if (typeof v !== "number" || !isFinite(v)) return "—";
+    var p = unit === "°C" ? 1 : (unit === "В" || unit === "А" || unit === "Гц") ? 2 : 0;
+    var f = Math.pow(10, p);
+    return String(Math.round(v * f) / f);
+  }
+
   function renderTable(rows, cols) {
     if (!rows.length) { tableEl.innerHTML = '<div class="muted">' + T("stats.no_data") + "</div>"; edge.top = edge.bottom = 0; return; }
-    // колонки — по контракту (имя поля); fallback — union field_id
-    var names = {};
-    (cols || []).forEach(function (c) { names[c.id] = c.name; });
+    // колонки — по контракту (имя поля + единица второй строкой); fallback — union field_id
+    var names = {}, units = {}, raws = {};
+    (cols || []).forEach(function (c) { names[c.id] = c.name; units[c.id] = c.unit || ""; raws[c.id] = !!c.raw; });
     var colIds = (cols || []).map(function (c) { return String(c.id); });
     if (!colIds.length) {
       var s = {}; rows.forEach(function (r) { Object.keys(r.f || {}).forEach(function (k) { s[k] = true; }); });
       colIds = Object.keys(s).sort(function (a, b) { return (+a) - (+b); });
     }
-    var html = '<table class="tbl"><thead><tr><th>' + T("stats.time") + "</th><th>" + T("stats.version") + "</th>";
-    colIds.forEach(function (c) { html += "<th>" + (names[c] || "f" + c) + "</th>"; });
+    var html = '<table class="tbl"><thead><tr><th>' + T("stats.time") + "</th><th>" + verHdr + "</th>";
+    colIds.forEach(function (c) {
+      // «сырое» поле (без пересчёта) помечаем звёздочкой с подсказкой (R6)
+      var mark = raws[c] ? ' <sup title="' + T("stats.raw_field") + '">*</sup>' : "";
+      html += "<th>" + (names[c] || "f" + c) + mark + (units[c] ? '<div class="unit">' + units[c] + "</div>" : "") + "</th>";
+    });
     html += "</tr></thead><tbody>";
     rows.forEach(function (r) {
       html += "<tr><td>" + fmtTime(r.t) + "</td><td>" + r.v + "</td>";
-      colIds.forEach(function (c) { html += "<td>" + (r.f && c in r.f ? r.f[c] : "—") + "</td>"; });
+      colIds.forEach(function (c) { html += "<td>" + fmtVal(units[c], r.f && c in r.f ? r.f[c] : null) + "</td>"; });
       html += "</tr>";
     });
     html += "</tbody></table>";

@@ -20,6 +20,42 @@ func TestSchemasRegistered(t *testing.T) {
 	if n := len(mbmsFields(8)); n != 24 {
 		t.Fatalf("mbms v8 полей: %d, ожидалось 24", n)
 	}
+	// map v2 = v1 + реле (id 27)
+	if c, ok := reg.Get("map", 2); !ok || len(c.Fields()) != 27 {
+		t.Fatalf("map v2: ok=%v", ok)
+	}
+}
+
+// TestMapV2Relay — map v2 кодирует/декодирует поле реле (id 27).
+func TestMapV2Relay(t *testing.T) {
+	reg := NewDefaultRegistry()
+	c, ok := reg.Get("map", 2)
+	if !ok {
+		t.Fatal("map v2 не зарегистрирован")
+	}
+	p, err := c.Encode([]Value{
+		{ID: 1, Type: FTU8, Int: 120},   // UNET
+		{ID: 27, Type: FTU8, Int: 0x03}, // Relay: реле1+реле2
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vals, err := c.Decode(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, v := range vals {
+		if v.ID == 27 {
+			found = true
+			if v.Int != 0x03 {
+				t.Fatalf("Relay=%d, ожидалось 3", v.Int)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("поле Relay (27) не найдено в payload v2")
+	}
 }
 
 func TestU8U16RoundTrip(t *testing.T) {
