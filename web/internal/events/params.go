@@ -84,6 +84,8 @@ func ResolveParam(key string, f map[string]uint32) (float64, bool) {
 	case "pacc":
 		return measure.Power100(u("PLoad_L"), u("PLoad_H")), true
 	case "imppt":
+		// Суммарный ток MPPT — сумма по каналам (не среднее). Нет ни одного
+		// канала → нет данных (ok=false), чтобы отличать «нет MPPT» от «0 А».
 		var sum float64
 		cnt := 0
 		for i := 0; i < 16; i++ {
@@ -96,9 +98,9 @@ func ResolveParam(key string, f map[string]uint32) (float64, bool) {
 			cnt++
 		}
 		if cnt == 0 {
-			return 0, true
+			return 0, false
 		}
-		return sum / float64(cnt), true
+		return sum, true
 	case "pmppt":
 		ia, _ := ResolveParam("imppt", f)
 		ua, _ := ResolveParam("uacc", f)

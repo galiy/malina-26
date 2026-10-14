@@ -427,16 +427,13 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 
 	t := time.Unix(f.meta.LastSeen, 0)
 
-	// КЭС (маленькая коллекция) из ячеек МАП; средний ток для «солнышка».
+	// КЭС (маленькая коллекция) из ячеек МАП; суммарный ток для «солнышка»
+	// (имена полей `_I_mppt_avg`/`_P_mppt_avg` — исторические, значение — СУММА).
 	kes := mpptList(f)
 	bms := bmsList(f)
-	impptAvg := 0.0
-	if len(kes) > 0 {
-		var sum float64
-		for _, k := range kes {
-			sum += k.I
-		}
-		impptAvg = sum / float64(len(kes))
+	impptSum := 0.0
+	for _, k := range kes {
+		impptSum += k.I
 	}
 
 	s := fmt.Sprintf(
@@ -452,11 +449,11 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 		int32(f.u("Temp_Grad0"))-50, int32(f.u("Temp_Grad2"))-50,
 		inet16_4, iaccU16, f.u("Temp_off"),
 		e.net, e.acc, e.chg, e.signNet, 0,
-		0.0, impptAvg, i2c,
+		0.0, impptSum, i2c,
 		int32(f.u("Temp_Grad1"))-50, relay1, relay2,
 		f.u("flag_NETON_ECO"), f.u("RSErrDop"), f.u("flagUnet2"), f.u("CulerSpead"), 0,
 		i3ph, ph1, ph2, ph3, fwHi, fwLo,
-		int32(math.Round(uacc*impptAvg)), int32(uacc*i3ph),
+		int32(math.Round(uacc*impptSum)), int32(uacc*i3ph),
 		int32(uacc*ph1), int32(uacc*ph2), int32(uacc*ph3),
 		uint64(e.baseNet)+e.net, uint64(e.baseAcc)+e.acc, uint64(e.baseChg)+e.chg,
 		// _E_NET_SIGN_B: без накопителя (знаковый счётчик меняет знак, см. updateE).

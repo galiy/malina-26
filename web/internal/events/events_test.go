@@ -231,6 +231,18 @@ func TestResolveParamKes(t *testing.T) {
 	if v, _ := ResolveParam("k_mode", g); v != 105 {
 		t.Fatalf("k_mode=%v", v)
 	}
+	// imppt — СУММА по каналам (не среднее): два канала по 16 А → 32 А.
+	m := map[string]uint32{
+		"I_Akb_MPPT_L0": 0, "I_Akb_MPPT_H0": 1,
+		"I_Akb_MPPT_L1": 0, "I_Akb_MPPT_H1": 1,
+	}
+	if v, _ := ResolveParam("imppt", m); v != 32 {
+		t.Fatalf("imppt(сумма)=%v, ожидалось 32", v)
+	}
+	// R4: без каналов MPPT — нет данных (а не 0 А).
+	if _, ok := ResolveParam("imppt", map[string]uint32{}); ok {
+		t.Fatal("imppt без каналов: ожидалось ok=false")
+	}
 	if _, ok := ResolveParam("k_unknown", g); ok {
 		t.Fatal("k_unknown не должен резолвиться")
 	}

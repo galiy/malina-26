@@ -174,7 +174,7 @@
       if (bn >= 1 && bn <= 32) { for (var j = 0; j < bn; j++) { var L = num(f, "UakbCell_L" + j) || 0, H = num(f, "UakbCell_H" + j) || 0; var vol = ((L & 0xff) | ((H & 0x7f) << 8)) / 100; var raw = num(f, "TakbCell" + j) || 0; var q = num(f, "Q_Cell" + j) || 0; bms.push({ V: vol, t: (raw === 255 ? 127 : raw - 50), I: q / 100 * vol }); } }
     }
     v.kes = kes; v.bms = bms;
-    if (kes.length) { var s = 0; for (var k2 = 0; k2 < kes.length; k2++) { s += kes[k2].I; } v.Imppt = s / kes.length; if (v.Uacc) { v.Pmppt = v.Uacc * v.Imppt; } }
+    if (kes.length) { var s = 0; for (var k2 = 0; k2 < kes.length; k2++) { s += kes[k2].I; } v.Imppt = s; if (v.Uacc) { v.Pmppt = v.Uacc * v.Imppt; } }
     // Ошибка вентилятора: документированный бит FT_Culer (0x08) в F_AccOver.
     // (CulerErr=0x48 — счётчик-накопитель, не флаг, поэтому не используем.)
     v.FanErr = (((num(f, "F_AccOver") || 0) & 0x08) !== 0);
