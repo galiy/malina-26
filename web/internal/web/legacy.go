@@ -327,7 +327,7 @@ func bmsList(f *legacyFields) []bmsRec {
 			t = 127 // нет датчика (как ждёт панель)
 		}
 		q := float64(f.u(fmt.Sprintf("Q_Cell%d", i)))
-		out = append(out, bmsRec{V: v, T: t, I: q / 100 * v})
+		out = append(out, bmsRec{V: v, T: t, I: q}) // Q_Cell — ток банки, А (u8, как есть)
 	}
 	return out
 }

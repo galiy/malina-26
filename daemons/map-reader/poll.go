@@ -8,6 +8,10 @@ import (
 // pollRetries — число попыток чтения МАП за один цикл опроса.
 const pollRetries = 3
 
+// pollReopenAfter — после стольких неудачных ЦИКЛОВ подряд переоткрываем порт
+// (Close+Open сбрасывает буферы драйвера — убирает «залипание»).
+const pollReopenAfter = 6
+
 // pollPort опрашивает все МАП одного порта (последовательно, одной горутиной).
 // Период — 1 раз в секунду; потеря МАП — maxMiss неудачных ЦИКЛОВ подряд.
 // Цикл считается неудачным, только если провалились все pollRetries попытки;
@@ -17,7 +21,7 @@ const pollRetries = 3
 // команду (порт занят только этой горутиной, поэтому обмен сериализован), затем
 // возвращается к опросу.
 func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, proto string, baud int, entries []*MapEntry, cmds chan *writeJob) {
-	defer p.Close()
+	defer func() { p.Close() }() // closure: закроет актуальный p (см. переоткрытие)
 
 	t := time.NewTicker(cfg.pollInterval)
 	defer t.Stop()
@@ -71,12 +75,25 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 				// Промах ЦИКЛА: не удалась ни одна из попыток.
 				miss[e]++
 				if miss[e] >= cfg.maxMiss {
-					log.Printf("МАП %s unit=%d потерян (%d неудачных циклов подряд: %v)", port, e.unit, miss[e], firstErr)
+					log.Printf("МАП %s unit=%d потерян (%d неудачных циклов подряд, причина: %v)", port, e.unit, miss[e], firstErr)
 					delete(miss, e)
 					reg.Remove(e)
 					continue
 				}
-				cfg.debugf("poll %s unit=%d: цикл неудачен (%v), промахов %d/%d", port, e.unit, firstErr, miss[e], cfg.maxMiss)
+				// После pollReopenAfter промахов переоткрываем порт (Close+Open сбрасывает
+				// буферы) — убирает «залипание»/мусор в очереди драйвера.
+				if miss[e] == pollReopenAfter {
+					if np, rerr := openPort(port); rerr == nil {
+						p.Close()
+						p = np
+						log.Printf("poll %s unit=%d: переоткрыт порт после %d промахов (причина: %v)", port, e.unit, miss[e], firstErr)
+					} else {
+						log.Printf("poll %s unit=%d: переоткрытие порта не удалось: %v", port, e.unit, rerr)
+					}
+				}
+				// Точная причина промаха (таймаут «не МАП» / «ошибочный ответ» / чужое
+				// устройство) — всегда в лог, чтобы видеть доминирующий тип сбоя.
+				log.Printf("poll %s unit=%d: промах %d/%d (%v)", port, e.unit, miss[e], cfg.maxMiss, firstErr)
 				alive = append(alive, e)
 				continue
 			}

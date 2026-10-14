@@ -135,7 +135,8 @@
     if (p === "last") return { from: 0, to: to }; // «Последние данные» — хвост БД (как в таблицах)
     return { from: to - 24 * 3600e3, to: to };
   }
-  function toLocalInput(ms) { var d = new Date(ms), p = function (x) { return (x < 10 ? "0" : "") + x; }; return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()); }
+  // Значение для <input type="datetime-local" step="1"> (локальная зона, секунды).
+  function toLocalInput(ms) { var d = new Date(ms), p = function (x) { return (x < 10 ? "0" : "") + x; }; return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()); }
 
   // --- Устройства/закладки ---
   var devs = [], active = null;
@@ -238,6 +239,14 @@
       } catch (e) {}
     }
   };
+  // Пауза 0.3 с перед перезапросом данных: если зум/панорама продолжаются —
+  // таймер перезапускается, запрос уходит только когда движение прекратилось.
+  var reloadTimers = {};
+  function scheduleReload(cid) {
+    clearTimeout(reloadTimers[cid]);
+    reloadTimers[cid] = setTimeout(function () { reloadTimers[cid] = null; onReloadWindow(cid, false); }, 300);
+  }
+
   function onReloadWindow(cid, isReset) {
     // После зума/панорамы — перезапрос данных под окно (без прореживания).
     var c = CHARTS[cid]; if (!c) return;
@@ -257,7 +266,19 @@
       var b = document.createElement("button"); b.type = "button"; b.className = "lg-chip";
       var sw = document.createElement("i"); sw.style.background = d.borderColor; b.appendChild(sw); b.appendChild(document.createTextNode(d.label));
       var t = null;
-      b.addEventListener("click", function () { if (t) { clearTimeout(t); t = null; chart.data.datasets.forEach(function (x, j) { chart.setDatasetVisibility(j, j === i); }); } else { t = setTimeout(function () { t = null; chart.setDatasetVisibility(i, !chart.isDatasetVisible(i)); }, 250); } chart.update("none"); sync(); });
+      b.addEventListener("click", function () {
+        if (t) { // двойной клик — только эта линия
+          clearTimeout(t); t = null;
+          chart.data.datasets.forEach(function (x, j) { chart.setDatasetVisibility(j, j === i); });
+          chart.update("none"); sync();
+        } else { // одиночный клик — вкл/выкл (с задержкой на распознавание двойного)
+          t = setTimeout(function () {
+            t = null;
+            chart.setDatasetVisibility(i, !chart.isDatasetVisible(i));
+            chart.update("none"); sync();
+          }, 250);
+        }
+      });
       row.appendChild(b);
     });
     var all = document.createElement("button"); all.type = "button"; all.className = "lg-chip lg-all"; all.textContent = "Все";
@@ -284,14 +305,37 @@
       plugins: {
         legend: { display: false },
         zoom: {
-          pan: { enabled: true, mode: "x", onPanComplete: function () { onReloadWindow(cid, false); } },
-          zoom: { wheel: { enabled: true, speed: .1, modifierKey: "ctrl" }, pinch: { enabled: true }, mode: "x", onZoomComplete: function () { onReloadWindow(cid, false); } },
+          pan: { enabled: true, mode: "x", onPanComplete: function () { scheduleReload(cid); } },
+          zoom: {
+            wheel: { enabled: true, speed: .1, modifierKey: "ctrl" },
+            drag: { enabled: true, modifierKey: "ctrl", backgroundColor: "rgba(51,122,183,.15)", borderColor: "rgba(51,122,183,.6)", borderWidth: 1 },
+            pinch: { enabled: true },
+            mode: "x",
+            onZoomComplete: function () { scheduleReload(cid); }
+          },
           limits: { x: { minRange: 5 * 60e3 } }
         }
       },
       scales: {
-        x: { type: "time", time: { tooltipFormat: "dd.MM.yyyy HH:mm:ss" }, ticks: { maxRotation: 0 } },
-        y: { beginAtZero: false }
+        x: {
+          type: "time",
+          time: {
+            tooltipFormat: "dd.MM.yyyy HH:mm:ss",
+            displayFormats: { // 24-часовой формат (без AM/PM)
+              millisecond: "HH:mm:ss.SSS", second: "HH:mm:ss", minute: "HH:mm", hour: "HH:mm",
+              day: "dd.MM", week: "dd.MM", month: "MM.yyyy", quarter: "MM.yyyy", year: "yyyy"
+            }
+          },
+          ticks: { maxRotation: 0 }
+        },
+        y: {
+          beginAtZero: false,
+          grid: {
+            // Нулевая линия — контрастнее остальных линий сетки.
+            color: function (c) { return (c.tick && c.tick.value === 0) ? "rgba(51,74,102,.55)" : "rgba(0,0,0,.08)"; },
+            lineWidth: function (c) { return (c.tick && c.tick.value === 0) ? 1.5 : 1; }
+          }
+        }
       }
     };
     if (saved) { opts.scales.x.min = saved.min; opts.scales.x.max = saved.max; }
@@ -306,13 +350,33 @@
     cv.addEventListener("mouseleave", function () { if (cursor.active) { cursor.active = false; syncTooltips(null); Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].update("none"); } catch (x) {} }); } });
   }
 
-  function loadCharts() {
+  // Все времена из ответа (объединение), по возрастанию.
+  function seriesTimes(ser) {
+    var set = {};
+    Object.keys(ser || {}).forEach(function (k) { (ser[k] || []).forEach(function (p) { set[+p[0]] = 1; }); });
+    return Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
+  }
+
+  function loadCharts(retry) {
     if (!active) return;
     if (!range.from) { range = preset("24h"); }
     document.getElementById("ch-from").value = toLocalInput(range.from);
     document.getElementById("ch-to").value = toLocalInput(range.to);
     var url = "/api/stats/series?type=" + encodeURIComponent(active.type) + "&id=" + encodeURIComponent(active.id) + "&from=" + range.from + "&to=" + range.to;
     api(url).then(function (j) {
+      // Если avg не покрывает запрошенный период и данных < 20 мин — сужаем период
+      // до «20 мин от последней точки» и перезагружаем (запрос уйдёт в raw).
+      if (!retry && j && j.source === "avg") {
+        var ts = seriesTimes(j.series || {});
+        if (ts.length) {
+          var first = ts[0], last = ts[ts.length - 1];
+          if (last - first < 20 * 60e3) {
+            range = { from: last - 20 * 60e3, to: last };
+            loadCharts(true);
+            return;
+          }
+        }
+      }
       Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].destroy(); } catch (e) {} delete CHARTS[id]; });
       chartsEl.innerHTML = "";
       var vals = buildVals((j && j.series) || {});
@@ -324,7 +388,8 @@
           var data = ln.calc ? calcSeries(ln.calc, vals) : ((j && j.series && j.series[ln.k]) || []).map(function (p) { return [+p[0], +p[1]]; });
           if (!data.length) return;
           var name = T(ln.n) + (ln.cell ? " " + ln.cell : "");
-          datasets.push({ label: name, data: data, borderColor: COLORS[li % COLORS.length], backgroundColor: COLORS[li % COLORS.length], pointRadius: 0, pointHoverRadius: 0, borderWidth: 1.5, tension: .35, cubicInterpolationMode: "monotone", fill: false });
+          var pr = data.length < 3 ? 3 : 0; // редкие данные — точки видимы
+          datasets.push({ label: name, data: data, borderColor: COLORS[li % COLORS.length], backgroundColor: COLORS[li % COLORS.length], pointRadius: pr, pointHoverRadius: 3, pointBorderColor: COLORS[li % COLORS.length], borderWidth: 1.5, tension: .35, cubicInterpolationMode: "monotone", fill: false });
         });
         renderCard(set, cid, datasets);
       });
@@ -338,7 +403,8 @@
   });
   document.getElementById("ch-show").addEventListener("click", function () {
     var f = document.getElementById("ch-from").value, t = document.getElementById("ch-to").value;
-    if (!f || !t) return; range = { from: new Date(f).getTime(), to: new Date(t).getTime() }; loadCharts();
+    var fn = f ? new Date(f).getTime() : NaN, tn = t ? new Date(t).getTime() : NaN;
+    if (!isFinite(fn) || !isFinite(tn) || fn > tn) return; range = { from: fn, to: tn }; loadCharts();
   });
   document.getElementById("ch-reload").addEventListener("click", function () { loadCharts(); });
 

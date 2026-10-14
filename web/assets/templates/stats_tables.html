@@ -17,8 +17,8 @@
   <button class="btn" data-period="month">{{index .T "stats.p_month"}}</button>
   <button class="btn" data-period="last">{{index .T "stats.p_last"}}</button>
   <span class="stats-custom">
-    <input type="datetime-local" id="st-from">
-    <input type="datetime-local" id="st-to">
+    <input type="datetime-local" id="st-from" step="1">
+    <input type="datetime-local" id="st-to" step="1">
     <button class="btn" id="st-show">{{index .T "stats.show"}}</button>
   </span>
   <span class="stats-custom">

@@ -97,6 +97,12 @@ func main() {
 		go serveDevice(devices[i], masters[i], stop)
 	}
 
+	// Публикация телеметрии КЭС в СВОЙ shm (ведущий эмулятор; читает map-reader sim).
+	seg, shmErr := openEmuShm()
+	if shmErr != nil {
+		log.Printf("kes-emu: shm недоступен (%v) — публикация КЭС выключена", shmErr)
+	}
+
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	go func() {
@@ -105,8 +111,18 @@ func main() {
 			case <-stop:
 				return
 			case now := <-tick.C:
+				chans := make([]emuChan, 0, len(devices))
 				for _, d := range devices {
 					d.Tick(now)
+					_, s := d.SimSample()
+					iAkb := 0.0
+					if s.VBat > 0.1 {
+						iAkb = s.PPV * 0.98 / s.VBat // ток на выходе контроллера в АКБ
+					}
+					chans = append(chans, emuChan{I: iAkb, T: s.TempBat})
+				}
+				if seg != nil {
+					seg.publish(chans)
 				}
 			}
 		}

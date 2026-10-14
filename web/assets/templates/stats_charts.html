@@ -1,6 +1,7 @@
 {{define "content"}}
 <div class="page-head">
   <h1>{{index .T "menu.charts"}}</h1>
+  <div class="page-head-right charts-hint">{{index .T "stats.charts_hint"}}</div>
 </div>
 
 <div id="stats-tabs" class="stats-tabs"></div>
@@ -13,8 +14,8 @@
   <button class="btn" data-period="month">{{index .T "stats.p_month"}}</button>
   <button class="btn" data-period="last">{{index .T "stats.p_last"}}</button>
   <span class="stats-custom">
-    <input type="datetime-local" id="ch-from">
-    <input type="datetime-local" id="ch-to">
+    <input type="datetime-local" id="ch-from" step="1">
+    <input type="datetime-local" id="ch-to" step="1">
     <button class="btn" id="ch-show">{{index .T "stats.show"}}</button>
   </span>
   <button class="btn" id="ch-reload">{{index .T "stats.refresh"}}</button>

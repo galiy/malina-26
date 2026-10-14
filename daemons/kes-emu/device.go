@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/galiy/malina-26/daemons/kes-emu/physim"
 	"github.com/galiy/malina-26/daemons/lib/device"
 	"github.com/galiy/malina-26/daemons/lib/microart"
 )
@@ -26,6 +27,14 @@ const (
 	searchFall = 0.85
 )
 
+// tempReg — кодирование температуры (°C) в байт регистра КЭС: x+50, с clamp 0..255
+// (см. docs/kes-memory.md: TakbCell/TempInt хранятся как x−50).
+func tempReg(t float64) byte {
+	v := math.Round(t + 50)
+	v = math.Min(math.Max(v, 0), 255)
+	return byte(v)
+}
+
 // Device — виртуальный КЭС (MPPT): модель регистров + «живая» физика.
 type Device struct {
 	mu       sync.Mutex
@@ -36,10 +45,7 @@ type Device struct {
 	relayCmd uint16
 	eewr     bool
 	rnd      *rand.Rand
-	vBat     float64
-	cloud    float64
-	tInt     float64
-	tBat     float64
+	pm       *physim.Model // общая физическая модель (docs/emu-physics.md)
 	pwrW     uint32
 	lastTick time.Time
 	nextSrch time.Time
@@ -58,10 +64,20 @@ func newDevice(id int, uid uint16, fw byte, relayCmd uint16, store *Store, idx i
 	if store != nil {
 		img = store.Image(idx)
 	}
+	// Разброс выработки параллельных контроллеров (2-й — лучший): 1-й 95 %, 3-й 97 %.
+	pp := physim.Default()
+	switch id {
+	case 0:
+		pp.OutputScale = 0.95
+	case 2:
+		pp.OutputScale = 0.97
+	default:
+		pp.OutputScale = 1.0
+	}
 	d := &Device{
 		id: id, img: img, uid: uid, fw: fw, relayCmd: relayCmd,
-		rnd:  rand.New(rand.NewSource(int64(0x9E3779B9) ^ (int64(id) * int64(2654435761)))),
-		vBat: batVMean, cloud: 1.0, tInt: 30, tBat: 24,
+		rnd: rand.New(rand.NewSource(int64(0x9E3779B9) ^ (int64(id) * int64(2654435761)))),
+		pm:  physim.New(pp, time.Now()),
 	}
 	d.mu.Lock()
 	d.store, d.idx = store, idx
@@ -97,6 +113,16 @@ func (d *Device) seedLocked() {
 
 func rand4to15s(r *rand.Rand) time.Duration {
 	return time.Duration(4+r.Intn(12)) * time.Second
+}
+
+// SimSample — текущий срез физической модели (для публикации в shm) + серийник.
+func (d *Device) SimSample() (uint16, physim.Sample) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.pm == nil {
+		d.pm = physim.New(physim.Default(), time.Now())
+	}
+	return d.uid, d.pm.Snapshot()
 }
 
 func (d *Device) Read(addr uint16, n int) []byte {
@@ -203,15 +229,13 @@ func (d *Device) ramSet16(addr uint16, v uint16) {
 
 // tickLocked пересчитывает регистры измерений по текущему времени.
 func (d *Device) tickLocked(now time.Time) {
-	t := float64(now.Unix()%86400) / 86400.0
-	day := 0.5 - 0.5*math.Cos(2*math.Pi*(t-0.25))
-	if day < 0.20 {
-		day = 0.20
+	if d.pm == nil {
+		d.pm = physim.New(physim.Default(), now)
 	}
-	d.cloud += (d.rnd.Float64()*2-1)*0.02 + (1.0-d.cloud)*0.05
-	d.cloud = clamp(d.cloud, 0.9, 1.1)
-	sun := clamp(day*d.cloud, 0.05, 1.0)
+	d.pm.Tick(now)
+	s := d.pm.Snapshot()
 
+	// MPPT-поиск 'S' — редкое плавное снижение выработки (управление, не физика).
 	scale := 1.0
 	mode := d.modeChar
 	if now.After(d.nextSrch) {
@@ -227,38 +251,29 @@ func (d *Device) tickLocked(now time.Time) {
 		scale = 0.15
 	}
 
-	pvV := pvVTypMin + (pvVTypMax-pvVTypMin)*sun
-	if mode == 'S' {
-		pvV = pvVTypMin + (pvV-pvVTypMin)*0.5
-	}
-	iCh := clamp(maxChgCur*sun*scale+d.rnd.NormFloat64()*1.5, 0, maxChgCur)
-	iPv := iCh * d.vBat / pvV
-
+	pvV := s.VcPV
+	iPv := s.IcPV * scale
 	pPV := pvV * iPv
-	pChg := d.vBat * iCh
-	pOut := pChg * 0.98
-
-	d.vBat += (iCh-45)*0.0008 + (batVMean-d.vBat)*0.004 + d.rnd.NormFloat64()*0.001
-	d.vBat = clamp(d.vBat, batVMin, batVMax)
-
-	tBatT := 5 + 30*(iCh/maxChgCur)
-	tIntT := 20 + 25*(iCh/maxChgCur)
-	d.tBat += (tBatT - d.tBat) * 0.02
-	d.tInt += (tIntT - d.tInt) * 0.02
+	vBat := s.VBat
+	pOut := 0.98 * pPV
+	iOut := 0.0
+	if vBat > 0 {
+		iOut = pOut / vBat
+	}
 
 	put16 := func(addr uint16, v uint16) { d.ramSet16(addr, v) }
-	put16(0x2D9, uint16(pvV*100+0.5))
-	put16(0x2DF, uint16(iPv*100+0.5))
-	put16(0x2E5, uint16(d.vBat*100+0.5))
-	put16(0x2EB, uint16(pPV+0.5))
-	put16(0x2ED, uint16(pOut+0.5))
+	put16(0x2D9, uint16(math.Max(0, pvV)*100+0.5))
+	put16(0x2DF, uint16(math.Max(0, iPv)*100+0.5))
+	put16(0x2E5, uint16(math.Max(0, vBat)*100+0.5))
+	put16(0x2EB, uint16(math.Max(0, pPV)+0.5))
+	put16(0x2ED, uint16(math.Max(0, pOut)+0.5))
 	put16(0x2F5, 0)
-	put16(0x2F9, uint16(pChg+0.5))
-	put16(0x2FB, uint16(iCh*100+0.5))
-	put16(0x2FF, uint16(iCh*100+0.5))
-	d.ramSet(0x31D, byte(int8(d.tInt+0.5))) // °C как есть (знаковый)
-	d.ramSet(0x31E, byte(int8(d.tBat+0.5))) // °C как есть (знаковый)
-	d.ramSet(0x2C2, mode)                   // режим заряда: 'i'/'v'/'B'/'b'/'S'
+	put16(0x2F9, uint16(math.Max(0, pOut)+0.5))     // PCurr = POut
+	put16(0x2FB, uint16(math.Max(0, iOut)*100+0.5)) // ICh = IOut
+	put16(0x2FF, uint16(math.Max(0, iOut)*100+0.5))
+	d.ramSet(0x31D, tempReg(s.TempInt))
+	d.ramSet(0x31E, tempReg(s.TempBat))
+	d.ramSet(0x2C2, mode)                      // режим заряда: 'i'/'v'/'B'/'b'/'S'
 	// Mode B/b — смена раз в 4..15 минут (кроме сканирования 'S')
 	if now.After(d.nextMode) {
 		d.nextMode = now.Add(time.Duration(4+d.rnd.Intn(12)) * time.Minute)
@@ -271,7 +286,7 @@ func (d *Device) tickLocked(now time.Time) {
 	// Избыток/Нехватка: '+/-', смена раз в 4..15 c; значение — по V_Bat (>53 → избыток '-')
 	if now.After(d.nextSign) {
 		d.nextSign = now.Add(rand4to15s(d.rnd))
-		if d.vBat > 53 {
+		if vBat > 53 {
 			d.ramSet(0x37A, '-')
 		} else {
 			d.ramSet(0x37A, '+')

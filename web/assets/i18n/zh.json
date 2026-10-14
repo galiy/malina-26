@@ -1308,5 +1308,6 @@
   "stats.n.spread": "压差",
   "stats.n.pack": "电池组",
   "stats.n.cell": "电芯",
-  "stats.f.map.PNET_Sign_P": "电网功率符号（0 = 负）"
+  "stats.f.map.PNET_Sign_P": "电网功率符号（0 = 负）",
+  "stats.charts_hint": "Ctrl+滚轮或 Ctrl+框选 — 缩放 · 拖拽 — 平移\n单击图例 — 切换线条，双击 — 仅此线 · 卡片箭头 — 排序"
 }

@@ -175,22 +175,35 @@ func (s *Server) statsTable(typ, id string, from, to int64, dir uint8, limit int
 	// Н3 (краевой, пренебрежимо для MVP): avg-строка окна, пересекающего rawMin,
 	// имеет time = последний сэмпл окна; при time >= rawMin она отбрасывается.
 
+	// Наборы для обхода: базовый; при отсутствии «детальных» и пустом avg —
+	// фолбэк на raw (avg наполняется по окнам, сразу после рестарта/очистки пуст).
+	orders := [][](*tsdbclient.Client){order}
+	if !detail {
+		orders = append(orders, [](*tsdbclient.Client){rawCli})
+	}
 	byTime := map[int64]tsdbclient.Row{}
 	var times []int64
-	for _, c := range order {
-		isRaw := c == rawCli
-		st, rows, err := c.Query(tsdbclient.ModeWholeOne, typ, []string{id}, nil, from, to, dir, uint32(limit))
-		if err != nil || st != tsdbclient.StatusOK {
-			continue
+	for _, ord := range orders {
+		byTime = map[int64]tsdbclient.Row{}
+		times = nil
+		for _, c := range ord {
+			isRaw := c == rawCli
+			st, rows, err := c.Query(tsdbclient.ModeWholeOne, typ, []string{id}, nil, from, to, dir, uint32(limit))
+			if err != nil || st != tsdbclient.StatusOK {
+				continue
+			}
+			for _, r := range rows {
+				if !isRaw && rawMin >= 0 && r.Time >= rawMin {
+					continue // зона приоритета raw
+				}
+				if _, ok := byTime[r.Time]; !ok {
+					times = append(times, r.Time)
+				}
+				byTime[r.Time] = r
+			}
 		}
-		for _, r := range rows {
-			if !isRaw && rawMin >= 0 && r.Time >= rawMin {
-				continue // зона приоритета raw
-			}
-			if _, ok := byTime[r.Time]; !ok {
-				times = append(times, r.Time)
-			}
-			byTime[r.Time] = r
+		if len(times) > 0 {
+			break
 		}
 	}
 	sort.Slice(times, func(i, j int) bool { return times[i] < times[j] })

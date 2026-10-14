@@ -35,10 +35,9 @@ func TestFieldConvNum(t *testing.T) {
 		{"kes", 8, 75, nil, 25, "°C", true},
 		{"kes", 4, 65535, nil, 0, "", false}, // Windspeed: 0xFFFF — н/д
 		{"kes", 4, 120, nil, 120, "", true},
-		{"mbms", 1, 32768 + 340, nil, 3.4, "В", true},                // UakbCell & 0x7FFF
-		{"mbms", 2, 255, nil, 0, "°C", false},                        // R2: TakbCell нет датчика → «—»
-		{"mbms", 3, 100, map[uint16]float64{1: 320}, 3.2, "А", true}, // Q_Cell: q/100 · UakbCell
-		{"mbms", 3, 100, nil, 0, "А", false},                         // R1: без UakbCell — нет данных
+		{"mbms", 1, 32768 + 340, nil, 3.4, "В", true}, // UakbCell & 0x7FFF
+		{"mbms", 2, 255, nil, 0, "°C", false},         // R2: TakbCell нет датчика → «—»
+		{"mbms", 3, 100, nil, 100, "А", true},         // Q_Cell = ток ячейки, А (сырой u8)
 	}
 	for _, c := range cases {
 		fc, known := fieldConvFor(c.typ, 1, c.id)

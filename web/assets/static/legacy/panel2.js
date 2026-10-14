@@ -150,11 +150,12 @@
         kes.push({ I: kcur, T: u(f, "Takb_MPPT" + ki) - 50 });
       }
     }
-    var kavg = 0;
-    if (kes.length) { var ksum = 0; for (var kj = 0; kj < kes.length; kj++) { ksum += kes[kj].I; } kavg = ksum / kes.length; }
+    // Суммарный ток КЭС (не среднее) — согласовано с панелью 1 и legacy-api.
+    var ksum = 0;
+    for (var kj = 0; kj < kes.length; kj++) { ksum += kes[kj].I; }
     m['_kes'] = kes;
-    m['_I_mppt_avg'] = kavg;
-    m['_P_mppt_avg'] = Math.round(m['_Uacc'] * kavg);
+    m['_I_mppt_avg'] = ksum; // имя историческое, значение — СУММА
+    m['_P_mppt_avg'] = Math.round(m['_Uacc'] * ksum);
     m['_MPPTs_mode'] = 0;
 
     // BMS из контракта (как legacy-api): количество BMS_Num, гейт LCD_BMSFunk ∈ {1,3}.
@@ -166,7 +167,7 @@
         var raw = u(f, "TakbCell" + bi2);
         var bt = (raw === 255) ? 127 : (raw - 50);
         var bq = u(f, "Q_Cell" + bi2);
-        bms.push({ V: bv, t: bt, I: bq / 100 * bv });
+        bms.push({ V: bv, t: bt, I: bq });
       }
     }
     m['_bms'] = bms;
@@ -239,7 +240,7 @@
   function bind() {
     e.map_ac_in1 = $('#map_input1'); e.map_ac_in2 = $('#map_input2');
     e.map_inet = $('.map_inet'); e.map_vin = $('.map_vin'); e.map_vout = $('.map_vout');
-    e.map_ubat = $('.map_uab'); e.map_ibat = $('.map_ibat');
+    e.map_ubat = $('.map_uab'); e.map_ibat = $('.map_ibat'); e.map_ialt = $('.map_ialt');
     e.map_temp1 = $('#map_temp_1'); e.map_ab_temp = $('#map_ab_temp'); e.map_mode_div = $('#map_mode');
     e.map_enet = $('#map_enet'); e.map_eacc = $('#map_eacc'); e.map_echg = $('#map_echg');
     e.map_time = $('#map_time'); e.map_slider = $('#map_slider'); e.ab_slider = $('#ab_slider'); e.mppt_slider = $('#mppt_slider');
@@ -270,6 +271,7 @@
     e.map_inet.kumaGauge('update', { value: d1(map['_INET_16_4']) });
     e.map_ubat.kumaGauge('update', { value: d1(map['_Uacc']) });
     e.map_ibat.kumaGauge('update', { value: d1(map['_IAcc_med_A_u16']) });
+    e.map_ialt.kumaGauge('update', { value: d1(map['_I_mppt_avg']) }); // Imppts = суммарный ток КЭС
 
     e.map_mode_div.html(modeText(map['_MODE'], map['_StatusCh']));
     e.map_time.html(new Date().toLocaleTimeString());

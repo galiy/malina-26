@@ -218,7 +218,8 @@
   });
   document.getElementById("st-show").onclick = function () {
     var f = document.getElementById("st-from").value, t = document.getElementById("st-to").value;
-    if (f && t) query(new Date(f).getTime(), new Date(t).getTime(), "from");
+    var fn = f ? new Date(f).getTime() : NaN, tn = t ? new Date(t).getTime() : NaN;
+    if (isFinite(fn) && isFinite(tn) && fn <= tn) query(fn, tn, "from");
   };
   document.getElementById("st-day-show").onclick = function () {
     var v = document.getElementById("st-day").value;

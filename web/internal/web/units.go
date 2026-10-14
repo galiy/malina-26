@@ -198,7 +198,7 @@ func fieldConvFor(typ string, _ uint16, id uint16) (fieldConv, bool) {
 		case 2:
 			return tempBms(), true // TakbCell
 		default:
-			return qCell(id), true // Q_Cell
+			return passConv("А"), true // Q_Cell — ток ячейки, А (u8, как есть)
 		}
 	}
 	return fieldConv{}, false

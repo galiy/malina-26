@@ -57,18 +57,33 @@ func (d *Dev) Authenticate(user, password string) error {
 	return ErrInvalidCredentials
 }
 
-// ChangePassword меняет пароль Linux-аккаунта через chpasswd (нужен root).
+// ChangePassword меняет пароль Linux-аккаунтов через chpasswd (нужен root).
 // Корень смонтирован ro, поэтому используется хелпер malina-rw
-// (короткое сериализованное окно rw).
-func ChangePassword(user, password string) error {
+// (короткое сериализованное окно rw). В одном вызове меняет всех users —
+// единая строка "user:пароль\n" на каждого (дедупликация имён).
+func ChangePassword(password string, users ...string) error {
 	// Защита от инъекции строк в chpasswd: `:` и переводы строк формируют
 	// дополнительные записи "пользователь:пароль" (эскалация до root).
-	if user == "" || strings.ContainsAny(user, "\n\r:") ||
-		strings.ContainsAny(password, "\n\r:") ||
+	if strings.ContainsAny(password, "\n\r:") ||
 		strings.IndexFunc(password, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
 		return ErrInvalidCredentials
 	}
+	seen := map[string]bool{}
+	var b strings.Builder
+	for _, u := range users {
+		if u == "" || strings.ContainsAny(u, "\n\r:") || seen[u] {
+			continue
+		}
+		seen[u] = true
+		b.WriteString(u)
+		b.WriteByte(':')
+		b.WriteString(password)
+		b.WriteByte('\n')
+	}
+	if b.Len() == 0 {
+		return ErrInvalidCredentials
+	}
 	cmd := exec.Command("/malina/usr/local/sbin/malina-rw", "run", "chpasswd")
-	cmd.Stdin = strings.NewReader(user + ":" + password + "\n")
+	cmd.Stdin = strings.NewReader(b.String())
 	return cmd.Run()
 }

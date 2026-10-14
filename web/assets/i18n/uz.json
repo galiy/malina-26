@@ -1308,5 +1308,6 @@
   "stats.n.spread": "Farq",
   "stats.n.pack": "Paket",
   "stats.n.cell": "Yacheyka",
-  "stats.f.map.PNET_Sign_P": "Tarmoq quvvati ishorasi (0 — manfiy)"
+  "stats.f.map.PNET_Sign_P": "Tarmoq quvvati ishorasi (0 — manfiy)",
+  "stats.charts_hint": "Ctrl+g‘ildirak yoki Ctrl+tanlash — masshtab · sudrash — panorama\nChipga bosish — chiziqni yoqish/o‘chirish, ikki marta — faqat u · kartadagi strelkalar — tartib"
 }

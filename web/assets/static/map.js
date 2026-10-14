@@ -171,7 +171,7 @@
     }
     if (bmsf === 1 || bmsf === 3) {
       var bn = num(f, "BMS_Num") || 0;
-      if (bn >= 1 && bn <= 32) { for (var j = 0; j < bn; j++) { var L = num(f, "UakbCell_L" + j) || 0, H = num(f, "UakbCell_H" + j) || 0; var vol = ((L & 0xff) | ((H & 0x7f) << 8)) / 100; var raw = num(f, "TakbCell" + j) || 0; var q = num(f, "Q_Cell" + j) || 0; bms.push({ V: vol, t: (raw === 255 ? 127 : raw - 50), I: q / 100 * vol }); } }
+      if (bn >= 1 && bn <= 32) { for (var j = 0; j < bn; j++) { var L = num(f, "UakbCell_L" + j) || 0, H = num(f, "UakbCell_H" + j) || 0; var vol = ((L & 0xff) | ((H & 0x7f) << 8)) / 100; var raw = num(f, "TakbCell" + j) || 0; var q = num(f, "Q_Cell" + j) || 0; bms.push({ V: vol, t: (raw === 255 ? 127 : raw - 50), I: q }); } }
     }
     v.kes = kes; v.bms = bms;
     if (kes.length) { var s = 0; for (var k2 = 0; k2 < kes.length; k2++) { s += kes[k2].I; } v.Imppt = s; if (v.Uacc) { v.Pmppt = v.Uacc * v.Imppt; } }
@@ -577,7 +577,7 @@
     for (i = 0; i < n; i++) { var L = gv(f, "UakbCell_L" + i) || 0, H = gv(f, "UakbCell_H" + i) || 0; var v = ((L & 0xff) | ((H & 0x7f) << 8)) / 100; vs.push(v); if (v < min) { min = v; } if (v > max) { max = v; } }
     for (i = 0; i < n; i++) {
       var raw = gv(f, "TakbCell" + i) || 0, tt = (raw === 255) ? "—" : (raw - 50);
-      var q = gv(f, "Q_Cell" + i) || 0, cur = (q / 100 * vs[i]).toFixed(2);
+      var q = gv(f, "Q_Cell" + i) || 0, cur = q.toFixed(2);
       var bg = (min !== max) ? (vs[i] === min ? "#5bc0de" : (vs[i] === max ? "#e48683" : "#0d5637")) : "#0d5637";
       head += '<th style="background:' + bg + ';color:#fff">' + t("p1.bms") + ' ' + (i + 1) + '</th>';
       body += '<td>' + vs[i].toFixed(2) + U("V") + '<br>' + cur + U("A") + '<br>' + tt + '&deg;C</td>';
@@ -636,7 +636,7 @@
     fetch("api/map/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(window.MAP_GEN || 0), { cache: "no-store", signal: inflight.signal })
       .then(function (r) { if (r.status === 404) { throw { gone: true }; } if (r.status === 401) { throw { auth: true }; } if (!r.ok) { throw new Error("HTTP " + r.status); } return r.arrayBuffer(); })
       .then(function (buf) { showErr(""); var p = parse(buf); lastP = p; renderPanel(p); if (infoActive) { renderInfo(p); } if (!debugHidden) { pre.textContent = JSON.stringify(p); postToPanel2(buf); } window.MAP_LAST_FIELDS = p.fields; window.MAP_GEN = p.gen; window.MAP_MODE = modeNum(p.fields); if (typeof window.mapControlRaw === "function") { try { window.mapControlRaw(p.fields, p.gen); } catch (e) { /* ignore */ } } })
-      .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { showErr(t("map.gone")); } else if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });
+      .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { window.location.href = "/"; return; } if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });
   }
   function start() { if (timer) { return; } tick(); timer = setInterval(tick, INTERVAL); }
   function stop() { if (timer) { clearInterval(timer); timer = null; } if (inflight) { inflight.abort(); inflight = null; } }

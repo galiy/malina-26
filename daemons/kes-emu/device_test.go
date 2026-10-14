@@ -77,12 +77,16 @@ func TestEmuLivingRanges(t *testing.T) {
 	}
 	pvV := float64(rd16(0x2D9)) / 100
 	iCh := float64(rd16(0x2FB)) / 100
+	iOut := float64(rd16(0x2FF)) / 100
 	vBat := float64(rd16(0x2E5)) / 100
-	if pvV < 105 || pvV > 165 {
-		t.Errorf("Vc_PV=%v вне 110..160 (±)", pvV)
+	if pvV < 95 || pvV > 160 { // массив 3S4P: Vmp·3 ≈ 105 В
+		t.Errorf("Vc_PV=%v вне 95..160 (±)", pvV)
 	}
 	if iCh < 0 || iCh > 100 {
 		t.Errorf("I_Ch=%v вне 0..100", iCh)
+	}
+	if iOut <= 0 || iOut > 100 { // IOut = 0.98·PPV/VBat > 0 (PPV ≥ 15 % номинала)
+		t.Errorf("I_Out=%v вне 0..100 (должен быть > 0)", iOut)
 	}
 	if vBat < 48 || vBat > 56.5 {
 		t.Errorf("V_Bat=%v вне 48..56.5", vBat)
@@ -90,11 +94,11 @@ func TestEmuLivingRanges(t *testing.T) {
 	if mode := d.Read(0x2C2+0x1F0, 1)[0]; mode != 'b' && mode != 'S' {
 		t.Errorf("Mode=%q вне {A,S}", mode)
 	}
-	// Температуры в допустимых диапазонах (x-50).
-	if ti := int(int8(d.Read(0x31D+0x1F0, 1)[0])); ti < -40 || ti > 50 {
-		t.Errorf("Temp_Int=%d вне 20..65 (±)", ti)
+	// Температуры в допустимых диапазонах (регистр x−50 → °C).
+	if ti := int(d.Read(0x31D+0x1F0, 1)[0]) - 50; ti < -45 || ti > 95 {
+		t.Errorf("Temp_Int=%d вне -45..95", ti)
 	}
-	if tb := int(int8(d.Read(0x31E+0x1F0, 1)[0])); tb < -40 || tb > 45 {
-		t.Errorf("Temp_Bat=%d вне 20..32 (±)", tb)
+	if tb := int(d.Read(0x31E+0x1F0, 1)[0]) - 50; tb < -45 || tb > 45 {
+		t.Errorf("Temp_Bat=%d вне -45..45", tb)
 	}
 }

@@ -1308,5 +1308,6 @@
   "stats.n.spread": "Spread",
   "stats.n.pack": "Pack",
   "stats.n.cell": "Cell",
-  "stats.f.map.PNET_Sign_P": "Mains power sign (0 = negative)"
+  "stats.f.map.PNET_Sign_P": "Mains power sign (0 = negative)",
+  "stats.charts_hint": "Ctrl+wheel or Ctrl+drag — zoom · drag — pan\nClick a chip — toggle a line, double-click — only it · arrows on a card — order"
 }
