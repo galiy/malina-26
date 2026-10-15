@@ -34,6 +34,7 @@ persist.
 | `map` | 3 | v2 + `ThFMAP` + каналы MPPT | план (для графиков) | `docs/ui-stat.md` §3.2 |
 | `kes` | 1 | ниже | утверждён (15 полей) | `docs/kes-contract.md` |
 | `mbms` | 1..32 | `Vn` = BMS на `n` ячеек; схема ячейки фиксирована (ниже) | утверждён | `docs/map-contract.md` (BMS) |
+| `bms` | 1 | 58 полей — контракт BMS-Receiver (ниже) | утверждён | `docs/bms-reader.md` §1 |
 
 ## Общий пакет контрактов
 
@@ -42,7 +43,7 @@ persist.
 (`daemons/tsdb`), и продюсерами (пулеры `map-reader`/`kes-reader` — сырьё; аккумулятор
 в `malina-web` — усреднение): обе стороны обязаны кодировать
 `payload` одинаково. Реестр ключуется парой `(device_type, version)`;
-`NewDefaultRegistry()` возвращает реестр с `map`/`kes`/`mbms`.
+`NewDefaultRegistry()` возвращает реестр с `map`/`kes`/`mbms`/`bms`.
 
 ---
 
@@ -197,3 +198,10 @@ BMS — **раздельные** (составной запрос не нуже�
 10 × `u16` (`VcPV`,`IcPV`,`PPV`,`Windspeed`,`VBat`,`ICh`,`PCurr`,`POut`,`PLoad`,`IOut`)
 = 20 Б + 5 × `u8` (`TempBat`,`TempInt`,`Mode`,`RelayC`,`RSErrSis`) = 5 Б = **~25 Б** на
 строку.
+---
+
+# Контракт `bms` v1 — описание в одном месте
+
+Полное описание контракта `bms` v1 (раскладка 107 Б, поля `field_id` 1..58, единицы,
+агрегация) — **единственный источник: `docs/bms-reader.md` §1**. Здесь (в `stat.md`)
+контракт **не дублируется** — только запись в «Реестре версий» выше.

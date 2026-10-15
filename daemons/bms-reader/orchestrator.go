@@ -10,11 +10,18 @@ import (
 	"github.com/galiy/malina-26/daemons/lib/stat"
 )
 
+// Тайминги (arch §4/§10).
+var (
+	backoffLadder = []time.Duration{15 * time.Second, 30 * time.Second, time.Minute, 5 * time.Minute}
+	banDuration   = 5 * time.Minute
+	scanInterval  = 5 * time.Second
+	rescanPeriod  = 30 * time.Second
+)
+
 // source — открытый источник (serial/TCP), разделяемый слотами одной шины.
 type source struct {
 	desc   string
 	serial string
-	baud   int
 	host   string
 	port   int
 	tr     Transport
@@ -31,6 +38,13 @@ type device struct {
 	gen  uint64
 }
 
+// boState — backoff/бан источника.
+type boState struct {
+	step   int
+	until  time.Time
+	banned bool
+}
+
 type orchestrator struct {
 	seg  *bmsShm
 	sink *stat.Sink
@@ -39,14 +53,28 @@ type orchestrator struct {
 	mu        sync.Mutex
 	devs      map[string]*device
 	freeSlots []int
-	busy      map[string]bool // занятые источники (desc)
-	skipUntil map[string]time.Time
+	busy      map[string]bool
+	backoff   map[string]*boState
+	activeSrc map[string]*source
+	srcType   map[string]bmsType
 	gws       gatewaysFile
 
 	stop chan struct{}
 }
 
-// setGateways обновляет список шлюзов (reload).
+func newOrchestrator(seg *bmsShm, sink *stat.Sink, idr *idRegistry, stop chan struct{}) *orchestrator {
+	free := make([]int, 0, maxDevices)
+	for i := 0; i < maxDevices; i++ {
+		free = append(free, i)
+	}
+	return &orchestrator{
+		seg: seg, sink: sink, idr: idr,
+		devs: make(map[string]*device), freeSlots: free,
+		busy: make(map[string]bool), backoff: make(map[string]*boState),
+		activeSrc: make(map[string]*source), srcType: make(map[string]bmsType), stop: stop,
+	}
+}
+
 func (o *orchestrator) setGateways(g gatewaysFile) {
 	o.mu.Lock()
 	o.gws = g
@@ -59,41 +87,34 @@ func (o *orchestrator) gateways() gatewaysFile {
 	return o.gws
 }
 
-func newOrchestrator(seg *bmsShm, sink *stat.Sink, idr *idRegistry, stop chan struct{}) *orchestrator {
-	free := make([]int, 0, maxDevices)
-	for i := 0; i < maxDevices; i++ {
-		free = append(free, i)
-	}
-	return &orchestrator{
-		seg: seg, sink: sink, idr: idr,
-		devs: make(map[string]*device), freeSlots: free,
-		busy: make(map[string]bool), skipUntil: make(map[string]time.Time), stop: stop,
-	}
-}
-
 var serialPatterns = []string{"/dev/ttyUSB*", "/dev/ttyACM*", "/dev/serial/by-id/*"}
 
-// run — цикл сканирования источников.
+// run — сканирование свободных источников + периодический рескан активных шин.
 func (o *orchestrator) run() {
-	tick := time.NewTicker(5 * time.Second)
-	defer tick.Stop()
+	scan := time.NewTicker(scanInterval)
+	rescan := time.NewTicker(rescanPeriod)
+	defer scan.Stop()
+	defer rescan.Stop()
 	o.scan()
 	for {
 		select {
 		case <-o.stop:
 			return
-		case <-tick.C:
+		case <-scan.C:
 			o.scan()
+		case <-rescan.C:
+			o.rescan()
 		}
 	}
 }
 
 func (o *orchestrator) scan() {
 	for _, path := range ports.ListPorts(serialPatterns) {
-		if o.isBusy("serial:" + path) {
+		desc := "serial:" + path
+		if o.isBusy(desc) {
 			continue
 		}
-		o.trySource(&source{desc: "serial:" + path, serial: path, baud: 19200})
+		o.trySource(&source{desc: desc, serial: path})
 	}
 	for _, g := range o.gateways().Gateways {
 		desc := "tcp:" + g.Host + ":" + itoa(g.Port)
@@ -110,56 +131,97 @@ func (o *orchestrator) isBusy(desc string) bool {
 	return o.busy[desc]
 }
 
-// trySource открывает источник и прогоняет последовательность probe (arch §19).
-func (o *orchestrator) trySource(src *source) {
-	if t, ok := o.skip(src.desc); ok {
-		_ = t
-		return
+// inBackoff сообщает, пропускать ли источник сейчас.
+func (o *orchestrator) inBackoff(desc string) bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	st, ok := o.backoff[desc]
+	if !ok {
+		return false
 	}
-	var tr Transport
-	var err error
-	if src.serial != "" {
-		tr, err = openSerial(src.serial, src.baud)
-	} else {
-		tr, err = openTCP(src.host, src.port)
+	if time.Now().Before(st.until) {
+		return true
 	}
-	if err != nil {
-		return
-	}
-	src.tr = tr
+	return false
+}
 
+// trySource открывает источник и прогоняет probe-последовательность (§19).
+func (o *orchestrator) trySource(src *source) {
+	if o.inBackoff(src.desc) {
+		return
+	}
+	if src.serial != "" {
+		for _, baud := range unionSpeeds() {
+			tr, err := openSerial(src.serial, baud)
+			if err != nil {
+				continue
+			}
+			if o.probeAndAct(src, tr) {
+				return
+			}
+			tr.Close()
+		}
+		return
+	}
+	tr, err := openTCP(src.host, src.port)
+	if err != nil {
+		o.bumpBackoff(src.desc, false)
+		return
+	}
+	if !o.probeAndAct(src, tr) {
+		tr.Close()
+	}
+}
+
+// probeAndAct возвращает true, если источних обработан (found/notMine).
+func (o *orchestrator) probeAndAct(src *source, tr Transport) bool {
+	matched, slots, sawNotMine := o.probeAll(tr)
+	switch {
+	case matched != nil:
+		o.clearBackoff(src.desc)
+		src.tr = tr
+		o.addDevices(src, matched, slots)
+		return true
+	case sawNotMine:
+		o.bumpBackoff(src.desc, true) // бан 5 мин
+		return true
+	default:
+		o.bumpBackoff(src.desc, false)
+		return false
+	}
+}
+
+// probeAll вызывает probe-функции по порядку (arch §19).
+func (o *orchestrator) probeAll(tr Transport) (bmsType, []probeSlot, bool) {
+	sawNotMine := false
 	for _, bt := range bmsTypesOrder {
 		res, err := bt.Probe(tr)
 		if err != nil {
 			continue
 		}
-		switch res.Kind {
-		case probeFound:
-			o.addDevices(src, bt, res.Slots)
-			return
-		case probeNotMine:
-			// другое семейство/диалект мог бы опознать иной probe — продолжаем
-			continue
-		default:
-			continue
+		if res.Kind == probeFound {
+			return bt, res.Slots, false
+		}
+		if res.Kind == probeNotMine {
+			sawNotMine = true
 		}
 	}
-	// не опознали: закрываем и пробуем позже
-	tr.Close()
+	return nil, nil, sawNotMine
 }
 
 // addDevices занимает слоты, регистрирует ID и запускает пулеры.
 func (o *orchestrator) addDevices(src *source, bt bmsType, slots []probeSlot) {
 	for _, s := range slots {
 		o.mu.Lock()
-		if len(o.freeSlots) == 0 {
+		if len(o.freeSlots) == 0 || o.deviceByAddr(src.desc, s.Addr) != nil {
 			o.mu.Unlock()
-			src.tr.Close()
-			return
+			continue
 		}
 		slot := o.freeSlots[0]
 		o.freeSlots = o.freeSlots[1:]
 		o.busy[src.desc] = true
+		o.activeSrc[src.desc] = src
+		o.srcType[src.desc] = bt
 		o.mu.Unlock()
 
 		id, _ := o.idr.assignID(s.Base, src.desc)
@@ -169,9 +231,43 @@ func (o *orchestrator) addDevices(src *source, bt bmsType, slots []probeSlot) {
 		o.mu.Lock()
 		o.devs[id] = d
 		o.mu.Unlock()
-		o.publishList(d, 1)
+		o.publishList(d)
 		log.Printf("bms-reader: + %s (%s) на %s addr=%d slot=%d", id, bt.Name(), src.desc, s.Addr, slot)
 		go o.poller(d)
+	}
+}
+
+func (o *orchestrator) deviceByAddr(desc string, addr int) *device {
+	for _, d := range o.devs {
+		if d.src.desc == desc && d.addr == addr {
+			return d
+		}
+	}
+	return nil
+}
+
+// rescan — периодический перебор адресов активных шин (добавление новых слотов).
+func (o *orchestrator) rescan() {
+	o.mu.Lock()
+	srcs := make([]*source, 0, len(o.activeSrc))
+	types := make(map[string]bmsType, len(o.srcType))
+	for desc, s := range o.activeSrc {
+		srcs = append(srcs, s)
+		types[desc] = o.srcType[desc]
+	}
+	o.mu.Unlock()
+
+	for _, src := range srcs {
+		bt := types[src.desc]
+		if bt == nil {
+			continue
+		}
+		src.mu.Lock()
+		res, err := bt.Probe(src.tr)
+		src.mu.Unlock()
+		if err == nil && res.Kind == probeFound {
+			o.addDevices(src, bt, res.Slots)
+		}
 	}
 }
 
@@ -195,42 +291,83 @@ func (o *orchestrator) poller(d *device) {
 		}
 		o.seg.publishTelemetry(d.slot, bmscontract.Encode(&tel))
 		publishRaw(o.sink, d.id, tel)
-		o.publishList(d, 1)
+		o.publishList(d)
 	}
 }
 
-func (o *orchestrator) publishList(d *device, state uint8) {
+func (o *orchestrator) publishList(d *device) {
 	rec := listRecord{
 		ID: d.id, Base: d.base, Source: d.src.desc, TypeID: d.bt.TypeID(),
-		State: state, Framing: d.bt.Framing(), Gen: d.gen, LastSeen: uint64(time.Now().Unix()),
+		State: 1, Framing: d.bt.Framing(), Gen: d.gen, LastSeen: uint64(time.Now().Unix()),
 	}
 	o.seg.publishList(d.slot, rec)
 }
 
-// loseDevice освобождает слот и возвращает источник в пул.
+// loseDevice освобождает слот; если на источнике не осталось устройств — закрывает.
 func (o *orchestrator) loseDevice(d *device) {
 	o.mu.Lock()
 	delete(o.devs, d.id)
 	o.freeSlots = append(o.freeSlots, d.slot)
-	// источник больше не занят (транспорт будет переоткрыт при след. скане)
-	delete(o.busy, d.src.desc)
+	remain := false
+	for _, x := range o.devs {
+		if x.src.desc == d.src.desc {
+			remain = true
+			break
+		}
+	}
+	if !remain {
+		delete(o.busy, d.src.desc)
+		delete(o.activeSrc, d.src.desc)
+		delete(o.srcType, d.src.desc)
+	}
 	o.mu.Unlock()
 	o.seg.release(d.slot)
-	d.src.tr.Close()
+	if !remain {
+		o.bumpBackoff(d.src.desc, false) // потеря устройства → отстойник
+		d.src.tr.Close()
+	}
 }
 
-func (o *orchestrator) skip(desc string) (time.Time, bool) {
+func (o *orchestrator) clearBackoff(desc string) {
+	o.mu.Lock()
+	delete(o.backoff, desc)
+	o.mu.Unlock()
+}
+
+// bumpBackoff повышает ступень отстойника; ban=true — бан 5 мин.
+func (o *orchestrator) bumpBackoff(desc string, ban bool) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	t, ok := o.skipUntil[desc]
-	if !ok {
-		return time.Time{}, false
+	st := o.backoff[desc]
+	if st == nil {
+		st = &boState{}
+		o.backoff[desc] = st
 	}
-	if time.Now().After(t) {
-		delete(o.skipUntil, desc)
-		return time.Time{}, false
+	if ban {
+		st.banned = true
+		st.until = time.Now().Add(banDuration)
+		return
 	}
-	return t, true
+	st.step++
+	if st.step > len(backoffLadder) {
+		st.step = len(backoffLadder)
+	}
+	st.until = time.Now().Add(backoffLadder[st.step-1])
+}
+
+// unionSpeeds — объединение скоростей всех типов (для открытия serial).
+func unionSpeeds() []int {
+	seen := map[int]bool{}
+	var out []int
+	for _, bt := range bmsTypesOrder {
+		for _, s := range bt.Speeds() {
+			if !seen[s] {
+				seen[s] = true
+				out = append(out, s)
+			}
+		}
+	}
+	return out
 }
 
 func itoa(n int) string {

@@ -14,6 +14,7 @@ type antBMS struct{}
 func (antBMS) TypeID() uint8  { return typeAntBMS }
 func (antBMS) Name() string   { return "AntBMS-DSP" }
 func (antBMS) Framing() uint8 { return framingNative }
+func (antBMS) Speeds() []int  { return []int{19200} }
 
 // antMarker — заголовок live-кадра.
 var antMarker = []byte{0xAA, 0x55, 0xAA, 0xFF}

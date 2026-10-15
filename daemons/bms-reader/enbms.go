@@ -15,6 +15,7 @@ type enBMS struct{}
 func (enBMS) TypeID() uint8  { return typeEnBMS }
 func (enBMS) Name() string   { return "EnBMS-RS485" }
 func (enBMS) Framing() uint8 { return framingNative }
+func (enBMS) Speeds() []int  { return []int{19200} }
 
 const enMaxADR = 15
 

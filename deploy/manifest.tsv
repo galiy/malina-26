@@ -34,3 +34,6 @@ daemons/kes-reader/kes-reader.service	/etc/systemd/system/kes-reader.service	064
 daemons/tsdb/tsdb.service	/etc/systemd/system/malina-tsdb.service	0644	always
 system/systemd/malina-tsdb-raw.service	/etc/systemd/system/malina-tsdb-raw.service	0644	always
 system/systemd/map-reader.service.d/sim.conf	/etc/systemd/system/map-reader.service.d/sim.conf	0644	always
+daemons/bms-reader/bms-reader.service	/etc/systemd/system/malina-bms-reader.service	0644	always
+system/bms/bms-gateways.json	/malina/etc/malina/bms-gateways.json	0644	if_absent
+system/bms/bms-ident.json	/malina/etc/malina/bms-ident.json	0644	if_absent

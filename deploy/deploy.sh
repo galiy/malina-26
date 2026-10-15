@@ -4,7 +4,7 @@
 # Использование:
 #   deploy/deploy.sh [--build] [--first-run] [user@host]
 #
-#   --build      пересобрать ARM-бинарники (web, map-reader, kes-reader, tsdb)
+#   --build      пересобрать ARM-бинарники (web, map-reader, kes-reader, tsdb, bms-reader)
 #   --first-run  ПЕРВИЧНОЕ развёртывание «голого» устройства: units/конфиги по
 #                `deploy/manifest.tsv`, fstab-tmpfs `/run/malina-ts-raw`,
 #                `systemd-tmpfiles`, сборка `pamcheck`, enable юнитов, чистка
@@ -17,7 +17,7 @@
 # Пароль SSH: env MALINA_PASS или строка MALINA_PASS=... в .kilo/secrets (не коммитится).
 #
 # Сервисы проекта (бинарники/юниты): malina-web, malina-netd, map-reader,
-# kes-reader, malina-tsdb (avg), malina-tsdb-raw. `malina-netd` НЕ перезапускается
+# kes-reader, bms-reader, malina-tsdb (avg), malina-tsdb-raw. `malina-netd` НЕ перезапускается
 # (сетевой стек; новый бинарник вступит в силу при следующей загрузке).
 set -euo pipefail
 
@@ -53,6 +53,7 @@ if [ "$BUILD" = 1 ]; then
   make -C "$ROOT/web" arm
   make -C "$ROOT/daemons/map-reader" arm
   make -C "$ROOT/daemons/kes-reader" arm
+  make -C "$ROOT/daemons/bms-reader" arm
   make -C "$ROOT/daemons/tsdb" arm
 fi
 
@@ -60,8 +61,9 @@ BIN_WEB="$ROOT/web/dist/malina-web-armv7"
 BIN_NETD="$ROOT/web/dist/malina-netd-armv7"
 BIN_MAP="$ROOT/daemons/map-reader/dist/map-reader-armv7"
 BIN_KES="$ROOT/daemons/kes-reader/dist/kes-reader-armv7"
+BIN_BMS="$ROOT/daemons/bms-reader/dist/bms-reader-armv7"
 BIN_TSDB="$ROOT/daemons/tsdb/dist/malina-tsdb-armv7"
-for f in "$BIN_WEB" "$BIN_NETD" "$BIN_MAP" "$BIN_KES" "$BIN_TSDB"; do
+for f in "$BIN_WEB" "$BIN_NETD" "$BIN_MAP" "$BIN_KES" "$BIN_BMS" "$BIN_TSDB"; do
   [ -f "$f" ] || { echo "нет $f (собери: $0 --build)"; exit 1; }
 done
 
@@ -71,6 +73,7 @@ cp "$BIN_WEB"  "$STAGE/malina-web"
 cp "$BIN_NETD" "$STAGE/malina-netd"
 cp "$BIN_MAP"  "$STAGE/map-reader"
 cp "$BIN_KES"  "$STAGE/kes-reader"
+cp "$BIN_BMS"  "$STAGE/bms-reader"
 cp "$BIN_TSDB" "$STAGE/malina-tsdb"
 
 # --- стейдж и передача ---
@@ -83,19 +86,20 @@ if [ "$FIRST" = 1 ]; then
   echo "==> первичное развёртывание на $HOST"
   "${SSH[@]}" "$HOST" 'rm -rf /tmp/malina-install && mkdir -p /tmp/malina-install'
   "${SCP[@]}" "$STAGE/pkg.tar" "$STAGE/malina-web" "$STAGE/malina-netd" "$STAGE/map-reader" \
-    "$STAGE/kes-reader" "$STAGE/malina-tsdb" "$STAGE/pamcheck.c" "$HOST:/tmp/malina-install/"
+    "$STAGE/kes-reader" "$STAGE/bms-reader" "$STAGE/malina-tsdb" "$STAGE/pamcheck.c" "$HOST:/tmp/malina-install/"
 else
   tar -C "$ROOT/web/assets" -cf "$STAGE/assets.tar" templates static i18n
   cp "$ROOT/daemons/tsdb/tsdb.service"              "$STAGE/malina-tsdb.service"
   cp "$ROOT/system/systemd/malina-tsdb-raw.service" "$STAGE/malina-tsdb-raw.service"
   cp "$ROOT/daemons/map-reader/map-reader.service"  "$STAGE/map-reader.service"
   cp "$ROOT/daemons/kes-reader/kes-reader.service"  "$STAGE/kes-reader.service"
+  cp "$ROOT/daemons/bms-reader/bms-reader.service"  "$STAGE/malina-bms-reader.service"
   echo "==> обновление на $HOST"
   # стейдж на /malina (rw, много места); /tmp на устройстве — tmpfs 64 МБ
   "${SSH[@]}" "$HOST" 'sudo mkdir -p /malina/.deploy/tmp && sudo chown -R malina:malina /malina/.deploy/tmp && sudo rm -rf /malina/.deploy/tmp/*'
   "${SCP[@]}" "$STAGE/malina-web" "$STAGE/malina-netd" "$STAGE/map-reader" "$STAGE/kes-reader" \
-    "$STAGE/malina-tsdb" "$STAGE/assets.tar" "$STAGE/malina-tsdb.service" "$STAGE/malina-tsdb-raw.service" \
-    "$STAGE/map-reader.service" "$STAGE/kes-reader.service" "$HOST:/malina/.deploy/tmp/"
+    "$STAGE/bms-reader" "$STAGE/malina-tsdb" "$STAGE/assets.tar" "$STAGE/malina-tsdb.service" "$STAGE/malina-tsdb-raw.service" \
+    "$STAGE/map-reader.service" "$STAGE/kes-reader.service" "$STAGE/malina-bms-reader.service" "$HOST:/malina/.deploy/tmp/"
 fi
 
 # --- удалённая установка (общая; ветвление по FIRST) ---
@@ -116,6 +120,7 @@ sudo install -D -m0755 malina-web  /malina/usr/local/bin/malina-web
 sudo install -D -m0755 malina-netd /malina/usr/local/sbin/malina-netd
 sudo install -D -m0755 map-reader  /malina/usr/local/sbin/map-reader
 sudo install -D -m0755 kes-reader  /malina/usr/local/sbin/kes-reader
+sudo install -D -m0755 bms-reader  /malina/usr/local/sbin/bms-reader
 sudo install -D -m0755 malina-tsdb /malina/usr/local/sbin/malina-tsdb
 
 # веб-ассеты (шаблоны/статика/i18n) — путь из malina-web.service (-assets)
@@ -175,7 +180,7 @@ if [ "${FIRST:-0}" = 1 ]; then
 	# malina-wpa, malina-net-wifi, malina-dhclient-wlan0, malina-net-monitor,
 	# malina-net-scan, malina-net-fallback.service, malina-logrotate.service)
 	# включаются/выключаются по режиму сети (malina-netd) и потому здесь не трогаются.
-	for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-tsdb malina-tsdb-raw; do
+	for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-tsdb malina-tsdb-raw; do
 		sudo systemctl enable "$u" >/dev/null 2>&1 || true
 	done
 else
@@ -185,18 +190,19 @@ else
 	sudo install -m0644 malina-tsdb-raw.service /etc/systemd/system/malina-tsdb-raw.service
 	sudo install -m0644 map-reader.service      /etc/systemd/system/map-reader.service
 	sudo install -m0644 kes-reader.service      /etc/systemd/system/kes-reader.service
+	sudo install -m0644 malina-bms-reader.service /etc/systemd/system/malina-bms-reader.service
 	sudo systemctl daemon-reload
 	sync
 	sudo mount -o remount,ro / || true
 fi
 
 # перезапуск сервисов (malina-netd не трогаем: сетевой стек)
-for u in malina-web map-reader kes-reader malina-tsdb malina-tsdb-raw; do
+for u in malina-web map-reader kes-reader malina-bms-reader malina-tsdb malina-tsdb-raw; do
 	sudo systemctl restart "$u" 2>/dev/null && echo "restart $u" || echo "skip   $u (не активен/не установлен)"
 done
 sleep 2
 echo "--- status ---"
-for u in malina-web map-reader kes-reader malina-tsdb malina-tsdb-raw; do
+for u in malina-web map-reader kes-reader malina-bms-reader malina-tsdb malina-tsdb-raw; do
 	printf '%-16s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
 done
 curl -s -o /dev/null -w "login http=%{http_code}\n" http://127.0.0.1/login || true

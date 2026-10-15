@@ -95,7 +95,7 @@ func parsePace(b []byte) (paceFrame, error) {
 		return f, fmt.Errorf("pace: chk mismatch")
 	}
 	// body: VER(2) ADR(2) 46 RTN(2) LEN(4) INFO...
-	if len(body) < 10 || body[4:6] != "46" {
+	if len(body) < 12 || body[4:6] != "46" {
 		return f, fmt.Errorf("pace: формат")
 	}
 	_, err := fmt.Sscanf(body[0:2], "%02X", new(int))
@@ -106,7 +106,7 @@ func parsePace(b []byte) (paceFrame, error) {
 	fmt.Sscanf(body[2:4], "%02X", &adr)
 	fmt.Sscanf(body[6:8], "%02X", &rtn)
 	f.ADR, f.RTN = adr, rtn
-	infoHex := body[10:]
+	infoHex := body[12:] // VER(2)+ADR(2)+46(2)+RTN(2)+LEN(4)
 	if infoHex != "" {
 		info, err := hex.DecodeString(infoHex)
 		if err != nil {

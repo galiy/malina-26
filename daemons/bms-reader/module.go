@@ -36,6 +36,8 @@ type bmsType interface {
 	TypeID() uint8
 	Name() string
 	Framing() uint8 // framingNative / framingMRTU / framingMTCP
+	// Speeds — список скоростей COM для этого типа (оркестратор перебирает).
+	Speeds() []int
 	// Probe распознаёт свои устройства на открытом источнике (порт/скорость —
 	// задаёт оркестратор). Для шинных — перебирает адреса.
 	Probe(t Transport) (probeResult, error)

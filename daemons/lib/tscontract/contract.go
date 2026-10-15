@@ -21,7 +21,8 @@
 //   - map  v2      — v1 + реле (id 27 `Relay`, биты 0/1/2 = реле 1/2/3);
 //   - kes  v1      — 15 колонок (ячейки КЭС, u8/u16);
 //   - mbms v1..v32 — BMS отдельным рядом: Vn = n ячеек × (u16+u8+u8),
-//     device_id — тот же, что у МАП.
+//     device_id — тот же, что у МАП;
+//   - bms  v1      — 58 колонок контракта BMS-Receiver (описание — docs/bms-reader.md §1).
 package tscontract
 
 import (
