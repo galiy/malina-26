@@ -6,7 +6,7 @@
 //	  magic        u32  "MTS1"
 //	  format_ver   u16
 //	  device_type  str  (u8 len + UTF-8; map/kes/… — набор открыт)
-//	  device_id    str  (u8 len + UTF-8; до 10 символов)
+//	  device_id    str  (u8 len + UTF-8; до 50 символов; см. store.validKey)
 //	  time_base    i64  (мс)
 //	  flags        u16
 //	  crc32        u32  (по всем предыдущим байтам)

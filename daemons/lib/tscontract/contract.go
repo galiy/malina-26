@@ -331,6 +331,40 @@ var kesV1Fields = []Field{
 	{15, FTU8, "RSErrSis"},
 }
 
+// bmsV1 — 58 колонок контракта телеметрии BMS (docs/bms-reader.md §1):
+// счётчики/флаги, 16 ячеек (мВ), 8 температур (0.1 °C), ток/мощность/ёмкости,
+// напряжения сборки/клемм, маска балансировки, режим и 19 байт `alarm`.
+var bmsV1Fields = func() []Field {
+	f := make([]Field, 0, 58)
+	f = append(f,
+		Field{1, FTU8, "CellCount"},
+		Field{2, FTU8, "TempCount"},
+		Field{3, FTU16, "Flags"})
+	for i := 1; i <= 16; i++ { // id 4..19
+		f = append(f, Field{uint16(3 + i), FTU16, "Cell" + strconv.Itoa(i)})
+	}
+	for i := 1; i <= 8; i++ { // id 20..27
+		f = append(f, Field{uint16(19 + i), FTInt, "Temp" + strconv.Itoa(i)})
+	}
+	f = append(f,
+		Field{28, FTInt, "Current"},
+		Field{29, FTInt, "Power"},
+		Field{30, FTU16, "Soc"},
+		Field{31, FTU16, "Soh"},
+		Field{32, FTInt, "Cap"},
+		Field{33, FTInt, "Remaining"},
+		Field{34, FTInt, "Rated"},
+		Field{35, FTU16, "Cycles"},
+		Field{36, FTU16, "TotalV"},
+		Field{37, FTU16, "PortV"},
+		Field{38, FTInt, "BalanceMask"},
+		Field{39, FTU16, "Mode"})
+	for i := 1; i <= 19; i++ { // id 40..58
+		f = append(f, Field{uint16(39 + i), FTU8, "Alarm" + strconv.Itoa(i)})
+	}
+	return f
+}()
+
 // mbmsFields — схема BMS на n ячеек: ячейка i (1..n) → UakbCell u16,
 // TakbCell u8, Q_Cell u8; field_id = 3·(i−1)+1..+3 (docs/stat.md).
 func mbmsFields(n int) []Field {
@@ -355,6 +389,7 @@ func NewDefaultRegistry() *Registry {
 	r.Register("map", newSchemaContract(2, mapV2Fields))
 	r.Register("map", newSchemaContract(3, mapV3Fields))
 	r.Register("kes", newSchemaContract(1, kesV1Fields))
+	r.Register("bms", newSchemaContract(1, bmsV1Fields))
 	for n := 1; n <= mbmsMaxCells; n++ {
 		r.Register("mbms", newSchemaContract(uint16(n), mbmsFields(n)))
 	}

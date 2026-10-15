@@ -101,12 +101,35 @@ var kesRules = map[uint16]rule{
 	9: rAvg, 10: rAvg, 11: rAvg, 12: rAvg, 13: rLast, 14: rLast, 15: rOr,
 }
 
+// bmsRules — правила для полей контракта bms v1 (docs/bms-reader.md §1):
+// битфилды (flags/balance_mask/alarm) — ИЛИ; mode/flags-дискретные — last.
+var bmsRules = func() map[uint16]rule {
+	m := map[uint16]rule{
+		1: rLast, 2: rLast, 3: rOr, // cell_count, temp_count, flags
+		28: rAvg, 29: rAvg, 30: rAvg, 31: rAvg, // current, power, soc, soh
+		32: rLast, 33: rAvg, 34: rLast, 35: rLast, // cap, remaining, rated, cycles
+		36: rAvg, 37: rAvg, 38: rOr, 39: rLast, // totalV, portV, balance_mask, mode
+	}
+	for i := 4; i <= 19; i++ { // ячейки (мВ) — среднее
+		m[uint16(i)] = rAvg
+	}
+	for i := 20; i <= 27; i++ { // температуры — среднее
+		m[uint16(i)] = rAvg
+	}
+	for i := 40; i <= 58; i++ { // alarm_1..19 — ИЛИ
+		m[uint16(i)] = rOr
+	}
+	return m
+}()
+
 func rulesFor(typ string) map[uint16]rule {
 	switch typ {
 	case "map":
 		return mapRules
 	case "kes":
 		return kesRules
+	case "bms":
+		return bmsRules
 	default: // mbms и прочие — всё измеряемое
 		return nil
 	}

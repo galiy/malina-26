@@ -402,7 +402,7 @@ func pad6(v uint32) string {
 }
 
 func validKey(s string) bool {
-	return s != "" && s != "." && s != ".." && len(s) <= 10 &&
+	return s != "" && s != "." && s != ".." && len(s) <= 50 &&
 		!strings.ContainsRune(s, '/') && !strings.ContainsRune(s, 0)
 }
 

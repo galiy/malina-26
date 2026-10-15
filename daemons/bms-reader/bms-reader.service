@@ -1,0 +1,18 @@
+[Unit]
+Description=Malina BMS reader (сбор статистики BMS)
+After=local-fs.target rsyslog.service network.target
+Wants=rsyslog.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/malina/usr/local/sbin/bms-reader
+ExecReload=/bin/kill -HUP $MAINPID
+Nice=-5
+CPUWeight=1000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
