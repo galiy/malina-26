@@ -384,13 +384,16 @@ func TestStoreSegmentSkip(t *testing.T) {
 	}
 }
 
-func TestDecimateRowsFirstPoint(t *testing.T) {
+func TestDecimateRowsNearest(t *testing.T) {
+	// Строки 0,100,1100,2100,2200; bucket=1000. Границы: 1000 (от 0), затем 2100
+	// (от 1100). К границе 2100 ближе prev=2100 (0 мс), чем next=2200 (100 мс) —
+	// включаем 2100 (в отличие от «первой после границы», где было бы 2200).
 	rows := []Row{
 		{ID: "1", Time: 0}, {ID: "1", Time: 100}, {ID: "1", Time: 1100},
 		{ID: "1", Time: 2100}, {ID: "1", Time: 2200},
 	}
 	got := decimateRows(rows, 1000, dirFrom)
-	want := []int64{0, 1100, 2200}
+	want := []int64{0, 1100, 2100}
 	if len(got) != len(want) {
 		t.Fatalf("decimate from: %d строк, ожидалось %d (%v)", len(got), len(want), times(got))
 	}
@@ -399,9 +402,9 @@ func TestDecimateRowsFirstPoint(t *testing.T) {
 			t.Fatalf("decimate from[%d]=%d, ожидалось %d", i, got[i].Time, want[i])
 		}
 	}
-	// direction=to — свежайшая в окне, порядок возрастает.
+	// direction=to — симметрично, порядок возрастает.
 	gotTo := decimateRows(rows, 1000, dirTo)
-	wantTo := []int64{0, 1100, 2200}
+	wantTo := []int64{100, 1100, 2200}
 	if len(gotTo) != len(wantTo) {
 		t.Fatalf("decimate to: %d строк, ожидалось %d (%v)", len(gotTo), len(wantTo), times(gotTo))
 	}
@@ -412,6 +415,28 @@ func TestDecimateRowsFirstPoint(t *testing.T) {
 	}
 	if r := decimateRows(rows, 0, dirFrom); len(r) != len(rows) {
 		t.Fatalf("bucket=0 не должен резать: %d", len(r))
+	}
+}
+
+func TestDecimateRowsTie(t *testing.T) {
+	// Граница G=1000 (от 0); prev=900 (dp=100) и next=1100 (dn=100) равноудалены —
+	// при равенстве включаем next (за границей).
+	rows := []Row{{ID: "1", Time: 0}, {ID: "1", Time: 900}, {ID: "1", Time: 1100}}
+	got := decimateRows(rows, 1000, dirFrom)
+	if len(got) != 2 || got[0].Time != 0 || got[1].Time != 1100 {
+		t.Fatalf("dp==dn: ожидалось [0,1100], получено %v", times(got))
+	}
+}
+
+func TestDecimateRowsIDBoundary(t *testing.T) {
+	// Смена ID внутри набора сбрасывает опору (порядок — по (ID, time)).
+	rows := []Row{
+		{ID: "1", Time: 0}, {ID: "1", Time: 500},
+		{ID: "2", Time: 100}, {ID: "2", Time: 600},
+	}
+	got := decimateRows(rows, 1000, dirFrom)
+	if len(got) != 2 || got[0].ID != "1" || got[0].Time != 0 || got[1].ID != "2" || got[1].Time != 100 {
+		t.Fatalf("смена ID: ожидалось [1/0, 2/100], получено %v", got)
 	}
 }
 

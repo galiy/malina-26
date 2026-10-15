@@ -682,57 +682,64 @@ type Query struct {
 	Bucket    int64    // мини-окно decimation, мс (0 = без прореживания) — §9
 }
 
-// decimateRows — прореживание «первая строка в мини-окне» (§9): включаем строку,
-// запоминаем время; следующие пропускаем, пока |t − t_last| ≤ bucket. Решение
-// только по времени, payload не трогается. Прореживание по строкам (общие времена).
-// direction=to — проход от конца (свежайшая в окне), затем порядок восстанавливается.
+// decimateRows — прореживание «ближайшая строка к границе мини-окна» (§9).
+// От включённой точки t_last строится граница G = t_last ± bucket. Строки внутри
+// окна (|t − t_last| ≤ bucket) пропускаются, удерживая prev — последнюю пропущенную.
+// Первую строку next за границей сравниваем с prev: включаем ту, что ближе к G.
+// Решение только по времени, payload не трогается; по строкам (общие времена).
+// direction=to — проход от конца (в порядке убывания времени), затем разворот.
 func decimateRows(rows []Row, bucketMS int64, dir uint8) []Row {
 	if bucketMS <= 0 || len(rows) < 2 {
 		return rows
 	}
-	out := make([]Row, 0, len(rows)/2+1)
+	// step: +1 — проход по возрастанию (dirFrom), −1 — по убыванию (dirTo).
+	// Обе ветви считаются одной формулой: направление учитывается знаком step.
+	step := int64(1)
 	if dir == dirTo {
-		var lastID string
-		var lastT int64
-		var have bool
-		for i := len(rows) - 1; i >= 0; i-- {
-			r := rows[i]
-			if !have || r.ID != lastID {
-				out = append(out, r)
-				lastID, lastT, have = r.ID, r.Time, true
-				continue
-			}
-			d := r.Time - lastT
-			if d < 0 {
-				d = -d
-			}
-			if d > bucketMS {
-				out = append(out, r)
-				lastT = r.Time
-			}
-		}
-		// развернуть к возрастанию времени
-		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-			out[i], out[j] = out[j], out[i]
-		}
-		return out
+		step = -1
 	}
+	n := len(rows)
+	out := make([]Row, 0, n/2+2)
 	var lastID string
 	var lastT int64
-	var have bool
-	for _, r := range rows {
-		if !have || r.ID != lastID {
+	var haveLast, havePrev bool
+	var prevRow Row
+	for k := 0; k < n; k++ {
+		i := k
+		if step < 0 {
+			i = n - 1 - k
+		}
+		r := rows[i]
+		if !haveLast || r.ID != lastID {
 			out = append(out, r)
-			lastID, lastT, have = r.ID, r.Time, true
+			lastID, lastT, haveLast, havePrev = r.ID, r.Time, true, false
 			continue
 		}
-		d := r.Time - lastT
-		if d < 0 {
-			d = -d
-		}
-		if d > bucketMS {
+		for {
+			G := lastT + step*bucketMS // граница окна (G впереди по направлению)
+			if (r.Time-lastT)*step <= bucketMS {
+				// внутри окна — держим ближайшего кандидата prev
+				prevRow, havePrev = r, true
+				break
+			}
+			if havePrev {
+				dp := (G - prevRow.Time) * step // расстояние prev→G (>0)
+				dn := (r.Time - G) * step       // расстояние G→next (>0)
+				// dp == dn → включаем next (за границей): строгое dp < dn.
+				if dp < dn {
+					out = append(out, prevRow)
+					lastT, havePrev = prevRow.Time, false
+					continue // переоценить r относительно новой границы
+				}
+			}
 			out = append(out, r)
-			lastT = r.Time
+			lastT, havePrev = r.Time, false
+			break
+		}
+	}
+	if step < 0 {
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
 		}
 	}
 	return out
