@@ -76,22 +76,23 @@
   `last` (`mode`); avg.
 - **Приёмка:** e2e с эмуляторами → raw/avg в tsdb.
 
-### M7. Веб-админка и web-API — **вне рамок текущей реализации** (отложено)
+### M7. web-API `/api/bms/*` — **реализовано**; UI — вне рамок
 
-> По решению владельца веб/API отложены. Ниже — на будущее.
+> Реализован **API** (по решению владельца — без UI-страницы `web`).
 
-- **API — по полной аналогии с `/api/map/*` и `/api/kes/*`** (`web/internal/web/bmsapi.go`):
-  - `GET /api/bms/devices` — JSON-список BMS из shm (тип `bms`: `id`, `gen`, `serial`,
-    `label`), как `/api/kes/devices`;
-  - `GET /api/bms/raw?id&gen` — **бинарный payload слота** (контракт 107 Б) из shm, как
+- **`web/internal/web/bmsstate.go`** — чтение shm-сегмента BMS (`bms-list` + слот 107 Б),
+  раскладка совпадает с `daemons/bms-reader/shm.go`.
+- **`web/internal/web/bmsapi.go`**:
+  - `GET /api/bms/devices` — JSON-список BMS (`type:"bms"`, `id`, `gen`, `serial`, `base`,
+    `bms_type`, `source`, `framing`, `last_seen`);
+  - `GET /api/bms/raw?id&gen` — **бинарный payload слота** (контракт 107 Б), как
     `/api/kes/raw`;
   - **`write` нет** — BMS строго **RO**.
-- **Страница настроек шлюзов** — отдельно, по образцу `/system/*` (правка `IP:PORT`+режим,
-  запись `bms-gateways.json`, reload/SIGHUP) — это конфиг демона, **не** `/api/bms/*`.
-- **`/api/mainlist`** — добавить BMS (список).
-- **i18n** (ru/be/zh/en/ka/kk/uz/tg, дефолт en): страница шлюзов, метки типов, названия
-  `mode`.
-- **Приёмка:** API-тесты `/api/bms/*` + UI smoke (`tests/`).
+- Маршруты зарегистрированы в `web/internal/web/server.go`; авторизация — как у
+  `/api/kes/*` (cookie||Bearer); задокументировано в `docs/api-auth.md`.
+- **Тесты:** `web/internal/web/bmsapi_test.go` (devices/raw/401/404/400 на временном
+  shm-сегменте).
+- **UI-страница** (настройка шлюзов, отображение) — **вне рамок** (как и решено).
 
 ### M8. Деплой и восстановимость
 Демон **новый**, поэтому включается во **все** общие точки деплоя (сейчас в них его нет):

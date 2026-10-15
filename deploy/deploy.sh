@@ -2,36 +2,70 @@
 # Единый деплой артефактов проекта на устройство (единый список сервисов).
 #
 # Использование:
-#   deploy/deploy.sh [--build] [--first-run] [user@host]
+#   deploy/deploy.sh [--build] [--first-run] [--only s1,s2,...] [user@host]
 #
-#   --build      пересобрать ARM-бинарники (web, map-reader, kes-reader, tsdb, bms-reader)
+#   --build      пересобрать ARM-бинарники выбранных сервисов
 #   --first-run  ПЕРВИЧНОЕ развёртывание «голого» устройства: units/конфиги по
 #                `deploy/manifest.tsv`, fstab-tmpfs `/run/malina-ts-raw`,
 #                `systemd-tmpfiles`, сборка `pamcheck`, enable юнитов, чистка
-#                legacy; корень монтируется rw на весь блок.
+#                legacy; корень монтируется rw на весь блок. (Всегда полное;
+#                `--only` при `--first-run` игнорируется.)
+#   --only LIST  точечное обновление ТОЛЬКО выбранных сервисов (через запятую):
+#                web,netd,map,kes,bms,tsdb.
+#   --all        обновить ВСЕ сервисы (весь скрипт). Без `--only`/`--all` обычный
+#                деплой НЕ запускается (правило: на .60 деплоим только изменённые).
 #   (без флага)  точечное ОБНОВЛЕНИЕ работающего устройства: только бинарники +
-#                веб-ассеты + unit-файлы сервисов; `/etc` — коротким rw-окном;
-#                ничего не создаёт (fstab/tmpfiles/enable не трогает).
+#                веб-ассеты + unit-файлы выбранных сервисов; `/etc` — коротким
+#                rw-окном.
 #   user@host    по умолчанию malina@192.168.13.60 (или env HOST)
 #
 # Пароль SSH: env MALINA_PASS или строка MALINA_PASS=... в .kilo/secrets (не коммитится).
 #
-# Сервисы проекта (бинарники/юниты): malina-web, malina-netd, map-reader,
-# kes-reader, bms-reader, malina-tsdb (avg), malina-tsdb-raw. `malina-netd` НЕ перезапускается
-# (сетевой стек; новый бинарник вступит в силу при следующей загрузке).
+# Сервисы: malina-web, malina-netd, map-reader, kes-reader, bms-reader,
+# malina-tsdb (avg), malina-tsdb-raw. `malina-netd` НЕ перезапускается.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-BUILD=0 FIRST=0 HOSTARG=""
-for a in "$@"; do
-  case "$a" in
-    --build) BUILD=1 ;;
-    --first-run) FIRST=1 ;;
-    -*) echo "неизвестный флаг: $a" >&2; exit 2 ;;
-    *) [ -z "$HOSTARG" ] && HOSTARG="$a" ;;
+ALL_SERVICES="web netd map kes bms tsdb"
+
+BUILD=0 FIRST=0 ALL=0 HOSTARG="" ONLY=""
+parse() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --build) BUILD=1 ;;
+      --first-run) FIRST=1 ;;
+      --all) ALL=1 ;;
+      --only) shift; ONLY="${1:-}" ;;
+      --only=*) ONLY="${1#--only=}" ;;
+      -*) echo "неизвестный флаг: $1" >&2; exit 2 ;;
+      *) [ -z "$HOSTARG" ] && HOSTARG="$1" ;;
+    esac
+    shift
+  done
+}
+parse "$@"
+
+# Нормализуем список сервисов.
+ONLY="${ONLY//,/ }"
+if [ -z "${ONLY// /}" ]; then
+  if [ "$ALL" = 1 ] || [ "$FIRST" = 1 ]; then
+    ONLY="$ALL_SERVICES"
+  else
+    echo "укажите --only <список> (обновить только изменённые сервисы) или --all" >&2
+    echo "сервисы: $ALL_SERVICES" >&2
+    exit 2
+  fi
+fi
+for s in $ONLY; do
+  case " $ALL_SERVICES " in
+    *" $s "*) ;;
+    *) echo "неизвестный сервис: '$s' (допустимо: $ALL_SERVICES)" >&2; exit 2 ;;
   esac
 done
+
+has() { case " $ONLY " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
 HOST="${HOSTARG:-${HOST:-malina@192.168.13.60}}"
 [ "${HOST#-}" = "$HOST" ] || { echo "некорректный хост: $HOST" >&2; exit 2; }
 
@@ -48,13 +82,19 @@ command -v sshpass >/dev/null || { echo "нет sshpass" >&2; exit 1; }
 SSH=(sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10)
 SCP=(sshpass -p "$PASS" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 
-# --- сборка (--build) ---
+echo "==> сервисы: $ONLY$([ "$FIRST" = 1 ] && echo ' (first-run — полное развёртывание)')"
+
+# --- сборка (--build) выбранных сервисов ---
 if [ "$BUILD" = 1 ]; then
+  has web  && make -C "$ROOT/web" arm
+  has map  && make -C "$ROOT/daemons/map-reader" arm
+  has kes  && make -C "$ROOT/daemons/kes-reader" arm
+  has bms  && make -C "$ROOT/daemons/bms-reader" arm
+  has tsdb && make -C "$ROOT/daemons/tsdb" arm
+fi
+# netd собирается вместе с web (один модуль web)
+if [ "$BUILD" = 1 ] && has netd && ! has web; then
   make -C "$ROOT/web" arm
-  make -C "$ROOT/daemons/map-reader" arm
-  make -C "$ROOT/daemons/kes-reader" arm
-  make -C "$ROOT/daemons/bms-reader" arm
-  make -C "$ROOT/daemons/tsdb" arm
 fi
 
 BIN_WEB="$ROOT/web/dist/malina-web-armv7"
@@ -63,51 +103,65 @@ BIN_MAP="$ROOT/daemons/map-reader/dist/map-reader-armv7"
 BIN_KES="$ROOT/daemons/kes-reader/dist/kes-reader-armv7"
 BIN_BMS="$ROOT/daemons/bms-reader/dist/bms-reader-armv7"
 BIN_TSDB="$ROOT/daemons/tsdb/dist/malina-tsdb-armv7"
-for f in "$BIN_WEB" "$BIN_NETD" "$BIN_MAP" "$BIN_KES" "$BIN_BMS" "$BIN_TSDB"; do
-  [ -f "$f" ] || { echo "нет $f (собери: $0 --build)"; exit 1; }
-done
+
+req() { [ -f "$1" ] || { echo "нет $1 (собери: $0 --build --only $2)"; exit 1; }; }
+has web  && { req "$BIN_WEB"  web; }
+has netd && { req "$BIN_NETD" netd; }
+has map  && { req "$BIN_MAP"  map; }
+has kes  && { req "$BIN_KES"  kes; }
+has bms  && { req "$BIN_BMS"  bms; }
+has tsdb && { req "$BIN_TSDB" tsdb; }
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
-cp "$BIN_WEB"  "$STAGE/malina-web"
-cp "$BIN_NETD" "$STAGE/malina-netd"
-cp "$BIN_MAP"  "$STAGE/map-reader"
-cp "$BIN_KES"  "$STAGE/kes-reader"
-cp "$BIN_BMS"  "$STAGE/bms-reader"
-cp "$BIN_TSDB" "$STAGE/malina-tsdb"
+has web  && cp "$BIN_WEB"  "$STAGE/malina-web"
+has netd && cp "$BIN_NETD" "$STAGE/malina-netd"
+has map  && cp "$BIN_MAP"  "$STAGE/map-reader"
+has kes  && cp "$BIN_KES"  "$STAGE/kes-reader"
+has bms  && cp "$BIN_BMS"  "$STAGE/bms-reader"
+has tsdb && cp "$BIN_TSDB" "$STAGE/malina-tsdb"
 
-# --- стейдж и передача ---
+# --- сборка списка файлов для передачи ---
+FILES=( )
+has web  && FILES+=( "$STAGE/malina-web" )
+has netd && FILES+=( "$STAGE/malina-netd" )
+has map  && FILES+=( "$STAGE/map-reader" )
+has kes  && FILES+=( "$STAGE/kes-reader" )
+has bms  && FILES+=( "$STAGE/bms-reader" )
+has tsdb && FILES+=( "$STAGE/malina-tsdb" )
+
 if [ "$FIRST" = 1 ]; then
-  # В pkg.tar кладём только нужное для `--first-run`: system/ и assets целиком, но
-  # из daemons/ — лишь файлы из манифеста (.service/drop-in), без dist/ и исходников.
+  # --- первичное развёртывание (полное) ---
   mapfile -t DAEMON_FILES < <(awk -F'\t' '$1 ~ /^daemons\// {print $1}' "$ROOT/deploy/manifest.tsv")
   tar -C "$ROOT" -cf "$STAGE/pkg.tar" system deploy/manifest.tsv web/assets "${DAEMON_FILES[@]}"
   cp "$ROOT/web/pamcheck/pamcheck.c" "$STAGE/pamcheck.c"
   echo "==> первичное развёртывание на $HOST"
   "${SSH[@]}" "$HOST" 'rm -rf /tmp/malina-install && mkdir -p /tmp/malina-install'
-  "${SCP[@]}" "$STAGE/pkg.tar" "$STAGE/malina-web" "$STAGE/malina-netd" "$STAGE/map-reader" \
-    "$STAGE/kes-reader" "$STAGE/bms-reader" "$STAGE/malina-tsdb" "$STAGE/pamcheck.c" "$HOST:/tmp/malina-install/"
+  "${SCP[@]}" "$STAGE/pkg.tar" "${FILES[@]}" "$STAGE/pamcheck.c" "$HOST:/tmp/malina-install/"
 else
-  tar -C "$ROOT/web/assets" -cf "$STAGE/assets.tar" templates static i18n
-  cp "$ROOT/daemons/tsdb/tsdb.service"              "$STAGE/malina-tsdb.service"
-  cp "$ROOT/system/systemd/malina-tsdb-raw.service" "$STAGE/malina-tsdb-raw.service"
-  cp "$ROOT/daemons/map-reader/map-reader.service"  "$STAGE/map-reader.service"
-  cp "$ROOT/daemons/kes-reader/kes-reader.service"  "$STAGE/kes-reader.service"
-  cp "$ROOT/daemons/bms-reader/bms-reader.service"  "$STAGE/malina-bms-reader.service"
-  echo "==> обновление на $HOST"
+  # --- точечное обновление выбранных сервисов ---
+  if has web; then
+    tar -C "$ROOT/web/assets" -cf "$STAGE/assets.tar" templates static i18n
+    FILES+=( "$STAGE/assets.tar" )
+  fi
+  UNITS=( )
+  has map  && { cp "$ROOT/daemons/map-reader/map-reader.service"     "$STAGE/map-reader.service";        UNITS+=( "$STAGE/map-reader.service" ); }
+  has kes  && { cp "$ROOT/daemons/kes-reader/kes-reader.service"     "$STAGE/kes-reader.service";        UNITS+=( "$STAGE/kes-reader.service" ); }
+  has bms  && { cp "$ROOT/daemons/bms-reader/bms-reader.service"     "$STAGE/malina-bms-reader.service"; UNITS+=( "$STAGE/malina-bms-reader.service" ); }
+  has tsdb && { cp "$ROOT/daemons/tsdb/tsdb.service"                 "$STAGE/malina-tsdb.service";       UNITS+=( "$STAGE/malina-tsdb.service" ); }
+  has tsdb && { cp "$ROOT/system/systemd/malina-tsdb-raw.service"    "$STAGE/malina-tsdb-raw.service";   UNITS+=( "$STAGE/malina-tsdb-raw.service" ); }
+  echo "==> обновление на $HOST: $ONLY"
   # стейдж на /malina (rw, много места); /tmp на устройстве — tmpfs 64 МБ
   "${SSH[@]}" "$HOST" 'sudo mkdir -p /malina/.deploy/tmp && sudo chown -R malina:malina /malina/.deploy/tmp && sudo rm -rf /malina/.deploy/tmp/*'
-  "${SCP[@]}" "$STAGE/malina-web" "$STAGE/malina-netd" "$STAGE/map-reader" "$STAGE/kes-reader" \
-    "$STAGE/bms-reader" "$STAGE/malina-tsdb" "$STAGE/assets.tar" "$STAGE/malina-tsdb.service" "$STAGE/malina-tsdb-raw.service" \
-    "$STAGE/map-reader.service" "$STAGE/kes-reader.service" "$STAGE/malina-bms-reader.service" "$HOST:/malina/.deploy/tmp/"
+  "${SCP[@]}" "${FILES[@]}" "${UNITS[@]}" "$HOST:/malina/.deploy/tmp/"
 fi
 
-# --- удалённая установка (общая; ветвление по FIRST) ---
-"${SSH[@]}" "$HOST" "FIRST=$FIRST bash -s" <<'REMOTE'
+# --- удалённая установка (общая; ветвление по FIRST/ONLY) ---
+"${SSH[@]}" "$HOST" "FIRST=$FIRST ONLY='$ONLY' bash -s" <<'REMOTE'
 set -e
+has() { case " $ONLY " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 if [ "${FIRST:-0}" = 1 ]; then
 	cd /tmp/malina-install
-	tar -xf pkg.tar
 	cleanup() { sudo mount -o remount,ro / 2>/dev/null || true; }
 	trap cleanup EXIT
 	sudo mount -o remount,rw /
@@ -116,27 +170,29 @@ else
 fi
 
 # бинарники (web — bin, остальные — sbin)
-sudo install -D -m0755 malina-web  /malina/usr/local/bin/malina-web
-sudo install -D -m0755 malina-netd /malina/usr/local/sbin/malina-netd
-sudo install -D -m0755 map-reader  /malina/usr/local/sbin/map-reader
-sudo install -D -m0755 kes-reader  /malina/usr/local/sbin/kes-reader
-sudo install -D -m0755 bms-reader  /malina/usr/local/sbin/bms-reader
-sudo install -D -m0755 malina-tsdb /malina/usr/local/sbin/malina-tsdb
+[ -f malina-web ]    && sudo install -D -m0755 malina-web    /malina/usr/local/bin/malina-web
+[ -f malina-netd ]   && sudo install -D -m0755 malina-netd   /malina/usr/local/sbin/malina-netd
+[ -f map-reader ]    && sudo install -D -m0755 map-reader    /malina/usr/local/sbin/map-reader
+[ -f kes-reader ]    && sudo install -D -m0755 kes-reader    /malina/usr/local/sbin/kes-reader
+[ -f bms-reader ]    && sudo install -D -m0755 bms-reader    /malina/usr/local/sbin/bms-reader
+[ -f malina-tsdb ]   && sudo install -D -m0755 malina-tsdb   /malina/usr/local/sbin/malina-tsdb
 
-# веб-ассеты (шаблоны/статика/i18n) — путь из malina-web.service (-assets)
-sudo rm -rf /malina/usr/local/share/malina/web
-sudo install -d -m0755 /malina/usr/local/share/malina/web
-if [ "${FIRST:-0}" = 1 ]; then
-	sudo cp -a web/assets/templates web/assets/static web/assets/i18n /malina/usr/local/share/malina/web/
-else
-	sudo tar -C /malina/usr/local/share/malina/web -xf assets.tar
+# веб-ассеты — только если уезжали (обновление web/first-run)
+if [ -f assets.tar ] || [ "${FIRST:-0}" = 1 ]; then
+	sudo rm -rf /malina/usr/local/share/malina/web
+	sudo install -d -m0755 /malina/usr/local/share/malina/web
+	if [ "${FIRST:-0}" = 1 ]; then
+		sudo cp -a web/assets/templates web/assets/static web/assets/i18n /malina/usr/local/share/malina/web/
+	else
+		sudo tar -C /malina/usr/local/share/malina/web -xf assets.tar
+	fi
+	sudo chown -R root:root /malina/usr/local/share/malina/web
+	sudo find /malina/usr/local/share/malina/web -type d -exec chmod 0755 {} +
+	sudo find /malina/usr/local/share/malina/web -type f -exec chmod 0644 {} +
 fi
-sudo chown -R root:root /malina/usr/local/share/malina/web
-sudo find /malina/usr/local/share/malina/web -type d -exec chmod 0755 {} +
-sudo find /malina/usr/local/share/malina/web -type f -exec chmod 0644 {} +
 
 if [ "${FIRST:-0}" = 1 ]; then
-	# --- первичная инфраструктура ---
+	# --- первичная инфраструктура (полная) ---
 	apply() { # src dest mode policy
 		src="$1"; dest="$2"; mode="$3"; pol="$4"
 		if [ "$pol" = "if_absent" ] && [ -e "$dest" ]; then echo "keep  $dest"; return; fi
@@ -149,8 +205,6 @@ if [ "${FIRST:-0}" = 1 ]; then
 		apply "$src" "$dest" "$mode" "$pol"
 	done < deploy/manifest.tsv
 
-	# PAM-хелпер компилируем на устройстве. Без него вход в web (PAM) не работает —
-	# при первичном развёртывании это критично, поэтому без gcc падаем.
 	if command -v gcc >/dev/null 2>&1; then
 		sudo gcc -O2 -o /tmp/malina-pamcheck pamcheck.c -ldl
 		sudo install -D -m0755 /tmp/malina-pamcheck /malina/usr/local/libexec/malina-pamcheck
@@ -162,7 +216,6 @@ if [ "${FIRST:-0}" = 1 ]; then
 	fi
 
 	sudo systemd-tmpfiles --create /etc/tmpfiles.d/malina.conf /etc/tmpfiles.d/malina-rsyslog.conf >/dev/null 2>&1 || true
-	# Устаревшие юниты: hostname/sysconfig больше не нужны.
 	for u in malina-hostname.service malina-sysconfig.service; do
 		sudo systemctl disable "$u" >/dev/null 2>&1 || true
 		sudo rm -f "/etc/systemd/system/$u"
@@ -171,41 +224,46 @@ if [ "${FIRST:-0}" = 1 ]; then
 	sudo rm -f /malina/etc/hostname /malina/etc/timezone
 	sudo systemctl daemon-reload
 
-	# raw-tsdb: отдельный tmpfs 200 МБ под детальное сырьё (§14)
 	grep -q '/run/malina-ts-raw' /etc/fstab || echo 'tmpfs  /run/malina-ts-raw  tmpfs  size=200M,mode=0755,nosuid,nodev  0  0' | sudo tee -a /etc/fstab >/dev/null
 	sudo mkdir -p /run/malina-ts-raw
 	sudo mountpoint -q /run/malina-ts-raw || sudo mount /run/malina-ts-raw 2>/dev/null || true
 
-	# Включаем только базовые юниты. Юниты режимов/сети (malina-hostapd, malina-dnsmasq,
-	# malina-wpa, malina-net-wifi, malina-dhclient-wlan0, malina-net-monitor,
-	# malina-net-scan, malina-net-fallback.service, malina-logrotate.service)
-	# включаются/выключаются по режиму сети (malina-netd) и потому здесь не трогаются.
 	for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-tsdb malina-tsdb-raw; do
 		sudo systemctl enable "$u" >/dev/null 2>&1 || true
 	done
 else
-	# --- точечное обновление: unit-файлы сервисов коротким rw-окном под /etc ---
-	sudo mount -o remount,rw /
-	sudo install -m0644 malina-tsdb.service     /etc/systemd/system/malina-tsdb.service
-	sudo install -m0644 malina-tsdb-raw.service /etc/systemd/system/malina-tsdb-raw.service
-	sudo install -m0644 map-reader.service      /etc/systemd/system/map-reader.service
-	sudo install -m0644 kes-reader.service      /etc/systemd/system/kes-reader.service
-	sudo install -m0644 malina-bms-reader.service /etc/systemd/system/malina-bms-reader.service
-	sudo systemctl daemon-reload
-	sync
-	sudo mount -o remount,ro / || true
+	# --- точечное обновление: unit-файлы выбранных сервисов (rw-окно под /etc) ---
+	if [ -f malina-tsdb.service ] || [ -f malina-tsdb-raw.service ] || [ -f map-reader.service ] || [ -f kes-reader.service ] || [ -f malina-bms-reader.service ]; then
+		sudo mount -o remount,rw /
+		[ -f malina-tsdb.service ]       && sudo install -m0644 malina-tsdb.service       /etc/systemd/system/malina-tsdb.service
+		[ -f malina-tsdb-raw.service ]   && sudo install -m0644 malina-tsdb-raw.service   /etc/systemd/system/malina-tsdb-raw.service
+		[ -f map-reader.service ]        && sudo install -m0644 map-reader.service        /etc/systemd/system/map-reader.service
+		[ -f kes-reader.service ]        && sudo install -m0644 kes-reader.service        /etc/systemd/system/kes-reader.service
+		[ -f malina-bms-reader.service ] && sudo install -m0644 malina-bms-reader.service /etc/systemd/system/malina-bms-reader.service
+		sudo systemctl daemon-reload
+		sync
+		sudo mount -o remount,ro / || true
+	fi
 fi
 
-# перезапуск сервисов (malina-netd не трогаем: сетевой стек)
-for u in malina-web map-reader kes-reader malina-bms-reader malina-tsdb malina-tsdb-raw; do
+# перезапуск выбранных сервисов (malina-netd не трогаем: сетевой стек)
+RESTART=""
+has web  && RESTART="$RESTART malina-web"
+has map  && RESTART="$RESTART map-reader"
+has kes  && RESTART="$RESTART kes-reader"
+has bms  && RESTART="$RESTART malina-bms-reader"
+has tsdb && RESTART="$RESTART malina-tsdb malina-tsdb-raw"
+for u in $RESTART; do
+	[ -n "$u" ] || continue
 	sudo systemctl restart "$u" 2>/dev/null && echo "restart $u" || echo "skip   $u (не активен/не установлен)"
 done
 sleep 2
 echo "--- status ---"
-for u in malina-web map-reader kes-reader malina-bms-reader malina-tsdb malina-tsdb-raw; do
-	printf '%-16s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
+for u in $RESTART; do
+	[ -n "$u" ] || continue
+	printf '%-18s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
 done
-curl -s -o /dev/null -w "login http=%{http_code}\n" http://127.0.0.1/login || true
+has web && curl -s -o /dev/null -w "login http=%{http_code}\n" http://127.0.0.1/login || true
 
 if [ "${FIRST:-0}" = 1 ]; then
 	sudo rm -rf /tmp/malina-install
@@ -214,4 +272,4 @@ else
 	sudo rm -rf /malina/.deploy/tmp
 fi
 REMOTE
-echo "==> готово ($([ "$FIRST" = 1 ] && echo 'первичное развёртывание' || echo 'обновление')) на $HOST"
+echo "==> готово ($([ "$FIRST" = 1 ] && echo 'первичное развёртывание' || echo "обновление: $ONLY")) на $HOST"

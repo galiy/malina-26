@@ -401,6 +401,8 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/api/kes/devices", s.handleAPIKesDevices)
 	mux.HandleFunc("/api/kes/raw", s.handleAPIKesRaw)
 	mux.HandleFunc("/api/kes/write", s.handleAPIKesWrite)
+	mux.HandleFunc("/api/bms/devices", s.handleAPIBmsDevices)
+	mux.HandleFunc("/api/bms/raw", s.handleAPIBmsRaw)
 	mux.HandleFunc("/api/mainlist", s.handleAPIMainList)
 	mux.HandleFunc("/api/token", s.handleAPIToken)
 	mux.HandleFunc("/read_json.php", s.handleReadJSON)

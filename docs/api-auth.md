@@ -22,6 +22,8 @@ TLS — **внешний слой**, нам не принадлежит и не 
 | `/api/kes/devices` | чтение (тип kes) | cookie-сессия **или** `Bearer` |
 | `/api/kes/raw` | чтение (тип kes) | cookie-сессия **или** `Bearer` |
 | `/api/kes/write` | запись (тип kes) | cookie-сессия **или** `Bearer` |
+| `/api/bms/devices` | чтение (тип bms) | cookie-сессия **или** `Bearer` |
+| `/api/bms/raw` | чтение (тип bms, 107 Б) | cookie-сессия **или** `Bearer` |
 | веб-страницы (`/`, `/map`, `/system`, …) | UI | cookie-сессия |
 
 Единый **скоуп** (без ролей): любой валидный токен = полный доступ.
