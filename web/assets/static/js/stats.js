@@ -58,14 +58,23 @@
     return await r.json();
   }
 
-  // Время — по локали клиента, 24-часовой формат (без AM/PM).
-  function fmtTime(ms) {
-    try { return new Date(ms).toLocaleString(navigator.language || undefined, { hour12: false }); }
-    catch (e) { return new Date(ms).toLocaleString(); }
+  // Время — 24-часовой формат (без AM/PM).
+  function pad(x, n) { var s = String(x); n = n || 2; while (s.length < n) s = "0" + s; return s; }
+  // Значения полей «С/по» (datetime-local): локальное время с миллисекундами.
+  function toLocalInputMS(ms) {
+    var d = new Date(ms);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" +
+      pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()) + "." + pad(d.getMilliseconds(), 3);
+  }
+  // Время в колонке «Время» и в диапазонах крайних точек — с миллисекундами.
+  function fmtTimeMS(ms) {
+    var d = new Date(ms);
+    return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear() + " " +
+      pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()) + "." + pad(d.getMilliseconds(), 3);
   }
   function fmtRange(mm) {
     if (mm[0] < 0 || mm[1] < 0) return "—";
-    return fmtTime(mm[0]) + " … " + fmtTime(mm[1]);
+    return fmtTimeMS(mm[0]) + " … " + fmtTimeMS(mm[1]);
   }
 
   function renderTabs() {
@@ -153,7 +162,7 @@
     });
     html += "</tr></thead><tbody>";
     rows.forEach(function (r) {
-      html += "<tr><td>" + fmtTime(r.t) + "</td><td>" + r.v + "</td>";
+      html += "<tr><td>" + fmtTimeMS(r.t) + "</td><td>" + r.v + "</td>";
       colIds.forEach(function (c) { html += "<td>" + fmtVal(units[c], r.f && c in r.f ? r.f[c] : null) + "</td>"; });
       html += "</tr>";
     });
@@ -161,6 +170,12 @@
     tableEl.innerHTML = html;
     edge.top = rows[0].t;
     edge.bottom = rows[rows.length - 1].t;
+    // Актуализируем поля «С/по» фактическим окном полученных данных (с мс).
+    var tmin = rows[0].t, tmax = rows[0].t;
+    rows.forEach(function (r) { if (r.t < tmin) tmin = r.t; if (r.t > tmax) tmax = r.t; });
+    var fEl = document.getElementById("st-from"), tEl = document.getElementById("st-to");
+    if (fEl) fEl.value = toLocalInputMS(tmin);
+    if (tEl) tEl.value = toLocalInputMS(tmax);
   }
 
   // Хинт открывается по щелчку на заголовке колонки (таблица перерисовывается —

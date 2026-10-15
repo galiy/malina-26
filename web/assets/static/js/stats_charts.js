@@ -175,8 +175,22 @@
 
   // --- Рендер карточек ---
   var CHARTS = {};
-  var hidden = {};   // id -> [labels]
+  var hidden = {};   // type -> [keyStr] (скрытые линии; кэш из localStorage)
   var zoomWin = {};  // id -> {min,max}
+  // Персист видимости линий: в разрезе ТИПА устройства, по стабильным ключам
+  // (не по локализованным именам). Новые линии не из настройки — включены;
+  // отсутствующие на графике записи настройки не удаляются.
+  function hiddenKey(type) { return "statsHidden:" + type; }
+  function loadHidden(type) {
+    var arr = null;
+    try { arr = JSON.parse(localStorage.getItem(hiddenKey(type)) || "null"); } catch (e) {}
+    return Array.isArray(arr) ? arr : [];
+  }
+  function ensureHidden(type) { if (!hidden[type]) hidden[type] = loadHidden(type); return hidden[type]; }
+  function persistHidden(type, arr) {
+    hidden[type] = arr;
+    try { localStorage.setItem(hiddenKey(type), JSON.stringify(arr)); } catch (e) {}
+  }
   var orderKey = function () { return "statsChartOrder:" + (active ? active.type : ""); };
 
   function applyOrder() {
@@ -213,23 +227,19 @@
       '<button class="ord-right" type="button" title="→">→</button></div>';
   }
 
-  // Синхронные курсор/хинты по общему времени.
+  // Синхронные курсор/хинты по общему времени. Само рисование — в syncPlugin.afterDraw
+  // (встроенный tooltip отключён), здесь только состояние и перерисовка всех карточек.
   var cursor = { active: false, value: null };
   var syncing = false;
   function syncTooltips(t) {
-    Object.keys(CHARTS).forEach(function (id) {
-      var c = CHARTS[id]; if (!c || !c.tooltip) return;
-      try {
-        if (t == null) { c.tooltip.setActiveElements([], { x: 0, y: 0 }); return; }
-        var ds = c.data.datasets || []; if (!ds.length || !ds[0].data.length) return;
-        var arr = ds[0].data, lo = 0, hi = arr.length - 1;
-        while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid][0] < t) lo = mid + 1; else hi = mid; }
-        var els = [];
-        c.data.datasets.forEach(function (d, i) { if (c.isDatasetVisible(i) && d.data[lo]) els.push({ datasetIndex: i, index: lo }); });
-        var px = c.scales.x.getPixelForValue(arr[lo][0]);
-        c.tooltip.setActiveElements(els, { x: px, y: c.chartArea.top });
-      } catch (e) {}
-    });
+    if (t == null) { cursor.active = false; } else { cursor.active = true; cursor.value = t; }
+    Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].update("none"); } catch (e) {} });
+  }
+  // Формат значения и времени для кастомного хинта.
+  function fmtVal(v) { if (v == null || !isFinite(v)) return "—"; var a = Math.abs(v); return v.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : 2); }
+  function fmtTime(t) {
+    var d = new Date(t), p = function (x) { return (x < 10 ? "0" : "") + x; };
+    return p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear() + " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
   }
   var syncPlugin = {
     id: "statsSync",
@@ -237,7 +247,35 @@
       try {
         if (cursor.active && isFinite(cursor.value)) {
           var x = c.scales.x.getPixelForValue(cursor.value);
-          if (x >= c.chartArea.left && x <= c.chartArea.right) { var ctx = c.ctx; ctx.save(); ctx.beginPath(); ctx.moveTo(x, c.scales.y.top); ctx.lineTo(x, c.scales.y.bottom); ctx.strokeStyle = "rgba(15,18,22,.75)"; ctx.lineWidth = 1; ctx.stroke(); ctx.restore(); }
+          if (x >= c.chartArea.left && x <= c.chartArea.right) {
+            var ctx = c.ctx;
+            ctx.save();
+            ctx.beginPath(); ctx.moveTo(x, c.scales.y.top); ctx.lineTo(x, c.scales.y.bottom); ctx.strokeStyle = "rgba(15,18,22,.75)"; ctx.lineWidth = 1; ctx.stroke();
+            // Хинт: значения видимых линий на ближайшем к общему времени индексе.
+            var ds = c.data.datasets || [];
+            if (ds.length && ds[0].data && ds[0].data.length) {
+              var arr = ds[0].data, lo = 0, hi = arr.length - 1;
+              while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid][0] < cursor.value) lo = mid + 1; else hi = mid; }
+              var rows = [];
+              ds.forEach(function (d, i) { if (c.isDatasetVisible(i) && d.data[lo]) rows.push({ col: d.borderColor, s: d.label + ": " + fmtVal(d.data[lo][1]) }); });
+              var title = fmtTime(arr[lo][0]), pad = 5, lh = 13;
+              var fontNormal = "11px system-ui, sans-serif", fontBold = "bold 11px system-ui, sans-serif";
+              ctx.textBaseline = "top";
+              ctx.font = fontNormal;
+              var w = ctx.measureText(title).width;
+              ctx.font = fontBold; // значения — жирным
+              rows.forEach(function (r) { w = Math.max(w, ctx.measureText(r.s).width); });
+              w += pad * 2;
+              var h = (rows.length + 1) * lh + pad * 2, bx = x + 10, by = c.chartArea.top + 4;
+              if (bx + w > c.chartArea.right) bx = x - 10 - w;
+              ctx.fillStyle = "#ffffff"; ctx.fillRect(bx, by, w, h);
+              ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = 1; ctx.strokeRect(bx + .5, by + .5, w - 1, h - 1);
+              ctx.font = fontNormal; ctx.fillStyle = "#222222"; ctx.fillText(title, bx + pad, by + pad);
+              ctx.font = fontBold;
+              rows.forEach(function (r, k) { ctx.fillStyle = r.col || "#222222"; ctx.fillText(r.s, bx + pad, by + pad + (k + 1) * lh); });
+            }
+            ctx.restore();
+          }
         }
         if (!syncing) {
           var sx = c.scales.x; if (sx && isFinite(sx.min) && isFinite(sx.max) && sx.max > sx.min) {
@@ -255,17 +293,23 @@
   };
   function chipsBuild(canvasId, chipsId, chart) {
     var row = document.getElementById(chipsId);
-    // sync обновляет вид чипов и СОХРАНЯЕТ состав скрытых линий в hidden[canvasId]:
-    // при любом обновлении (zoom/панорама/«Обновить»/смена периода) активными
-    // остаются только те линии, что были активны (§сохранение линий).
+    // sync — только вид чипов (без записи настройки). Настройка обновляется
+    // в saveState() — только при явном действии пользователя.
     function sync() {
       var cs = row.querySelectorAll(".lg-chip:not(.lg-all)");
-      var hid = [];
+      chart.data.datasets.forEach(function (d, i) { if (cs[i]) cs[i].classList.toggle("off", !chart.isDatasetVisible(i)); });
+    }
+    // Сохраняет текущее состояние в настройку типа: видимые линии убираются из
+    // hidden, скрытые — добавляются; отсутствующие на графике записи НЕ удаляются.
+    function saveState() {
+      var type = active ? active.type : "";
+      var cur = {};
+      ensureHidden(type).forEach(function (k) { cur[k] = 1; });
       chart.data.datasets.forEach(function (d, i) {
-        if (cs[i]) cs[i].classList.toggle("off", !chart.isDatasetVisible(i));
-        if (!chart.isDatasetVisible(i)) hid.push(d.label);
+        if (!d.keyStr) return;
+        if (chart.isDatasetVisible(i)) delete cur[d.keyStr]; else cur[d.keyStr] = 1;
       });
-      hidden[canvasId] = hid;
+      persistHidden(type, Object.keys(cur));
     }
     row.innerHTML = "";
     chart.data.datasets.forEach(function (d, i) {
@@ -276,19 +320,19 @@
         if (t) { // двойной клик — только эта линия
           clearTimeout(t); t = null;
           chart.data.datasets.forEach(function (x, j) { chart.setDatasetVisibility(j, j === i); });
-          chart.update("none"); sync();
+          chart.update("none"); sync(); saveState();
         } else { // одиночный клик — вкл/выкл (с задержкой на распознавание двойного)
           t = setTimeout(function () {
             t = null;
             chart.setDatasetVisibility(i, !chart.isDatasetVisible(i));
-            chart.update("none"); sync();
+            chart.update("none"); sync(); saveState();
           }, 250);
         }
       });
       row.appendChild(b);
     });
     var all = document.createElement("button"); all.type = "button"; all.className = "lg-chip lg-all"; all.textContent = "Все";
-    all.addEventListener("click", function () { chart.data.datasets.forEach(function (x, j) { chart.setDatasetVisibility(j, true); }); chart.update("none"); sync(); });
+    all.addEventListener("click", function () { chart.data.datasets.forEach(function (x, j) { chart.setDatasetVisibility(j, true); }); chart.update("none"); sync(); saveState(); });
     row.appendChild(all);
     sync();
   }
@@ -337,12 +381,12 @@
     var opts = {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { mode: "index", intersect: false },
-      onHover: function (e, els, chart) {
-        if (chart && chart.scales && chart.scales.x) { var v = chart.scales.x.getValueForPixel(e.x); if (isFinite(v)) { cursor.active = true; cursor.value = v; syncTooltips(v); Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].update("none"); } catch (x) {} }); return; } }
-        if (cursor.active) { cursor.active = false; syncTooltips(null); Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].update("none"); } catch (x) {} }); }
-      },
       plugins: {
         legend: { display: false },
+        // Встроенный tooltip отключён: иначе Chart.js показывает его на текущем
+        // графике мгновенно по mousemove, мимо нашего таймера. Хинт рисуем сами
+        // (см. syncPlugin.afterDraw) — единообразно и с нужной задержкой.
+        tooltip: { enabled: false },
         zoom: {
           pan: { enabled: true, mode: "x", onPanComplete: function () { scheduleReload(cid); } },
           zoom: {
@@ -380,13 +424,47 @@
     if (saved) { opts.scales.x.min = saved.min; opts.scales.x.max = saved.max; }
     var chart = new Chart(document.getElementById(cid), { type: "line", data: { datasets: datasets }, plugins: [syncPlugin], options: opts });
     CHARTS[cid] = chart;
-    var hid = hidden[cid] || [];
-    chart.data.datasets.forEach(function (d, i) { if (hid.indexOf(d.label) >= 0) chart.setDatasetVisibility(i, false); });
+    var hid = hidden[active.type] || [];
+    chart.data.datasets.forEach(function (d, i) { if (d.keyStr && hid.indexOf(d.keyStr) >= 0) chart.setDatasetVisibility(i, false); });
     chipsBuild(cid, cid + "Lg", chart);
+    // Тач-хинт: показываем только по НЕПОДВИЖНОМУ тапу > 0.1 с; при любом движении
+    // гасим и больше не показываем до следующего тапа (движение = панорама/зум).
+    var cv = document.getElementById(cid);
+    var tapTimer = null;
+    function hideHints() {
+      clearTimeout(tapTimer); tapTimer = null;
+      if (cursor.active) { cursor.active = false; syncTooltips(null); Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].update("none"); } catch (x) {} }); }
+    }
+    function showHintAt(px) {
+      var xs = chart.scales.x; if (!xs) return;
+      var v = xs.getValueForPixel(px);
+      if (!isFinite(v)) return;
+      cursor.active = true; cursor.value = v; syncTooltips(v);
+      Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].update("none"); } catch (x) {} });
+    }
+    cv.addEventListener("touchstart", function (ev) {
+      if (!ev.touches || ev.touches.length !== 1) { clearTimeout(tapTimer); tapTimer = null; return; } // пинч — не хинт
+      var rect = cv.getBoundingClientRect(), px = ev.touches[0].clientX - rect.left;
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(function () { tapTimer = null; showHintAt(px); }, 100);
+    }, { passive: true });
+    cv.addEventListener("touchmove", function () { hideHints(); }, { passive: true });
+    cv.addEventListener("touchend", function () { clearTimeout(tapTimer); tapTimer = null; }, { passive: true });
+
+    // Десктоп-хинт: показываем только если мышь неподвижна > 0.3 с; при любом
+    // движении гасим и не показываем до следующей остановки.
+    var hoverTimer = null;
+    cv.addEventListener("mousemove", function (ev) {
+      var rect = cv.getBoundingClientRect(), px = ev.clientX - rect.left;
+      clearTimeout(hoverTimer);
+      hideHints(); // во время движения хинт скрыт
+      hoverTimer = setTimeout(function () { hoverTimer = null; showHintAt(px); }, 300);
+    });
+    cv.addEventListener("mouseleave", function () { clearTimeout(hoverTimer); hoverTimer = null; hideHints(); });
+
     // Double-tap reset (touch).
-    var cv = document.getElementById(cid), lastTap = 0;
+    var lastTap = 0;
     cv.addEventListener("touchend", function () { var now = Date.now(); if (now - lastTap < 320) { try { chart.resetZoom(); } catch (e) {} zoomWin[cid] = undefined; setTimeout(syncInputsFromWindow, 0); } lastTap = now; }, { passive: true });
-    cv.addEventListener("mouseleave", function () { if (cursor.active) { cursor.active = false; syncTooltips(null); Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].update("none"); } catch (x) {} }); } });
   }
 
   function loadCharts() {
@@ -401,6 +479,7 @@
       chartsEl.innerHTML = "";
       var vals = buildVals((j && j.series) || {});
       var sets = SETS[active.type] || [];
+      ensureHidden(active.type); // восстановить настройку видимости линий типа
       sets.forEach(function (set, si) {
         var lines = set.cellGroup !== undefined ? cellGroupLines(set.cellGroup) : set.lines;
         var datasets = [], cid = "ch" + si;
@@ -408,8 +487,9 @@
           var data = ln.calc ? calcSeries(ln.calc, vals) : ((j && j.series && j.series[ln.k]) || []).map(function (p) { return [+p[0], +p[1]]; });
           if (!data.length) return;
           var name = T(ln.n) + (ln.cell ? " " + ln.cell : "");
+          var keyStr = ln.n + (ln.cell ? ":" + ln.cell : ""); // стабильный ключ для персиста
           var pr = data.length < 3 ? 3 : 0; // редкие данные — точки видимы
-          datasets.push({ label: name, data: data, borderColor: COLORS[li % COLORS.length], backgroundColor: COLORS[li % COLORS.length], pointRadius: pr, pointHoverRadius: 3, pointBorderColor: COLORS[li % COLORS.length], borderWidth: 1.5, tension: .35, cubicInterpolationMode: "monotone", fill: false });
+          datasets.push({ label: name, keyStr: keyStr, data: data, borderColor: COLORS[li % COLORS.length], backgroundColor: COLORS[li % COLORS.length], pointRadius: pr, pointHoverRadius: 3, pointBorderColor: COLORS[li % COLORS.length], borderWidth: 1.5, tension: .35, cubicInterpolationMode: "monotone", fill: false });
         });
         renderCard(set, cid, datasets);
       });
