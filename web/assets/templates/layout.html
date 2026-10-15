@@ -24,7 +24,7 @@
         <div class="dropdown-menu">
           <div id="mapMenuWrap" {{if not .Maps}}hidden{{end}}>
             <div id="mapMenuItems">
-              {{range .Maps}}<a class="dropdown-sub" href="/map?id={{.ID}}&gen={{.Gen}}">{{.MenuLabel $.T}}</a>{{end}}
+              {{range .Maps}}<a class="dropdown-sub" href="/map?id={{.ID}}&gen={{.Gen}}&serial={{.SerialLabel}}">{{.MenuLabel $.T}}</a>{{end}}
             </div>
           </div>
         </div>
@@ -34,7 +34,7 @@
         <div class="dropdown-menu">
           <div id="kesMenuWrap" {{if not .Kes}}hidden{{end}}>
             <div id="kesMenuItems">
-              {{range .Kes}}<a class="dropdown-sub" href="/kes?id={{.ID}}&gen={{.Gen}}">{{.MenuLabel $.T}}</a>{{end}}
+              {{range .Kes}}<a class="dropdown-sub" href="/kes?id={{.ID}}&gen={{.Gen}}&serial={{.SerialLabel}}">{{.MenuLabel $.T}}</a>{{end}}
             </div>
           </div>
         </div>

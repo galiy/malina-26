@@ -14,16 +14,26 @@
   <button type="button" class="map-tab" data-tab="control">{{index .T "map.tab_control"}}</button>
 </div>
 
-<div class="map-tabpane" id="tab-monitor"></div>
-<div class="map-tabpane" id="tab-info" hidden></div>
-<div class="map-tabpane" id="tab-control" hidden></div>
+<div class="map-tabpane" id="tab-monitor">
+  <div class="kes-panel" id="kesPanel"></div>
+</div>
+<div class="map-tabpane" id="tab-info" hidden>
+  <div class="mi-subtabs">
+    <button type="button" class="mi-subtab active" data-sub="main">{{index .T "mi.sub_main"}}</button>
+    <button type="button" class="mi-subtab" data-sub="system">{{index .T "mi.sub_system"}}</button>
+  </div>
+  <div id="kesInfo" class="kes-info"></div>
+</div>
+<div class="map-tabpane" id="tab-control" hidden>
+  <div id="kesControl" class="kes-control"></div>
+</div>
 
-<pre class="map-json" id="kesJson"></pre>
-
+<link rel="stylesheet" href="{{asset "legacy/css/glyphicons.css"}}">
 <script>
 window.I18N = {{json .T}};
 window.KES_ID = {{.ID}};
 window.KES_GEN = {{.Gen}};
+window.KES_SERIAL = "{{.Serial}}";
 </script>
 <script src="{{asset "kes.js"}}"></script>
 {{end}}

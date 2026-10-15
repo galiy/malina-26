@@ -19,23 +19,29 @@ func (s *Server) handleKesPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.Atoi(r.URL.Query().Get("id"))
+	sn := r.URL.Query().Get("serial")
 	k, ok := findKes(id)
-	if !ok {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-	// Если задан gen — он должен совпасть (защита от переиспользования слота).
-	if gs := r.URL.Query().Get("gen"); gs != "" {
-		if g, err := strconv.ParseUint(gs, 10, 64); err != nil || g != k.Gen {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-			return
-		}
+	// Устаревший id/gen (устройство переоткрылось): ищем по серийнику из запроса.
+	if !ok && sn != "" {
+		k, ok = findKesBySerial(sn)
 	}
 	data := s.baseData(r)
 	data["Active"] = "kes"
-	data["ID"] = k.ID
-	data["Gen"] = k.Gen
-	// Заголовок: "КЭС s/n <sn> порт <port>" (шаблон локализуется).
-	data["Title"] = fmt.Sprintf(s.tr(s.lang(r), "kes.title"), k.SerialLabel(), k.Port)
+	if ok {
+		data["ID"] = k.ID // актуальные id/gen найденного устройства
+		data["Gen"] = k.Gen
+		data["Serial"] = k.SerialLabel()
+		data["Title"] = fmt.Sprintf(s.tr(s.lang(r), "kes.title"), k.SerialLabel(), k.Port)
+	} else if sn != "" {
+		// Устройство ещё не обнаружено (после старта/деплоя) — отдаём страницу-
+		// ожидание; клиент сам повторит поиск по серийнику (до ~60 c).
+		data["ID"] = id
+		data["Gen"] = 0
+		data["Serial"] = sn
+		data["Title"] = fmt.Sprintf(s.tr(s.lang(r), "kes.title"), sn, "")
+	} else {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
 	s.render(w, http.StatusOK, "kes", data)
 }

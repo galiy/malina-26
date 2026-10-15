@@ -28,15 +28,16 @@ func (s *Server) handleAPIKesDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type device struct {
-		Type  string `json:"type"`
-		ID    int    `json:"id"`
-		Gen   uint64 `json:"gen"`
-		Label string `json:"label"`
+		Type   string `json:"type"`
+		ID     int    `json:"id"`
+		Gen    uint64 `json:"gen"`
+		Serial string `json:"serial"`
+		Label  string `json:"label"`
 	}
 	out := make([]device, 0, 8)
 	tr := s.trFor(r)
 	for _, k := range loadKesList().Kes {
-		out = append(out, device{Type: "kes", ID: k.ID, Gen: k.Gen, Label: k.MenuLabel(tr)})
+		out = append(out, device{Type: "kes", ID: k.ID, Gen: k.Gen, Serial: k.SerialLabel(), Label: k.MenuLabel(tr)})
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

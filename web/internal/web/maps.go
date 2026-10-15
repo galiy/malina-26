@@ -27,26 +27,30 @@ func (s *Server) handleMapPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.Atoi(r.URL.Query().Get("id"))
+	sn := r.URL.Query().Get("serial")
 	m, ok := findMap(id)
-	if !ok {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-	// Если задан gen — он должен совпасть (защита от переиспользования слота).
-	if gs := r.URL.Query().Get("gen"); gs != "" {
-		if g, err := strconv.ParseUint(gs, 10, 64); err != nil || g != m.Gen {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-			return
-		}
+	// Устаревший id/gen (устройство переоткрылось): ищем по серийнику из запроса.
+	if !ok && sn != "" {
+		m, ok = findMapBySerial(sn)
 	}
 	data := s.baseData(r)
 	data["Active"] = "map"
-	data["ID"] = m.ID
-	data["Gen"] = m.Gen
 	data["FieldNames"] = mapFieldNames
-	data["SerialLabel"] = m.SerialLabel()
-	// Заголовок: "MAP <модель> s/n <sn> порт <port>" (шаблон локализуется).
-	data["Title"] = fmt.Sprintf(s.tr(s.lang(r), "map.title"), mapModelFull(s.trFor(r), m.Model), m.SerialLabel(), m.Port)
+	if ok {
+		data["ID"] = m.ID
+		data["Gen"] = m.Gen
+		data["SerialLabel"] = m.SerialLabel()
+		data["Title"] = fmt.Sprintf(s.tr(s.lang(r), "map.title"), mapModelFull(s.trFor(r), m.Model), m.SerialLabel(), m.Port)
+	} else if sn != "" {
+		// Устройство ещё не обнаружено — страница-ожидание; клиент повторит поиск.
+		data["ID"] = id
+		data["Gen"] = 0
+		data["SerialLabel"] = sn
+		data["Title"] = fmt.Sprintf(s.tr(s.lang(r), "map.title"), "", sn, "")
+	} else {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
 	s.render(w, http.StatusOK, "map", data)
 }
 
@@ -91,15 +95,16 @@ func (s *Server) handleAPIMapDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type device struct {
-		Type  string `json:"type"`
-		ID    int    `json:"id"`
-		Gen   uint64 `json:"gen"`
-		Label string `json:"label"`
+		Type   string `json:"type"`
+		ID     int    `json:"id"`
+		Gen    uint64 `json:"gen"`
+		Serial string `json:"serial"`
+		Label  string `json:"label"`
 	}
 	out := make([]device, 0, 8)
 	tr := s.trFor(r)
 	for _, m := range loadMapList().Maps {
-		out = append(out, device{Type: "map", ID: m.ID, Gen: m.Gen, Label: m.MenuLabel(tr)})
+		out = append(out, device{Type: "map", ID: m.ID, Gen: m.Gen, Serial: m.SerialLabel(), Label: m.MenuLabel(tr)})
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

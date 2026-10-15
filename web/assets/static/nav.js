@@ -21,7 +21,8 @@
     var html = "";
     for (var i = 0; i < arr.length; i++) {
       html += '<a class="dropdown-sub" href="' + prefix + '?id=' +
-        encodeURIComponent(arr[i].id) + '&gen=' + encodeURIComponent(arr[i].gen) + '">' +
+        encodeURIComponent(arr[i].id) + '&gen=' + encodeURIComponent(arr[i].gen) +
+        '&serial=' + encodeURIComponent(arr[i].serial || "") + '">' +
         esc(arr[i].label) + "</a>";
     }
     box.innerHTML = html;

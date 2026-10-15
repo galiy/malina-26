@@ -1196,6 +1196,50 @@ tr.ctl-changed { background: #fff8e1; }
 .charts-follow-group.active { border-color: #0d5637; }
 .charts-follow { white-space: nowrap; }
 .charts-follow input[type="checkbox"] { accent-color: #0d5637; }
+
+/* --- Панель КЭС (kesp-*) --- */
+.kes-panel { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
+.kesp-top { display: flex; align-items: center; gap: 14px; background: #0a6b1f; color: #fff; padding: 8px 12px; border-radius: 3px; font-weight: 700; }
+.kesp-top .kesp-rel { width: 26px; height: 26px; border-radius: 4px; background: #8a938d; color: #0a6b1f; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+.kesp-top .kesp-rel.on { background: #ffffff; color: #12902e; box-shadow: 0 0 0 2px #6fd83a; }
+.kesp-top .kesp-mode { background: #6fd83a; color: #06210f; padding: 3px 40px; font-size: 20px; border-radius: 2px; }
+.kesp-top .kesp-time { font-size: 22px; font-variant-numeric: tabular-nums; }
+.kesp-top .kesp-pow { background: #fff; color: #111; padding: 3px 34px; font-size: 19px; border-radius: 2px; }
+.kesp-top .kesp-sel { background: #fff; color: #0a6b1f; border-radius: 2px; padding: 1px 7px; }
+.kesp-top .kesp-id { margin-left: auto; font-size: 20px; }
+.kesp-top .kesp-id b { color: #b9dcc0; font-weight: 700; }
+.kesp-body { display: grid; grid-template-columns: 1.2fr 1.1fr 0.8fr; gap: 6px; margin-top: 6px; }
+.kesp-cell, .kesp-tint, .kesp-tbat, .kesp-st { display: flex; align-items: center; gap: 8px; padding: 8px 10px; min-height: 44px; }
+.kesp-pv, .kesp-tint { background: #dbe9f0; }
+.kesp-bat, .kesp-tbat { background: #cfd8de; }
+.kesp-out, .kesp-st { background: #b9e6b9; }
+.kesp-cell .kesp-ico, .kesp-tint .kesp-ico, .kesp-tbat .kesp-ico, .kesp-st .kesp-ico { font-size: 26px; line-height: 1; vertical-align: middle; }
+.kesp-ico.c-sun { color: #e8a000; }
+.kesp-ico, .kesp-top .kesp-sun .glyphicons { transition: color 1s ease; }
+.kesp-ico.c-bat, .kesp-ico.c-plug, .kesp-ico.c-st { color: #2e7d32; }
+.kesp-ico.c-temp { color: #428bca; }
+.kesp-ico.c-rec { color: #556b2f; }
+.kesp-cell.kesp-out .kesp-set { flex-direction: column; gap: 2px; }
+.kesp-dtl { color: rgba(150,150,150,.85); margin-right: 6px; }
+.kesp-cell .kesp-ico, .kesp-tint .kesp-ico, .kesp-tbat .kesp-ico, .kesp-st .kesp-ico { font-size: 32px; }
+.kesp-leaf .glyphicons { color: #2e7d32; font-size: 26px; vertical-align: middle; }
+.kesp-top .kesp-sun { color: #ffd400; font-size: 24px; }
+.kesp-rel .glyphicons { font-size: 15px; vertical-align: middle; }
+.kesp-set { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.kesp-val { border: 2px ridge #808080; border-radius: 2px; background: #f9f9f9; color: #000; padding: 1px 14px; font-size: 19px; line-height: 1.35; font-weight: bolder; text-align: center; font-variant-numeric: tabular-nums; }
+.kesp-val:first-child { margin-left: 0; }
+.kesp-leaf { color: #2e7d32; white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 19px; font-weight: bolder; margin-left: 10px; padding-left: 4px; }
+.kesp-st.bad { background: #f7d9d9; }
+.kesp-status { font-weight: bolder; font-size: 19px; }
+.kesp-err { color: #b00; font-weight: 600; }
+.kes-info, .kes-control { margin: 6px 0; }
+.kes-info .tbl, .kes-control .tbl { border-collapse: collapse; font-size: 13px; }
+.kes-main th, .kes-sys th { text-align: left; color: #0d5637; padding: 3px 12px 3px 0; vertical-align: top; white-space: nowrap; }
+.kes-main td, .kes-sys td { padding: 3px 0; }
+.kes-mppt th, .kes-mppt td { border: 1px solid #ddd; padding: 2px 8px; }
+.kesctl-sec { margin: 8px 0; }
+.kesctl-sec h3 { margin: 0 0 6px; font-size: 15px; color: var(--accent); }
+.kesctl-relay { display: flex; gap: 16px; }
 .charts-depth { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #6b7a72; white-space: nowrap; }
 .charts-depth input[type="range"] { width: 120px; accent-color: #0d5637; }
 .charts-depth[hidden] { display: none; }
