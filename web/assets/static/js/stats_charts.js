@@ -73,6 +73,20 @@
     return out;
   }
 
+  // Поля контракта, нужные графикам: ключи линий наборов (§3.2) + поля,
+  // которые читают вычисляемые ряды (calcSeries). Сервер отдаёт только их.
+  var CALC_DEPS = { map: ["33", "29", "30", "31", "32"] }; // PNET_Sign_P + MPPT-каналы
+  function fieldsFor(type) {
+    var seen = {};
+    function add(k) { if (k) seen[k] = 1; }
+    (SETS[type] || []).forEach(function (card) {
+      if (card.cellGroup !== undefined) cellGroupLines(card.cellGroup).forEach(function (ln) { add(ln.k); });
+      else (card.lines || []).forEach(function (ln) { add(ln.k); });
+    });
+    (CALC_DEPS[type] || []).forEach(add);
+    return Object.keys(seen);
+  }
+
   // --- Индекс значений по времени из ответа series ---
   function buildVals(series) {
     var byKey = {}; // key -> Map(t->v)
@@ -268,6 +282,20 @@
     sync();
   }
 
+  // Отражает фактическое окно осей X в полях «С/по» (без перезапроса данных):
+  // вызывается по завершении зума/панорамы и при сбросе зума.
+  function syncInputsFromWindow() {
+    var c = null;
+    Object.keys(CHARTS).forEach(function (id) { if (!c && CHARTS[id]) c = CHARTS[id]; });
+    if (!c || !c.scales || !c.scales.x) return;
+    var x = c.scales.x;
+    if (!isFinite(x.min) || !isFinite(x.max)) return;
+    range.from = Math.round(x.min);
+    range.to = Math.round(x.max);
+    document.getElementById("ch-from").value = toLocalInput(range.from);
+    document.getElementById("ch-to").value = toLocalInput(range.to);
+  }
+
   function renderCard(set, cid, datasets) {
     var card = document.createElement("div");
     card.className = "stats-card";
@@ -286,12 +314,13 @@
       plugins: {
         legend: { display: false },
         zoom: {
-          pan: { enabled: true, mode: "x" },
+          pan: { enabled: true, mode: "x", onPanComplete: function () { syncInputsFromWindow(); } },
           zoom: {
             wheel: { enabled: true, speed: .1, modifierKey: "ctrl" },
             drag: { enabled: true, modifierKey: "ctrl", backgroundColor: "rgba(51,122,183,.15)", borderColor: "rgba(51,122,183,.6)", borderWidth: 1 },
             pinch: { enabled: true },
-            mode: "x"
+            mode: "x",
+            onZoomComplete: function () { syncInputsFromWindow(); }
           },
           limits: { x: { minRange: 5 * 60e3 } }
         }
@@ -326,7 +355,7 @@
     chipsBuild(cid, cid + "Lg", chart);
     // Double-tap reset (touch).
     var cv = document.getElementById(cid), lastTap = 0;
-    cv.addEventListener("touchend", function () { var now = Date.now(); if (now - lastTap < 320) { try { chart.resetZoom(); } catch (e) {} zoomWin[cid] = undefined; } lastTap = now; }, { passive: true });
+    cv.addEventListener("touchend", function () { var now = Date.now(); if (now - lastTap < 320) { try { chart.resetZoom(); } catch (e) {} zoomWin[cid] = undefined; setTimeout(syncInputsFromWindow, 0); } lastTap = now; }, { passive: true });
     cv.addEventListener("mouseleave", function () { if (cursor.active) { cursor.active = false; syncTooltips(null); Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].update("none"); } catch (x) {} }); } });
   }
 
@@ -335,7 +364,8 @@
     if (!range.from) { range = preset("24h"); }
     document.getElementById("ch-from").value = toLocalInput(range.from);
     document.getElementById("ch-to").value = toLocalInput(range.to);
-    var url = "/api/stats/series?type=" + encodeURIComponent(active.type) + "&id=" + encodeURIComponent(active.id) + "&from=" + range.from + "&to=" + range.to;
+    var url = "/api/stats/series?type=" + encodeURIComponent(active.type) + "&id=" + encodeURIComponent(active.id) + "&from=" + range.from + "&to=" + range.to +
+      "&fields=" + encodeURIComponent(fieldsFor(active.type).join(","));
     api(url).then(function (j) {
       Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].destroy(); } catch (e) {} delete CHARTS[id]; });
       chartsEl.innerHTML = "";

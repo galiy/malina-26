@@ -3,8 +3,11 @@
 package web
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -335,23 +338,30 @@ func splitColID(s string) (int, int) {
 	return a, 0
 }
 
+// seriesPoint — точка ряда (время, значение). Типизированная (без interface{}),
+// чтобы не боксить значения при построении рядов (§производительность графиков).
+type seriesPoint struct {
+	T int64
+	V float64
+}
+
 // statsSeries — ряды запрошенных полей (ключи колонок) за период. Без лимита
 // точек и времени: avg читаем всегда, raw — только если окно доходит до
 // горизонта 48 ч (rawRetentionMs). На сшиве приоритет у raw: avg берём лишь
 // левее первой raw-точки, правее — raw. Сервер отдаёт только значения полей
 // контракта (в человеческих единицах); вычисляемые величины (мощности, ток
 // MPPT-сумма и т.п.) — на клиенте (§3.2).
-func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) map[string][][2]any {
+func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) map[string][]seriesPoint {
 	all := len(fields) == 0 // без fields — вернуть все поля ряда
 	want := map[string]bool{}
-	out := map[string][][2]any{}
+	out := map[string][]seriesPoint{}
 	for _, k := range fields {
 		want[k] = true
-		out[k] = [][2]any{}
+		out[k] = []seriesPoint{}
 	}
 	addPt := func(key string, t int64, v float64) {
 		if all || want[key] {
-			out[key] = append(out[key], [2]any{t, v})
+			out[key] = append(out[key], seriesPoint{t, v})
 		}
 	}
 
@@ -461,8 +471,53 @@ func (s *Server) handleAPIStatsSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	series := s.statsSeries(typ, id, from, to, fields)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(map[string]any{"series": series})
+	writeSeriesJSON(w, series)
 }
+
+// writeSeriesJSON стримит `{"series":{"<key>":[[t,v],…],…}}` прямо в ответ, без
+// промежуточного map[string]any и без полного буфера ответа (§производительность:
+// типизированные числа пишутся strconv, буферизация лишь chunk-ами).
+func writeSeriesJSON(w io.Writer, series map[string][]seriesPoint) {
+	bw := bufio.NewWriterSize(w, 64*1024)
+	_, _ = bw.WriteString(`{"series":{`)
+	first := true
+	var num []byte
+	for k, pts := range series {
+		if first {
+			first = false
+		} else {
+			_ = bw.WriteByte(',')
+		}
+		kb, _ := json.Marshal(k)
+		_, _ = bw.Write(kb)
+		_, _ = bw.WriteString(`:[`)
+		firstPt := true
+		for i := range pts {
+			p := pts[i]
+			if !isFinite(p.V) {
+				continue // несериализуемые значения (NaN/Inf) пропускаем
+			}
+			if firstPt {
+				firstPt = false
+			} else {
+				_ = bw.WriteByte(',')
+			}
+			_ = bw.WriteByte('[')
+			num = strconv.AppendInt(num[:0], p.T, 10)
+			_, _ = bw.Write(num)
+			_ = bw.WriteByte(',')
+			num = strconv.AppendFloat(num[:0], p.V, 'f', -1, 64)
+			_, _ = bw.Write(num)
+			_ = bw.WriteByte(']')
+		}
+		_ = bw.WriteByte(']')
+	}
+	_, _ = bw.WriteString("}}")
+	_ = bw.Flush()
+}
+
+// isFinite — значение конечно (не NaN/±Inf).
+func isFinite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 
 // --- handlers ---
 
