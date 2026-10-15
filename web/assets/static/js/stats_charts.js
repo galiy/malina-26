@@ -39,7 +39,12 @@
       { t: "stats.c.t", lines: [
         { n: "stats.f.map.Temp_Grad0", k: "14" },
         { n: "stats.f.map.Temp_Grad1", k: "15" },
-        { n: "stats.f.map.Temp_Grad2", k: "16" }] }
+        { n: "stats.f.map.Temp_Grad2", k: "16" }] },
+      { t: "stats.c.i_kes", lines: [
+        { n: "stats.f.map.I_Akb_MPPT0", k: "29" },
+        { n: "stats.f.map.I_Akb_MPPT1", k: "30" },
+        { n: "stats.f.map.I_Akb_MPPT2", k: "31" },
+        { n: "stats.f.map.I_Akb_MPPT3", k: "32" }] }
     ],
     kes: [
       { t: "stats.c.v", lines: [
@@ -152,6 +157,67 @@
   // Значение для <input type="datetime-local" step="1"> (локальная зона, секунды).
   function toLocalInput(ms) { var d = new Date(ms), p = function (x) { return (x < 10 ? "0" : "") + x; }; return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()); }
 
+  // --- Режим «Следовать за временем» ---
+  // Глубину окна задаёт движок (1..10 мин) — персистентно. Первично/при смене глубины
+  // тянем весь диапазон (follow=1&depth), далее раз в секунду — только новые точки
+  // (follow=1&after=<время правой крайней точки>); клиент дописывает справа, удаляет
+  // устаревшее слева и выравнивает окно. Не персистентен (кроме глубины); выключается
+  // при входе, смене вкладки и ручных действиях.
+  var followTimer = null, followActive = false, followSeries = null, followFrom = 0, followTo = 0, followDepth = 5;
+  function depthKey() { return "statsFollowDepth"; }
+  function loadDepth() { var v = parseInt(localStorage.getItem(depthKey()) || "5", 10); return (v >= 1 && v <= 10) ? v : 5; }
+  function saveDepth(v) { try { localStorage.setItem(depthKey(), String(v)); } catch (e) {} }
+  function depthUI() {
+    var r = document.getElementById("ch-depth"); if (r) r.value = String(followDepth);
+    var v = document.getElementById("ch-depth-val"); if (v) v.textContent = String(followDepth);
+    var w = document.getElementById("ch-depth-wrap"); if (w) w.hidden = !followActive;
+    var g = document.getElementById("ch-follow-group"); if (g) g.classList.toggle("active", followActive);
+  }
+  // В follow ручные контролы периода/дат/показа/обновить неактивны.
+  function followControls(dis) {
+    Array.prototype.forEach.call(document.querySelectorAll(".stats-controls [data-period], #ch-from, #ch-to, #ch-show, #ch-reload"),
+      function (el) { el.disabled = dis; });
+  }
+  function inputsShow() {
+    document.getElementById("ch-from").value = toLocalInput(range.from);
+    document.getElementById("ch-to").value = toLocalInput(range.to);
+  }
+  function stopFollow() {
+    if (followTimer) { clearInterval(followTimer); followTimer = null; }
+    followActive = false; followControls(false); depthUI();
+  }
+  function setFollowOff() { var cb = document.getElementById("ch-follow"); if (cb) cb.checked = false; stopFollow(); }
+  function followURL(extra) {
+    return "/api/stats/series?type=" + encodeURIComponent(active.type) + "&id=" + encodeURIComponent(active.id) +
+      "&fields=" + encodeURIComponent(fieldsFor(active.type).join(",")) + "&follow=1" + extra;
+  }
+  function followFull() {
+    return api(followURL("&depth=" + followDepth)).then(function (j) {
+      followSeries = (j && j.series) || {}; followFrom = j.from; followTo = j.to;
+      range = { from: followFrom, to: followTo };
+      renderFromSeries(followSeries); inputsShow();
+    });
+  }
+  function followTick() {
+    var lastT = 0;
+    Object.keys(followSeries || {}).forEach(function (k) { var a = followSeries[k]; if (a && a.length && a[a.length - 1][0] > lastT) lastT = a[a.length - 1][0]; });
+    return api(followURL("&after=" + lastT)).then(function (j) {
+      var ns = (j && j.series) || {};
+      Object.keys(ns).forEach(function (k) { var dst = followSeries[k] || (followSeries[k] = []); ns[k].forEach(function (p) { dst.push(p); }); });
+      followTo = j.to; followFrom = followTo - followDepth * 60000;
+      Object.keys(followSeries).forEach(function (k) { var a = followSeries[k]; while (a.length && a[0][0] < followFrom) a.shift(); });
+      range = { from: followFrom, to: followTo };
+      renderFromSeries(followSeries); inputsShow();
+    });
+  }
+  function startFollow() {
+    stopFollow();
+    followActive = true; followDepth = loadDepth();
+    depthUI(); followControls(true);
+    followFull().catch(function () {});
+    followTimer = setInterval(function () { followTick().catch(function () {}); }, 1000);
+  }
+
   // --- Устройства/закладки ---
   var devs = [], active = null;
   function devLabel(d) { return (d.type === "map" ? "МАП" : d.type === "kes" ? "КЭС" : "BMS") + " " + d.id; }
@@ -161,7 +227,7 @@
       var b = document.createElement("button");
       b.className = "stats-tab" + (active === d ? " active" : "");
       b.textContent = devLabel(d);
-      b.addEventListener("click", function () { active = d; renderTabs(); loadCharts(); });
+      b.addEventListener("click", function () { setFollowOff(); active = d; renderTabs(); loadCharts(); });
       tabsEl.appendChild(b);
     });
   }
@@ -175,6 +241,7 @@
 
   // --- Рендер карточек ---
   var CHARTS = {};
+  var chartsType = null; // тип устройства, под который построены карточки (in-place только для него)
   var hidden = {};   // type -> [keyStr] (скрытые линии; кэш из localStorage)
   var zoomWin = {};  // id -> {min,max}
   // Персист видимости линий: в разрезе ТИПА устройства, по стабильным ключам
@@ -331,7 +398,7 @@
       });
       row.appendChild(b);
     });
-    var all = document.createElement("button"); all.type = "button"; all.className = "lg-chip lg-all"; all.textContent = "Все";
+    var all = document.createElement("button"); all.type = "button"; all.className = "lg-chip lg-all"; all.textContent = T("stats.all");
     all.addEventListener("click", function () { chart.data.datasets.forEach(function (x, j) { chart.setDatasetVisibility(j, true); }); chart.update("none"); sync(); saveState(); });
     row.appendChild(all);
     sync();
@@ -341,6 +408,7 @@
   // bucket на бэкенде пересчитывается от нового окна (детализация растёт при зуме).
   var reloadTimers = {};
   function scheduleReload(cid) {
+    setFollowOff(); // zoom/панорама сбрасывают режим «следовать за временем»
     clearTimeout(reloadTimers[cid]);
     reloadTimers[cid] = setTimeout(function () { reloadTimers[cid] = null; reloadFromWindow(); }, 300);
   }
@@ -467,46 +535,117 @@
     cv.addEventListener("touchend", function () { var now = Date.now(); if (now - lastTap < 320) { try { chart.resetZoom(); } catch (e) {} zoomWin[cid] = undefined; setTimeout(syncInputsFromWindow, 0); } lastTap = now; }, { passive: true });
   }
 
+  // Сборка datasets набора из ответа (ключ линии — стабильный, §3.5).
+  function buildDatasets(set, vals, series) {
+    var lines = set.cellGroup !== undefined ? cellGroupLines(set.cellGroup) : set.lines;
+    var datasets = [];
+    lines.forEach(function (ln, li) {
+      var data = ln.calc ? calcSeries(ln.calc, vals) : ((series && series[ln.k]) || []).map(function (p) { return [+p[0], +p[1]]; });
+      if (!data.length) return;
+      var name = T(ln.n) + (ln.cell ? " " + ln.cell : "");
+      var keyStr = ln.n + (ln.cell ? ":" + ln.cell : ""); // стабильный ключ для персиста
+      var pr = data.length < 3 ? 3 : 0; // редкие данные — точки видимы
+      datasets.push({ label: name, keyStr: keyStr, data: data, borderColor: COLORS[li % COLORS.length], backgroundColor: COLORS[li % COLORS.length], pointRadius: pr, pointHoverRadius: 3, pointBorderColor: COLORS[li % COLORS.length], borderWidth: 1.5, tension: .35, cubicInterpolationMode: "monotone", fill: false });
+    });
+    return datasets;
+  }
+
+  // Мягкое обновление графика НА МЕСТЕ (без destroy/пересоздания): данные и ось X
+  // обновляются, объекты линий сохраняются → плавный сдвиг окна (follow/zoom-reload),
+  // без «дёргания» и с сохранением видимости линий.
+  function applyInPlace(chart, datasets) {
+    var existing = {};
+    (chart.data.datasets || []).forEach(function (d) { if (d.keyStr) existing[d.keyStr] = d; });
+    var hid = hidden[active.type] || [];
+    chart.data.datasets = datasets.map(function (nd) {
+      var ex = existing[nd.keyStr];
+      if (!ex) return nd; // новая линия
+      ex.label = nd.label; ex.data = nd.data;
+      ex.borderColor = nd.borderColor; ex.backgroundColor = nd.backgroundColor;
+      ex.pointRadius = nd.pointRadius; ex.pointBorderColor = nd.pointBorderColor;
+      return ex;
+    });
+    chart.options.scales.x.min = range.from;
+    chart.options.scales.x.max = range.to;
+    chart.data.datasets.forEach(function (d, i) { chart.setDatasetVisibility(i, hid.indexOf(d.keyStr) < 0); });
+    chart.update("none");
+  }
+
+  // Общий рендер наборов из объекта series: мягкое обновление на месте, если
+  // карточки уже построены под тот же тип/состав, иначе — полный рендер.
+  function renderFromSeries(ser) {
+    var vals = buildVals(ser || {});
+    var sets = SETS[active.type] || [];
+    ensureHidden(active.type);
+    var canInPlace = chartsType === active.type && sets.length > 0 &&
+      Object.keys(CHARTS).length === sets.length &&
+      sets.every(function (_, si) { return CHARTS["ch" + si]; });
+    if (canInPlace) {
+      sets.forEach(function (set, si) { applyInPlace(CHARTS["ch" + si], buildDatasets(set, vals, ser)); });
+      applyOrder();
+      return;
+    }
+    Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].destroy(); } catch (e) {} delete CHARTS[id]; });
+    chartsEl.innerHTML = "";
+    sets.forEach(function (set, si) { renderCard(set, "ch" + si, buildDatasets(set, vals, ser)); });
+    chartsType = active.type;
+    applyOrder();
+  }
+
   function loadCharts() {
     if (!active) return;
     if (!range.from) { range = preset("24h"); }
-    document.getElementById("ch-from").value = toLocalInput(range.from);
-    document.getElementById("ch-to").value = toLocalInput(range.to);
-    var url = "/api/stats/series?type=" + encodeURIComponent(active.type) + "&id=" + encodeURIComponent(active.id) + "&from=" + range.from + "&to=" + range.to +
-      "&fields=" + encodeURIComponent(fieldsFor(active.type).join(","));
+    var url = "/api/stats/series?type=" + encodeURIComponent(active.type) + "&id=" + encodeURIComponent(active.id) +
+      "&fields=" + encodeURIComponent(fieldsFor(active.type).join(",")) +
+      "&from=" + range.from + "&to=" + range.to;
     api(url).then(function (j) {
-      Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].destroy(); } catch (e) {} delete CHARTS[id]; });
-      chartsEl.innerHTML = "";
-      var vals = buildVals((j && j.series) || {});
-      var sets = SETS[active.type] || [];
-      ensureHidden(active.type); // восстановить настройку видимости линий типа
-      sets.forEach(function (set, si) {
-        var lines = set.cellGroup !== undefined ? cellGroupLines(set.cellGroup) : set.lines;
-        var datasets = [], cid = "ch" + si;
-        lines.forEach(function (ln, li) {
-          var data = ln.calc ? calcSeries(ln.calc, vals) : ((j && j.series && j.series[ln.k]) || []).map(function (p) { return [+p[0], +p[1]]; });
-          if (!data.length) return;
-          var name = T(ln.n) + (ln.cell ? " " + ln.cell : "");
-          var keyStr = ln.n + (ln.cell ? ":" + ln.cell : ""); // стабильный ключ для персиста
-          var pr = data.length < 3 ? 3 : 0; // редкие данные — точки видимы
-          datasets.push({ label: name, keyStr: keyStr, data: data, borderColor: COLORS[li % COLORS.length], backgroundColor: COLORS[li % COLORS.length], pointRadius: pr, pointHoverRadius: 3, pointBorderColor: COLORS[li % COLORS.length], borderWidth: 1.5, tension: .35, cubicInterpolationMode: "monotone", fill: false });
-        });
-        renderCard(set, cid, datasets);
+      var ser = (j && j.series) || {};
+      // Выравнивание окна по данным: правый край = конец данных (по всем полям),
+      // левый — не левее начала данных (без пустот с обеих сторон).
+      var gmax = 0, gmin = 0;
+      Object.keys(ser).forEach(function (k) {
+        var a = ser[k]; if (!a || !a.length) return;
+        if (gmax === 0 || a[a.length - 1][0] > gmax) gmax = a[a.length - 1][0];
+        if (gmin === 0 || a[0][0] < gmin) gmin = a[0][0];
       });
-      applyOrder();
+      if (gmax > 0) {
+        var w = range.to - range.from;
+        if (w > 0) {
+          range.to = gmax;
+          range.from = gmin > 0 ? Math.max(gmin, gmax - w) : gmax - w;
+        }
+      }
+      inputsShow();
+      renderFromSeries(ser);
     }).catch(function () {});
   }
 
   // --- События UI ---
   Array.prototype.forEach.call(document.querySelectorAll(".stats-controls [data-period]"), function (b) {
-    b.addEventListener("click", function () { range = preset(b.getAttribute("data-period")); zoomWin = {}; loadCharts(); });
+    b.addEventListener("click", function () { setFollowOff(); range = preset(b.getAttribute("data-period")); zoomWin = {}; loadCharts(); });
   });
   document.getElementById("ch-show").addEventListener("click", function () {
     var f = document.getElementById("ch-from").value, t = document.getElementById("ch-to").value;
     var fn = f ? new Date(f).getTime() : NaN, tn = t ? new Date(t).getTime() : NaN;
-    if (!isFinite(fn) || !isFinite(tn) || fn > tn) return; range = { from: fn, to: tn }; zoomWin = {}; loadCharts();
+    if (!isFinite(fn) || !isFinite(tn) || fn > tn) return; setFollowOff(); range = { from: fn, to: tn }; zoomWin = {}; loadCharts();
   });
-  document.getElementById("ch-reload").addEventListener("click", function () { loadCharts(); });
+  document.getElementById("ch-reload").addEventListener("click", function () { setFollowOff(); loadCharts(); });
+
+  // «Следовать за временем»: переключатель справа вверху.
+  var followCb = document.getElementById("ch-follow");
+  if (followCb) followCb.addEventListener("change", function () { if (followCb.checked) startFollow(); else stopFollow(); });
+  // Движок глубины окна follow (1..10 мин): значение персистентно; при смене —
+  // полный перезапрос диапазона.
+  var depthRange = document.getElementById("ch-depth");
+  if (depthRange) {
+    followDepth = loadDepth();
+    depthRange.value = String(followDepth);
+    depthUI();
+    depthRange.addEventListener("input", function () {
+      followDepth = +depthRange.value; saveDepth(followDepth); depthUI();
+      if (followActive) followFull().catch(function () {});
+    });
+  }
 
   loadDevs();
 })();

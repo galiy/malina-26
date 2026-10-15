@@ -1291,6 +1291,7 @@
   "stats.refresh": "刷新",
   "stats.c.v": "电压",
   "stats.c.i": "电流",
+  "stats.c.i_kes": "KES 电流",
   "stats.c.p": "功率",
   "stats.c.f": "频率",
   "stats.c.t": "温度",
@@ -1309,5 +1310,8 @@
   "stats.n.pack": "电池组",
   "stats.n.cell": "电芯",
   "stats.f.map.PNET_Sign_P": "电网功率符号（0 = 负）",
-  "stats.charts_hint": "Ctrl+滚轮或 Ctrl+框选 — 缩放 · 拖拽 — 平移\n单击图例 — 切换线条，双击 — 仅此线 · 卡片箭头 — 排序"
+  "stats.charts_hint": "Ctrl+滚轮或 Ctrl+框选 — 缩放 · 拖拽 — 平移\n单击图例 — 切换线条，双击 — 仅此线 · 卡片箭头 — 排序",
+  "stats.follow": "在线",
+  "stats.all": "全部",
+  "stats.minutes": "分钟"
 }

@@ -80,6 +80,26 @@ func scanRows(buf []byte, off int64, timeBase int64) (ents []idxEntry, first, la
 	return ents, first, last, int64(pos), n
 }
 
+// rowRowsEnd — смещение конца row-записей: начало index_footer, если он есть
+// (trailer: count u32 | magic MTSX | crc, см. §5/§14.4). Иначе — конец файла.
+// Нужно, чтобы сканер/читатель НЕ разбирали футер как row-записи (иначе
+// «последнее время» серии улетает в будущее — см. фикс 2026-10-15).
+func rowRowsEnd(data []byte) int {
+	n := len(data)
+	if n < idxFootMin {
+		return n
+	}
+	last := data[n-idxFootMin:]
+	if binary.LittleEndian.Uint32(last[4:8]) != idxMagic {
+		return n
+	}
+	footLen := int(binary.LittleEndian.Uint32(last[0:4]))*idxEntSize + idxFootMin
+	if footLen > n {
+		return n
+	}
+	return n - footLen
+}
+
 // loadRowSegment загружает raw-сегмент: сканирует строки и восстанавливает
 // разреженный индекс; при наличии хвоста (index_footer) — sealed, иначе active
 // (недописанный «хвост» обрезается).
@@ -88,7 +108,8 @@ func (s *Store) loadRowSegment(key seriesKey, seq uint32, path string, size int6
 	if err != nil {
 		return err
 	}
-	ents, first, last, good, n := scanRows(data, ref.hdrSize, ref.timeBase)
+	end := rowRowsEnd(data)
+	ents, first, last, good, n := scanRows(data[:end], ref.hdrSize, ref.timeBase)
 	ref.entries = ents
 	ref.minTime = first
 	ref.maxTime = last
@@ -160,6 +181,7 @@ func (s *Store) readSegmentRow(ref *segRef, id string, q Query) []Row {
 	if _, _, err := decodeSegHeader(data); err != nil {
 		return nil
 	}
+	end := rowRowsEnd(data) // строки только до index_footer
 	limit := q.Limit
 	out := make([]Row, 0, 16)
 	pos := int(ref.hdrSize)
@@ -183,9 +205,9 @@ func (s *Store) readSegmentRow(ref *segRef, id string, q Query) []Row {
 			}
 		}
 	}
-	for pos < len(data) {
+	for pos < end {
 		dt, ver, payload, rn, e := decodeRowRow(data[pos:])
-		if e != nil || pos+rn > len(data) {
+		if e != nil || pos+rn > end {
 			break
 		}
 		base += dt

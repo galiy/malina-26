@@ -447,3 +447,43 @@ func times(rows []Row) []int64 {
 	}
 	return out
 }
+
+func TestRowFooterNotParsedAsRows(t *testing.T) {
+	root := t.TempDir()
+	opts := Options{Row: true, SegMax: 300} // малый сегмент → запечатывание с index_footer
+	st, err := NewStore(root, opts, tscontract.NewDefaultRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var last int64
+	for i := 0; i < 200; i++ {
+		tm := int64(1000 + i*1000)
+		st.Write([]Row{rowT(t, "map", "1", tm, sample(1)...)})
+		last = tm
+	}
+	st.Wait()
+	st.Close()
+
+	// Перезагрузка: index_footer не должен трактоваться как строки (иначе
+	// «последнее время» улетает в будущее и запись блокируется).
+	st2, err := NewStore(root, opts, tscontract.NewDefaultRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st2.Close()
+	got, _ := st2.Query(Query{Type: "map", IDs: []string{"1"}, From: 0, To: 1 << 40})
+	if len(got) == 0 {
+		t.Fatal("нет строк после перезагрузки")
+	}
+	for _, r := range got {
+		if r.Time > last {
+			t.Fatalf("index_footer разобран как строка: время %d > последнего %d", r.Time, last)
+		}
+	}
+	// И запись после перезагрузки проходит (не блокируется future-lastTime).
+	st2.Write([]Row{rowT(t, "map", "1", last+1000, sample(2)...)})
+	st2.Wait()
+	if got2, _ := st2.Query(Query{Type: "map", IDs: []string{"1"}, From: last, To: last + 1000}); len(got2) == 0 {
+		t.Fatal("запись после перезагрузки отклонена (future lastTime?)")
+	}
+}

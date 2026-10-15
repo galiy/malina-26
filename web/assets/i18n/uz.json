@@ -1291,6 +1291,7 @@
   "stats.refresh": "Yangilash",
   "stats.c.v": "Kuchlanishlar",
   "stats.c.i": "Toklar",
+  "stats.c.i_kes": "KES toklari",
   "stats.c.p": "Quvvatlar",
   "stats.c.f": "Chastotalar",
   "stats.c.t": "Haroratlar",
@@ -1309,5 +1310,8 @@
   "stats.n.pack": "Paket",
   "stats.n.cell": "Yacheyka",
   "stats.f.map.PNET_Sign_P": "Tarmoq quvvati ishorasi (0 — manfiy)",
-  "stats.charts_hint": "Ctrl+g‘ildirak yoki Ctrl+tanlash — masshtab · sudrash — panorama\nChipga bosish — chiziqni yoqish/o‘chirish, ikki marta — faqat u · kartadagi strelkalar — tartib"
+  "stats.charts_hint": "Ctrl+g‘ildirak yoki Ctrl+tanlash — masshtab · sudrash — panorama\nChipga bosish — chiziqni yoqish/o‘chirish, ikki marta — faqat u · kartadagi strelkalar — tartib",
+  "stats.follow": "ONLAYN",
+  "stats.all": "Barchasi",
+  "stats.minutes": "daqiqa"
 }

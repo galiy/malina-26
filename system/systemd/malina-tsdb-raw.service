@@ -6,7 +6,8 @@ After=local-fs.target
 
 [Service]
 Type=simple
-ExecStart=/malina/usr/local/sbin/malina-tsdb -root /run/malina-ts-raw -sock /run/malina-ts-raw/tsdb.sock -row -retention 48h -limit 200 -segmax 1048576
+# Хранение raw — только по объёму (-limit 200): возрастного лимита нет (docs/telemetry-store.md §14.1).
+ExecStart=/malina/usr/local/sbin/malina-tsdb -root /run/malina-ts-raw -sock /run/malina-ts-raw/tsdb.sock -row -limit 200 -segmax 1048576
 Restart=on-failure
 RestartSec=2
 

@@ -20,10 +20,8 @@ import (
 	"github.com/galiy/malina-26/web/internal/accumulator"
 )
 
-// rawRetentionMs — глубина raw-инстанса (48 ч: `-retention 48h` у
-// malina-tsdb-raw). Ряды графиков: avg читаем всегда; raw — только если окно
-// доходит до этого горизонта (иначе данных raw там уже нет).
-const rawRetentionMs int64 = int64(48 * time.Hour / time.Millisecond)
+// followWindowMs — ширина окна режима «Следовать за временем» ([now−W, now]).
+const followWindowMs int64 = int64(5 * time.Minute / time.Millisecond)
 
 // statsDev — устройство для закладок.
 type statsDev struct {
@@ -348,12 +346,12 @@ type seriesPoint struct {
 }
 
 // statsSeries — ряды запрошенных полей (ключи колонок) за период. Без лимита
-// точек и времени: avg читаем всегда, raw — только если окно доходит до
-// горизонта 48 ч (rawRetentionMs). На сшиве приоритет у raw: avg берём лишь
-// левее первой raw-точки, правее — raw. Сервер отдаёт только значения полей
-// контракта (в человеческих единицах); вычисляемые величины (мощности, ток
-// MPPT-сумма и т.п.) — на клиенте (§3.2).
-func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) map[string][]seriesPoint {
+// точек и времени: avg читаем всегда, raw — за всю доступную глубину (порога нет,
+// глубина raw определяется объёмом, §14.1 telemetry-store.md). На сшиве приоритет
+// у raw: avg берём лишь левее первой raw-точки, правее — raw. Сервер отдаёт только
+// значения полей контракта (в человеческих единицах); вычисляемые величины
+// (мощности, ток MPPT-сумма и т.п.) — на клиенте (§3.2).
+func (s *Server) statsSeries(typ, id string, from, to int64, fields []string, source string) map[string][]seriesPoint {
 	all := len(fields) == 0 // без fields — вернуть все поля ряда
 	want := map[string]bool{}
 	out := map[string][]seriesPoint{}
@@ -373,18 +371,13 @@ func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) ma
 	bucketAvg := bucketFor(window, int64(s.accPeriodMin())*60_000*3/2)
 	bucketRaw := bucketFor(window, 1750)
 
-	// avg — всегда.
-	rowsAvg := s.querySeries(s.opts.TsdbSock, typ, id, from, to, bucketAvg)
-
-	// raw — только если окно доходит до последних 48 ч.
-	rawFrom := time.Now().UnixMilli() - rawRetentionMs
-	var rowsRaw []tsdbclient.Row
-	if to >= rawFrom {
-		rf := from
-		if rf < rawFrom {
-			rf = rawFrom
-		}
-		rowsRaw = s.querySeries(s.opts.TsdbRawSock, typ, id, rf, to, bucketRaw)
+	// source: "" — сшив avg+raw; "raw" — только raw; "avg" — только avg.
+	var rowsAvg, rowsRaw []tsdbclient.Row
+	if source != "raw" { // avg — всегда, кроме режима «только raw» (follow)
+		rowsAvg = s.querySeries(s.opts.TsdbSock, typ, id, from, to, bucketAvg)
+	}
+	if source != "avg" { // raw — за всю доступную глубину (порога нет, §14.1)
+		rowsRaw = s.querySeries(s.opts.TsdbRawSock, typ, id, from, to, bucketRaw)
 	}
 
 	// Граница сшива — время первой raw-точки. Левее берём avg, от неё и правее — raw.
@@ -498,29 +491,61 @@ func (s *Server) handleAPIStatsSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "type/id required", http.StatusBadRequest)
 		return
 	}
-	from, errF := strconv.ParseInt(q.Get("from"), 10, 64)
-	to, errT := strconv.ParseInt(q.Get("to"), 10, 64)
-	if errF != nil || errT != nil || from > to {
-		http.Error(w, "bad from/to", http.StatusBadRequest)
-		return
-	}
 	var fields []string
 	if f := q.Get("fields"); f != "" {
 		fields = strings.Split(f, ",")
 	}
-	series := s.statsSeries(typ, id, from, to, fields)
+	var from, to int64
+	source := q.Get("source")
+	if q.Get("follow") == "1" {
+		// Режим «Следовать за временем». Время считает backend (совпадает с tsdb).
+		// Глубину окна задаёт клиент (depth, мин), либо клиент просит только новые
+		// точки после after (догрузка). Источник — только raw.
+		now := time.Now().UnixMilli()
+		to, source = now, "raw"
+		if a := q.Get("after"); a != "" {
+			if af, err := strconv.ParseInt(a, 10, 64); err == nil && af > 0 {
+				from = af + 1 // только точки после последней известной клиенту
+			} else {
+				from = now - followWindowMs
+			}
+		} else {
+			depth := 5 // минуты по умолчанию
+			if d := q.Get("depth"); d != "" {
+				if dv, err := strconv.Atoi(d); err == nil && dv >= 1 && dv <= 10 {
+					depth = dv
+				}
+			}
+			from = now - int64(depth)*60000
+		}
+	} else {
+		var errF, errT error
+		from, errF = strconv.ParseInt(q.Get("from"), 10, 64)
+		to, errT = strconv.ParseInt(q.Get("to"), 10, 64)
+		if errF != nil || errT != nil || from > to {
+			http.Error(w, "bad from/to", http.StatusBadRequest)
+			return
+		}
+	}
+	series := s.statsSeries(typ, id, from, to, fields, source)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	writeSeriesJSON(w, series)
+	writeSeriesJSON(w, series, from, to)
 }
 
-// writeSeriesJSON стримит `{"series":{"<key>":[[t,v],…],…}}` прямо в ответ, без
+// writeSeriesJSON стримит `{"from":F,"to":T,"series":{"<key>":[[t,v],…],…}}` прямо в ответ, без
 // промежуточного map[string]any и без полного буфера ответа (§производительность:
 // типизированные числа пишутся strconv, буферизация лишь chunk-ами).
-func writeSeriesJSON(w io.Writer, series map[string][]seriesPoint) {
+func writeSeriesJSON(w io.Writer, series map[string][]seriesPoint, from, to int64) {
 	bw := bufio.NewWriterSize(w, 64*1024)
-	_, _ = bw.WriteString(`{"series":{`)
-	first := true
+	_, _ = bw.WriteString(`{"from":`)
 	var num []byte
+	num = strconv.AppendInt(num[:0], from, 10)
+	_, _ = bw.Write(num)
+	_, _ = bw.WriteString(`,"to":`)
+	num = strconv.AppendInt(num[:0], to, 10)
+	_, _ = bw.Write(num)
+	_, _ = bw.WriteString(`,"series":{`)
+	first := true
 	for k, pts := range series {
 		if first {
 			first = false

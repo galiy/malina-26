@@ -1291,6 +1291,7 @@
   "stats.refresh": "Refresh",
   "stats.c.v": "Voltages",
   "stats.c.i": "Currents",
+  "stats.c.i_kes": "KES currents",
   "stats.c.p": "Powers",
   "stats.c.f": "Frequencies",
   "stats.c.t": "Temperatures",
@@ -1309,5 +1310,8 @@
   "stats.n.pack": "Pack",
   "stats.n.cell": "Cell",
   "stats.f.map.PNET_Sign_P": "Mains power sign (0 = negative)",
-  "stats.charts_hint": "Ctrl+wheel or Ctrl+drag — zoom · drag — pan\nClick a chip — toggle a line, double-click — only it · arrows on a card — order"
+  "stats.charts_hint": "Ctrl+wheel or Ctrl+drag — zoom · drag — pan\nClick a chip — toggle a line, double-click — only it · arrows on a card — order",
+  "stats.follow": "ONLINE",
+  "stats.all": "All",
+  "stats.minutes": "min"
 }
