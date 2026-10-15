@@ -9,6 +9,9 @@ StartLimitBurst=5
 Type=simple
 ExecStart=/malina/usr/local/sbin/bms-reader
 ExecReload=/bin/kill -HUP $MAINPID
+# /run/malina-bms под control-сокет создаётся systemd (переживает рестарты/ребут).
+RuntimeDirectory=malina-bms
+RuntimeDirectoryMode=0755
 Nice=-5
 CPUWeight=1000
 Restart=on-failure
