@@ -239,25 +239,6 @@
       } catch (e) {}
     }
   };
-  // Пауза 0.3 с перед перезапросом данных: если зум/панорама продолжаются —
-  // таймер перезапускается, запрос уходит только когда движение прекратилось.
-  var reloadTimers = {};
-  function scheduleReload(cid) {
-    clearTimeout(reloadTimers[cid]);
-    reloadTimers[cid] = setTimeout(function () { reloadTimers[cid] = null; onReloadWindow(cid, false); }, 300);
-  }
-
-  function onReloadWindow(cid, isReset) {
-    // После зума/панорамы — перезапрос данных под окно (без прореживания).
-    var c = CHARTS[cid]; if (!c) return;
-    if (isReset) return; // сброс — просто вернуться к стандартному виду
-    var x = c.scales.x; if (!x || !isFinite(x.min) || !isFinite(x.max)) return;
-    range.from = Math.round(x.min); range.to = Math.round(x.max);
-    document.getElementById("ch-from").value = toLocalInput(range.from);
-    document.getElementById("ch-to").value = toLocalInput(range.to);
-    loadCharts();
-  }
-
   function chipsBuild(canvasId, chipsId, chart) {
     var row = document.getElementById(chipsId);
     function sync() { var cs = row.querySelectorAll(".lg-chip:not(.lg-all)"); chart.data.datasets.forEach(function (d, i) { if (cs[i]) cs[i].classList.toggle("off", !chart.isDatasetVisible(i)); }); }
@@ -305,13 +286,12 @@
       plugins: {
         legend: { display: false },
         zoom: {
-          pan: { enabled: true, mode: "x", onPanComplete: function () { scheduleReload(cid); } },
+          pan: { enabled: true, mode: "x" },
           zoom: {
             wheel: { enabled: true, speed: .1, modifierKey: "ctrl" },
             drag: { enabled: true, modifierKey: "ctrl", backgroundColor: "rgba(51,122,183,.15)", borderColor: "rgba(51,122,183,.6)", borderWidth: 1 },
             pinch: { enabled: true },
-            mode: "x",
-            onZoomComplete: function () { scheduleReload(cid); }
+            mode: "x"
           },
           limits: { x: { minRange: 5 * 60e3 } }
         }
@@ -350,33 +330,13 @@
     cv.addEventListener("mouseleave", function () { if (cursor.active) { cursor.active = false; syncTooltips(null); Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].update("none"); } catch (x) {} }); } });
   }
 
-  // Все времена из ответа (объединение), по возрастанию.
-  function seriesTimes(ser) {
-    var set = {};
-    Object.keys(ser || {}).forEach(function (k) { (ser[k] || []).forEach(function (p) { set[+p[0]] = 1; }); });
-    return Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
-  }
-
-  function loadCharts(retry) {
+  function loadCharts() {
     if (!active) return;
     if (!range.from) { range = preset("24h"); }
     document.getElementById("ch-from").value = toLocalInput(range.from);
     document.getElementById("ch-to").value = toLocalInput(range.to);
     var url = "/api/stats/series?type=" + encodeURIComponent(active.type) + "&id=" + encodeURIComponent(active.id) + "&from=" + range.from + "&to=" + range.to;
     api(url).then(function (j) {
-      // Если avg не покрывает запрошенный период и данных < 20 мин — сужаем период
-      // до «20 мин от последней точки» и перезагружаем (запрос уйдёт в raw).
-      if (!retry && j && j.source === "avg") {
-        var ts = seriesTimes(j.series || {});
-        if (ts.length) {
-          var first = ts[0], last = ts[ts.length - 1];
-          if (last - first < 20 * 60e3) {
-            range = { from: last - 20 * 60e3, to: last };
-            loadCharts(true);
-            return;
-          }
-        }
-      }
       Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].destroy(); } catch (e) {} delete CHARTS[id]; });
       chartsEl.innerHTML = "";
       var vals = buildVals((j && j.series) || {});

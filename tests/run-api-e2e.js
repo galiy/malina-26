@@ -213,8 +213,8 @@ async function login(password) {
       ok(se.status === 200, "cookie /api/stats/series -> 200 (got " + se.status + ")");
       let sbody = {};
       try { sbody = await se.json(); } catch (e) { /* ignore */ }
-      ok(sbody && typeof sbody.series === "object" && (sbody.source === "raw" || sbody.source === "avg"),
-        "/api/stats/series returns {source,series}");
+      ok(sbody && typeof sbody.series === "object",
+        "/api/stats/series returns {series}");
     } else {
       console.log("skip: устройств в tsdb нет — /api/stats/table не проверяем");
     }

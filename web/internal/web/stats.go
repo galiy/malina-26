@@ -9,10 +9,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/galiy/malina-26/daemons/lib/tscontract"
 	"github.com/galiy/malina-26/daemons/lib/tsdbclient"
 )
+
+// rawRetentionMs — глубина raw-инстанса (48 ч: `-retention 48h` у
+// malina-tsdb-raw). Ряды графиков: avg читаем всегда; raw — только если окно
+// доходит до этого горизонта (иначе данных raw там уже нет).
+const rawRetentionMs int64 = int64(48 * time.Hour / time.Millisecond)
 
 // statsDev — устройство для закладок.
 type statsDev struct {
@@ -329,21 +335,13 @@ func splitColID(s string) (int, int) {
 	return a, 0
 }
 
-// statsSeries — ряды запрошенных полей (ключи колонок) за период. Источник
-// выбирается автоматически: диапазон ≤ 20 мин → raw (детально), иначе avg.
-// Сервер отдаёт только значения полей контракта (в человеческих единицах);
-// вычисляемые величины (мощности, ток MPPT-сумма и т.п.) — на клиенте (§3.2).
-func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) (map[string][][2]any, string) {
-	sock := s.opts.TsdbSock
-	src := "avg"
-	if to > from && to-from <= 20*60*1000 {
-		sock = s.opts.TsdbRawSock
-		src = "raw"
-	}
-	st, rows, err := tsdbclient.New(sock).Query(tsdbclient.ModeWholeOne, typ, []string{id}, nil, from, to, tsdbclient.DirectionFrom, 0)
-	if err != nil || st != tsdbclient.StatusOK {
-		return nil, src
-	}
+// statsSeries — ряды запрошенных полей (ключи колонок) за период. Без лимита
+// точек и времени: avg читаем всегда, raw — только если окно доходит до
+// горизонта 48 ч (rawRetentionMs). На сшиве приоритет у raw: avg берём лишь
+// левее первой raw-точки, правее — raw. Сервер отдаёт только значения полей
+// контракта (в человеческих единицах); вычисляемые величины (мощности, ток
+// MPPT-сумма и т.п.) — на клиенте (§3.2).
+func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) map[string][][2]any {
 	all := len(fields) == 0 // без fields — вернуть все поля ряда
 	want := map[string]bool{}
 	out := map[string][][2]any{}
@@ -352,12 +350,57 @@ func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) (m
 		out[k] = [][2]any{}
 	}
 	addPt := func(key string, t int64, v float64) {
-		if all {
-			out[key] = append(out[key], [2]any{t, v})
-		} else if want[key] {
+		if all || want[key] {
 			out[key] = append(out[key], [2]any{t, v})
 		}
 	}
+
+	// avg — всегда.
+	rowsAvg := s.querySeries(s.opts.TsdbSock, typ, id, from, to)
+
+	// raw — только если окно доходит до последних 48 ч.
+	rawFrom := time.Now().UnixMilli() - rawRetentionMs
+	var rowsRaw []tsdbclient.Row
+	if to >= rawFrom {
+		rf := from
+		if rf < rawFrom {
+			rf = rawFrom
+		}
+		rowsRaw = s.querySeries(s.opts.TsdbRawSock, typ, id, rf, to)
+	}
+
+	// Граница сшива — время первой raw-точки. Левее берём avg, от неё и правее — raw.
+	rawMin := int64(-1)
+	for _, r := range rowsRaw {
+		if rawMin < 0 || r.Time < rawMin {
+			rawMin = r.Time
+		}
+	}
+	if rawMin >= 0 {
+		trimmed := rowsAvg[:0]
+		for _, r := range rowsAvg {
+			if r.Time < rawMin {
+				trimmed = append(trimmed, r)
+			}
+		}
+		rowsAvg = trimmed
+	}
+	s.decodeRowsInto(typ, rowsAvg, addPt)
+	s.decodeRowsInto(typ, rowsRaw, addPt)
+	return out
+}
+
+// querySeries — чтение всех строк ряда за период (без лимита точек/времени).
+func (s *Server) querySeries(sock, typ, id string, from, to int64) []tsdbclient.Row {
+	st, rows, err := tsdbclient.New(sock).Query(tsdbclient.ModeWholeOne, typ, []string{id}, nil, from, to, tsdbclient.DirectionFrom, 0)
+	if err != nil || st != tsdbclient.StatusOK {
+		return nil
+	}
+	return rows
+}
+
+// decodeRowsInto декодирует строки контракта в точки рядов через addPt.
+func (s *Server) decodeRowsInto(typ string, rows []tsdbclient.Row, addPt func(string, int64, float64)) {
 	reg := tscontract.NewDefaultRegistry()
 	for _, r := range rows {
 		c, ok := reg.Get(typ, r.Version)
@@ -392,7 +435,6 @@ func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) (m
 			}
 		}
 	}
-	return out, src
 }
 
 // handleAPIStatsSeries — ряды для графиков: ?type=&id=&from=&to=&fields=a,b,c
@@ -417,9 +459,9 @@ func (s *Server) handleAPIStatsSeries(w http.ResponseWriter, r *http.Request) {
 	if f := q.Get("fields"); f != "" {
 		fields = strings.Split(f, ",")
 	}
-	series, src := s.statsSeries(typ, id, from, to, fields)
+	series := s.statsSeries(typ, id, from, to, fields)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(map[string]any{"source": src, "series": series})
+	_ = json.NewEncoder(w).Encode(map[string]any{"series": series})
 }
 
 // --- handlers ---
