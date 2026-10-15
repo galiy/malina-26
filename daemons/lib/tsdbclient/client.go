@@ -159,8 +159,9 @@ func EncodeWriteReq(rows []Row) []byte {
 	return finish(b)
 }
 
-// EncodeReadReq собирает кадр чтения.
-func EncodeReadReq(mode uint8, typ string, ids []string, metrics []uint16, from, to int64, direction uint8, limit uint32) []byte {
+// EncodeReadReq собирает кадр чтения. bucket — мини-окно decimation в мс
+// (0 = без прореживания), §9 docs/telemetry-store.md.
+func EncodeReadReq(mode uint8, typ string, ids []string, metrics []uint16, from, to int64, direction uint8, limit uint32, bucket uint32) []byte {
 	b := make([]byte, 0, 64)
 	b = binary.LittleEndian.AppendUint32(b, magicReadReq)
 	b = append(b, mode)
@@ -177,6 +178,7 @@ func EncodeReadReq(mode uint8, typ string, ids []string, metrics []uint16, from,
 	b = binary.LittleEndian.AppendUint64(b, uint64(to))
 	b = append(b, direction)
 	b = binary.LittleEndian.AppendUint32(b, limit)
+	b = binary.LittleEndian.AppendUint32(b, bucket)
 	return finish(b)
 }
 
@@ -194,9 +196,10 @@ func (c *Client) Write(rows []Row) (uint8, uint32, error) {
 	return rb[4], binary.LittleEndian.Uint32(rb[5:9]), nil
 }
 
-// Query выполняет чтение; возвращает статус и строки.
-func (c *Client) Query(mode uint8, typ string, ids []string, metrics []uint16, from, to int64, direction uint8, limit uint32) (uint8, []Row, error) {
-	rb, err := c.roundtrip(EncodeReadReq(mode, typ, ids, metrics, from, to, direction, limit))
+// Query выполняет чтение; возвращает статус и строки. bucket — мини-окно
+// decimation в мс (0 = без прореживания).
+func (c *Client) Query(mode uint8, typ string, ids []string, metrics []uint16, from, to int64, direction uint8, limit uint32, bucket uint32) (uint8, []Row, error) {
+	rb, err := c.roundtrip(EncodeReadReq(mode, typ, ids, metrics, from, to, direction, limit, bucket))
 	if err != nil {
 		return 0, nil, err
 	}

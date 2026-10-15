@@ -255,7 +255,18 @@
   };
   function chipsBuild(canvasId, chipsId, chart) {
     var row = document.getElementById(chipsId);
-    function sync() { var cs = row.querySelectorAll(".lg-chip:not(.lg-all)"); chart.data.datasets.forEach(function (d, i) { if (cs[i]) cs[i].classList.toggle("off", !chart.isDatasetVisible(i)); }); }
+    // sync обновляет вид чипов и СОХРАНЯЕТ состав скрытых линий в hidden[canvasId]:
+    // при любом обновлении (zoom/панорама/«Обновить»/смена периода) активными
+    // остаются только те линии, что были активны (§сохранение линий).
+    function sync() {
+      var cs = row.querySelectorAll(".lg-chip:not(.lg-all)");
+      var hid = [];
+      chart.data.datasets.forEach(function (d, i) {
+        if (cs[i]) cs[i].classList.toggle("off", !chart.isDatasetVisible(i));
+        if (!chart.isDatasetVisible(i)) hid.push(d.label);
+      });
+      hidden[canvasId] = hid;
+    }
     row.innerHTML = "";
     chart.data.datasets.forEach(function (d, i) {
       var b = document.createElement("button"); b.type = "button"; b.className = "lg-chip";
@@ -282,8 +293,27 @@
     sync();
   }
 
-  // Отражает фактическое окно осей X в полях «С/по» (без перезапроса данных):
-  // вызывается по завершении зума/панорамы и при сбросе зума.
+  // Перезапрос под окно при zoom/панораме (§3.5): debounce, окно берётся из осей,
+  // bucket на бэкенде пересчитывается от нового окна (детализация растёт при зуме).
+  var reloadTimers = {};
+  function scheduleReload(cid) {
+    clearTimeout(reloadTimers[cid]);
+    reloadTimers[cid] = setTimeout(function () { reloadTimers[cid] = null; reloadFromWindow(); }, 300);
+  }
+  function reloadFromWindow() {
+    // Инвариант: окно по X общее для всех карточек (zoom-синк в syncPlugin),
+    // поэтому достаточно окна первого графика.
+    var c = null;
+    Object.keys(CHARTS).forEach(function (id) { if (!c && CHARTS[id]) c = CHARTS[id]; });
+    if (!c || !c.scales || !c.scales.x) return;
+    var x = c.scales.x;
+    if (!isFinite(x.min) || !isFinite(x.max)) return;
+    range.from = Math.round(x.min);
+    range.to = Math.round(x.max);
+    loadCharts();
+  }
+
+  // Отражает фактическое окно осей X в полях «С/по» без перезапроса (сброс зума).
   function syncInputsFromWindow() {
     var c = null;
     Object.keys(CHARTS).forEach(function (id) { if (!c && CHARTS[id]) c = CHARTS[id]; });
@@ -314,13 +344,13 @@
       plugins: {
         legend: { display: false },
         zoom: {
-          pan: { enabled: true, mode: "x", onPanComplete: function () { syncInputsFromWindow(); } },
+          pan: { enabled: true, mode: "x", onPanComplete: function () { scheduleReload(cid); } },
           zoom: {
             wheel: { enabled: true, speed: .1, modifierKey: "ctrl" },
             drag: { enabled: true, modifierKey: "ctrl", backgroundColor: "rgba(51,122,183,.15)", borderColor: "rgba(51,122,183,.6)", borderWidth: 1 },
             pinch: { enabled: true },
             mode: "x",
-            onZoomComplete: function () { syncInputsFromWindow(); }
+            onZoomComplete: function () { scheduleReload(cid); }
           },
           limits: { x: { minRange: 5 * 60e3 } }
         }
@@ -389,12 +419,12 @@
 
   // --- События UI ---
   Array.prototype.forEach.call(document.querySelectorAll(".stats-controls [data-period]"), function (b) {
-    b.addEventListener("click", function () { range = preset(b.getAttribute("data-period")); loadCharts(); });
+    b.addEventListener("click", function () { range = preset(b.getAttribute("data-period")); zoomWin = {}; loadCharts(); });
   });
   document.getElementById("ch-show").addEventListener("click", function () {
     var f = document.getElementById("ch-from").value, t = document.getElementById("ch-to").value;
     var fn = f ? new Date(f).getTime() : NaN, tn = t ? new Date(t).getTime() : NaN;
-    if (!isFinite(fn) || !isFinite(tn) || fn > tn) return; range = { from: fn, to: tn }; loadCharts();
+    if (!isFinite(fn) || !isFinite(tn) || fn > tn) return; range = { from: fn, to: tn }; zoomWin = {}; loadCharts();
   });
   document.getElementById("ch-reload").addEventListener("click", function () { loadCharts(); });
 

@@ -311,7 +311,7 @@ func processWindow(raw, avg *tsdbclient.Client, rawRoot string, from, to int64, 
 	devs := enumerateRaw(rawRoot)
 	written, rowsOut, errs := 0, 0, 0
 	for _, dev := range devs {
-		status, rows, err := raw.Query(tsdbclient.ModeWholeOne, dev.Type, []string{dev.ID}, nil, from, to, tsdbclient.DirectionFrom, 0)
+		status, rows, err := raw.Query(tsdbclient.ModeWholeOne, dev.Type, []string{dev.ID}, nil, from, to, tsdbclient.DirectionFrom, 0, 0)
 		if err != nil || status != tsdbclient.StatusOK {
 			errs++
 			continue

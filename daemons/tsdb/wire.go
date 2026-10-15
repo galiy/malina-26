@@ -55,6 +55,7 @@ type queryReq struct {
 	To        int64
 	Direction uint8  // 0 = from (вперёд), 1 = to (назад) — §9
 	Limit     uint32 // 0 = без лимита
+	Bucket    uint32 // мини-окно decimation, мс (0 = без прореживания) — §9
 }
 
 func finish(b []byte) []byte { return binary.LittleEndian.AppendUint32(b, crc32.ChecksumIEEE(b)) }
@@ -158,7 +159,7 @@ func decodeReadReq(b []byte) (queryReq, error) {
 	q.From = int64(binary.LittleEndian.Uint64(body[pos : pos+8]))
 	q.To = int64(binary.LittleEndian.Uint64(body[pos+8 : pos+16]))
 	pos += 16
-	if pos+1+4 > len(body) {
+	if pos+1+4+4 > len(body) {
 		return q, errWire
 	}
 	q.Direction = body[pos]
@@ -166,6 +167,7 @@ func decodeReadReq(b []byte) (queryReq, error) {
 		return q, errWire
 	}
 	q.Limit = binary.LittleEndian.Uint32(body[pos+1 : pos+5])
+	q.Bucket = binary.LittleEndian.Uint32(body[pos+5 : pos+9])
 	return q, nil
 }
 

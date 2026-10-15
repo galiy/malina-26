@@ -340,6 +340,16 @@ func TestQueryLimits(t *testing.T) {
 	if _, err := st.Query(Query{Type: "map", IDs: []string{"1"}, From: 0, To: 9999}); err == nil {
 		t.Fatal("ожидался отказ по числу строк")
 	}
+	// §1 ревью 2026-10-15: decimation применяется ДО maxRows — плотное окно не
+	// падает, если после прореживания укладывается в лимит. Строки 1000,1010,1020,
+	// 1030,1040; bucket=25 мс → [1000,1030] (2 строки ≤ MaxRows=2).
+	got, err := st.Query(Query{Type: "map", IDs: []string{"1"}, From: 0, To: 9999, Bucket: 25})
+	if err != nil {
+		t.Fatalf("decimation должна снимать ложный maxRows: %v", err)
+	}
+	if len(got) != 2 || got[0].Time != 1000 || got[1].Time != 1030 {
+		t.Fatalf("decimation+maxRows: %v", got)
+	}
 }
 
 func TestValidKeyDotDot(t *testing.T) {
@@ -372,4 +382,43 @@ func TestStoreSegmentSkip(t *testing.T) {
 	if len(got) != 5 {
 		t.Fatalf("узкий диапазон (отсечение сегментов): %d, ожидалось 5", len(got))
 	}
+}
+
+func TestDecimateRowsFirstPoint(t *testing.T) {
+	rows := []Row{
+		{ID: "1", Time: 0}, {ID: "1", Time: 100}, {ID: "1", Time: 1100},
+		{ID: "1", Time: 2100}, {ID: "1", Time: 2200},
+	}
+	got := decimateRows(rows, 1000, dirFrom)
+	want := []int64{0, 1100, 2200}
+	if len(got) != len(want) {
+		t.Fatalf("decimate from: %d строк, ожидалось %d (%v)", len(got), len(want), times(got))
+	}
+	for i := range want {
+		if got[i].Time != want[i] {
+			t.Fatalf("decimate from[%d]=%d, ожидалось %d", i, got[i].Time, want[i])
+		}
+	}
+	// direction=to — свежайшая в окне, порядок возрастает.
+	gotTo := decimateRows(rows, 1000, dirTo)
+	wantTo := []int64{0, 1100, 2200}
+	if len(gotTo) != len(wantTo) {
+		t.Fatalf("decimate to: %d строк, ожидалось %d (%v)", len(gotTo), len(wantTo), times(gotTo))
+	}
+	for i := range wantTo {
+		if gotTo[i].Time != wantTo[i] {
+			t.Fatalf("decimate to[%d]=%d, ожидалось %d", i, gotTo[i].Time, wantTo[i])
+		}
+	}
+	if r := decimateRows(rows, 0, dirFrom); len(r) != len(rows) {
+		t.Fatalf("bucket=0 не должен резать: %d", len(r))
+	}
+}
+
+func times(rows []Row) []int64 {
+	out := make([]int64, len(rows))
+	for i, r := range rows {
+		out[i] = r.Time
+	}
+	return out
 }

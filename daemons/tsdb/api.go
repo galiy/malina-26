@@ -131,7 +131,7 @@ func (srv *Server) doQuery(buf []byte, bw *bufio.Writer) error {
 	if q.Type == "" || !validMode(q) {
 		return writeFrame(bw, encodeReadReply(statusBadMode, nil))
 	}
-	rows, err := srv.store.Query(Query{Type: q.Type, IDs: q.IDs, From: q.From, To: q.To, Metrics: q.Metrics, Direction: q.Direction, Limit: int(q.Limit)})
+	rows, err := srv.store.Query(Query{Type: q.Type, IDs: q.IDs, From: q.From, To: q.To, Metrics: q.Metrics, Direction: q.Direction, Limit: int(q.Limit), Bucket: int64(q.Bucket)})
 	if err != nil {
 		status := statusBadMode
 		switch {

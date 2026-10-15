@@ -83,6 +83,14 @@ type Server struct {
 	masterCfgSize int64
 	masterCfgOK   bool
 
+	// Кэш периода агрегации avg (accumulator.json): горячий путь графиков
+	// (каждый zoom-перезапрос) не должен читать/парсить файл.
+	accMu     sync.Mutex
+	accMod    time.Time
+	accSize   int64
+	accPeriod int
+	accOK     bool
+
 	email *mailer.Mailer
 
 	eventsPath   string

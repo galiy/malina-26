@@ -679,6 +679,63 @@ type Query struct {
 	Metrics   []uint16 // пусто — ряд целиком
 	Direction uint8    // 0 = из начала периода, 1 = из конца
 	Limit     int      // 0 = без лимита
+	Bucket    int64    // мини-окно decimation, мс (0 = без прореживания) — §9
+}
+
+// decimateRows — прореживание «первая строка в мини-окне» (§9): включаем строку,
+// запоминаем время; следующие пропускаем, пока |t − t_last| ≤ bucket. Решение
+// только по времени, payload не трогается. Прореживание по строкам (общие времена).
+// direction=to — проход от конца (свежайшая в окне), затем порядок восстанавливается.
+func decimateRows(rows []Row, bucketMS int64, dir uint8) []Row {
+	if bucketMS <= 0 || len(rows) < 2 {
+		return rows
+	}
+	out := make([]Row, 0, len(rows)/2+1)
+	if dir == dirTo {
+		var lastID string
+		var lastT int64
+		var have bool
+		for i := len(rows) - 1; i >= 0; i-- {
+			r := rows[i]
+			if !have || r.ID != lastID {
+				out = append(out, r)
+				lastID, lastT, have = r.ID, r.Time, true
+				continue
+			}
+			d := r.Time - lastT
+			if d < 0 {
+				d = -d
+			}
+			if d > bucketMS {
+				out = append(out, r)
+				lastT = r.Time
+			}
+		}
+		// развернуть к возрастанию времени
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
+		}
+		return out
+	}
+	var lastID string
+	var lastT int64
+	var have bool
+	for _, r := range rows {
+		if !have || r.ID != lastID {
+			out = append(out, r)
+			lastID, lastT, have = r.ID, r.Time, true
+			continue
+		}
+		d := r.Time - lastT
+		if d < 0 {
+			d = -d
+		}
+		if d > bucketMS {
+			out = append(out, r)
+			lastT = r.Time
+		}
+	}
+	return out
 }
 
 func (s *Store) Query(q Query) ([]Row, error) {
@@ -708,9 +765,6 @@ func (s *Store) Query(q Query) ([]Row, error) {
 	var out []Row
 	for _, k := range keys {
 		out = append(out, s.readSeries(s.series[k], q)...)
-		if s.maxRows > 0 && len(out) > s.maxRows {
-			return nil, errTooMany
-		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].ID != out[j].ID {
@@ -718,6 +772,15 @@ func (s *Store) Query(q Query) ([]Row, error) {
 		}
 		return out[i].Time < out[j].Time
 	})
+	// Прореживание (§9): сначала decimation, затем limit по отобранным строкам.
+	if q.Bucket > 0 {
+		out = decimateRows(out, q.Bucket, q.Direction)
+	}
+	// Лимит строк в ответе — по уже прореженному набору (§1 ревью 2026-10-15):
+	// иначе плотное окно падало бы по maxRows до того, как bucket сократит объём.
+	if s.maxRows > 0 && len(out) > s.maxRows {
+		return nil, errTooMany
+	}
 	// Лимит «страницы»: direction=from — первые N, direction=to — последние N (§9).
 	if q.Limit > 0 && len(out) > q.Limit {
 		if q.Direction == dirTo {

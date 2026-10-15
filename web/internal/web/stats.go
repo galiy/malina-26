@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/galiy/malina-26/daemons/lib/tscontract"
 	"github.com/galiy/malina-26/daemons/lib/tsdbclient"
+	"github.com/galiy/malina-26/web/internal/accumulator"
 )
 
 // rawRetentionMs — глубина raw-инстанса (48 ч: `-retention 48h` у
@@ -197,7 +199,7 @@ func (s *Server) statsTable(typ, id string, from, to int64, dir uint8, limit int
 		times = nil
 		for _, c := range ord {
 			isRaw := c == rawCli
-			st, rows, err := c.Query(tsdbclient.ModeWholeOne, typ, []string{id}, nil, from, to, dir, uint32(limit))
+			st, rows, err := c.Query(tsdbclient.ModeWholeOne, typ, []string{id}, nil, from, to, dir, uint32(limit), 0)
 			if err != nil || st != tsdbclient.StatusOK {
 				continue
 			}
@@ -365,8 +367,14 @@ func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) ma
 		}
 	}
 
+	// Прореживание (§9 §3.3): bucket = окно/1000; если меньше порога — 0 (без
+	// прореживания). Порог: raw 1.75 с; avg PeriodMin × 1.5 (период агрегации).
+	window := to - from
+	bucketAvg := bucketFor(window, int64(s.accPeriodMin())*60_000*3/2)
+	bucketRaw := bucketFor(window, 1750)
+
 	// avg — всегда.
-	rowsAvg := s.querySeries(s.opts.TsdbSock, typ, id, from, to)
+	rowsAvg := s.querySeries(s.opts.TsdbSock, typ, id, from, to, bucketAvg)
 
 	// raw — только если окно доходит до последних 48 ч.
 	rawFrom := time.Now().UnixMilli() - rawRetentionMs
@@ -376,7 +384,7 @@ func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) ma
 		if rf < rawFrom {
 			rf = rawFrom
 		}
-		rowsRaw = s.querySeries(s.opts.TsdbRawSock, typ, id, rf, to)
+		rowsRaw = s.querySeries(s.opts.TsdbRawSock, typ, id, rf, to, bucketRaw)
 	}
 
 	// Граница сшива — время первой raw-точки. Левее берём avg, от неё и правее — raw.
@@ -400,9 +408,40 @@ func (s *Server) statsSeries(typ, id string, from, to int64, fields []string) ma
 	return out
 }
 
-// querySeries — чтение всех строк ряда за период (без лимита точек/времени).
-func (s *Server) querySeries(sock, typ, id string, from, to int64) []tsdbclient.Row {
-	st, rows, err := tsdbclient.New(sock).Query(tsdbclient.ModeWholeOne, typ, []string{id}, nil, from, to, tsdbclient.DirectionFrom, 0)
+// accPeriodMin — период агрегации avg (мин) с кешем по mtime/size (горячий путь
+// графиков; без кеша каждый запрос читал бы accumulator.json, §2 ревью 2026-10-15).
+func (s *Server) accPeriodMin() int {
+	path := s.opts.AccConfigPath
+	fi, err := os.Stat(path)
+	s.accMu.Lock()
+	defer s.accMu.Unlock()
+	if err == nil && s.accOK && fi.ModTime().Equal(s.accMod) && fi.Size() == s.accSize {
+		return s.accPeriod
+	}
+	p := 5
+	if acc := accumulator.Load(path); acc.PeriodMin > 0 {
+		p = acc.PeriodMin
+	}
+	s.accPeriod, s.accOK = p, true
+	if err == nil {
+		s.accMod, s.accSize = fi.ModTime(), fi.Size()
+	}
+	return p
+}
+
+// bucketFor — размер мини-окна деcimation: окно/1000 (мс на ~1000 точек).
+// Если меньше порога minMS — 0 (прореживание не запрашивается; §9).
+func bucketFor(windowMS, minMS int64) uint32 {
+	w := windowMS / 1000
+	if w < minMS {
+		return 0
+	}
+	return uint32(w)
+}
+
+// querySeries — чтение строк ряда за период; bucket — мини-окно decimation (мс, 0 = выкл).
+func (s *Server) querySeries(sock, typ, id string, from, to int64, bucket uint32) []tsdbclient.Row {
+	st, rows, err := tsdbclient.New(sock).Query(tsdbclient.ModeWholeOne, typ, []string{id}, nil, from, to, tsdbclient.DirectionFrom, 0, bucket)
 	if err != nil || st != tsdbclient.StatusOK {
 		return nil
 	}
