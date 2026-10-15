@@ -125,8 +125,31 @@ func parseAntFrame(f []byte) (bmscontract.Telemetry, error) {
 	}
 	r.TotalCV = uint16(totalMV / 10) // мВ→0.01В
 	r.BalanceMask = binary.BigEndian.Uint32(f[132:136])
+
+	// alarm (docs/bms/antbms-dsp.md «Раскладка alarm», docs/bms-reader.md §1):
+	// коды MOS по 4 бита + system log (16 бит), LSB-first (setAlarmBit).
+	setAlarmCode(&r.Alarm, 0, f[103]) // charge_mos    0..3
+	setAlarmCode(&r.Alarm, 4, f[104]) // discharge_mos 4..7
+	setAlarmCode(&r.Alarm, 8, f[105]) // balancer      8..11
+	syslog := binary.BigEndian.Uint16(f[136:138])
+	for k := 0; k < 16; k++ { // system log 12..27
+		if syslog&(1<<uint(k)) != 0 {
+			setAlarmBit(&r.Alarm, 12+k)
+		}
+	}
+
 	r.Mode = modeFromCurrent(r.CurrentDA)
 	return r, nil
+}
+
+// setAlarmCode упаковывает 4-битный код (0..15) в alarm, начиная с бита base
+// (LSB-first), не меняя остальные биты.
+func setAlarmCode(a *[bmscontract.AlarmLen]byte, base int, code byte) {
+	for b := 0; b < 4; b++ {
+		if code&(1<<uint(b)) != 0 {
+			setAlarmBit(a, base+b)
+		}
+	}
 }
 
 // modeFromCurrent — канонический режим по знаку тока (docs/bms-reader.md §1).

@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/binary"
 	"testing"
+
+	"github.com/galiy/malina-26/daemons/lib/bmscontract"
 )
 
 // buildAntFrame собирает валидный 140-байтный кадр с заданными полями.
@@ -73,3 +75,44 @@ func TestAntProbe(t *testing.T) {
 }
 
 func modeDischargeCode() uint16 { return 0x01 }
+
+// setAntCRC пересчитывает CRC кадра ANT (сумма байт 4..137).
+func setAntCRC(f []byte) {
+	var sum int
+	for _, x := range f[4:138] {
+		sum += int(x)
+	}
+	binary.BigEndian.PutUint16(f[138:], uint16(sum))
+}
+
+// TestAntAlarm — упаковка alarm: коды MOS (4 бита) + system log (16 бит).
+func TestAntAlarm(t *testing.T) {
+	f := buildAntFrame([]uint16{3300}, 0, 50, 100_000_000)
+	f[103] = 2                                  // charge_mos: Overvoltage protection
+	f[104] = 0                                  // discharge_mos: Off
+	f[105] = 1                                  // balancer: Exceeds limit equilibrium
+	binary.BigEndian.PutUint16(f[136:], 0x8001) // system log: bit0 (Status) + bit15 (chg/dis)
+	setAntCRC(f)
+
+	tel, err := parseAntFrame(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tel.Alarm[0] != 0x02 { // bits0..3 charge=2, bits4..7 discharge=0
+		t.Fatalf("Alarm[0]=%#x, ожидалось 0x02", tel.Alarm[0])
+	}
+	if tel.Alarm[1] != 0x11 { // bits8..11 balancer=1, bits12..15 syslog low nibble=1
+		t.Fatalf("Alarm[1]=%#x, ожидалось 0x11", tel.Alarm[1])
+	}
+	if tel.Alarm[3]&0x08 == 0 { // syslog bit15 → alarm bit 27 (byte3 bit3)
+		t.Fatalf("Alarm[3]=%#x, ожидался бит3 (syslog bit15)", tel.Alarm[3])
+	}
+	for i := 4; i < bmscontract.AlarmLen; i++ {
+		if tel.Alarm[i] != 0 {
+			t.Fatalf("Alarm[%d]=%#x, ожидался 0", i, tel.Alarm[i])
+		}
+	}
+	if tel.Flags&1 == 0 { // Flags по «≠0» сохраняется
+		t.Fatal("flags: charge_mos должен быть выставлен (≠0)")
+	}
+}
