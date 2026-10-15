@@ -110,13 +110,15 @@ flowchart TB
   PULLER --> MOD
   MOD -->|"контракт + ID"| PULLER
   PULLER -->|"heartbeat lastSeen"| ORCH
-  PULLER --> RAWT
+  PULLER -->|"107 Б (телеметрия слота)"| SHM
+  PULLER -->|"tscontract (raw)"| RAWT
 
   WEB --> SHM
 ```
 
 **Ключ:** оркестратор — **единственный** владелец поиска, проб, раздачи и **писатель
-shm-списка**; пулеры не знают типов BMS и исполняют опрос выданных слотов.
+shm-списка**; пулеры не знают типов BMS, исполняют опрос выданных слотов и **публикуют
+телеметрию слота в shm** (бинарный 107 Б, читает web) и в raw.
 
 ---
 
@@ -509,8 +511,8 @@ flowchart TD
 
 - **Список** пишет **только оркестратор** (инвариант «один писатель на item», seqlock);
   `lastSeen` оркестратор обновляет **по heartbeat от пулера** (успешный опрос).
-- **payload** телеметрии — пишет **пулер** — **в raw tsdb** (в shm телеметрия **не**
-  пишется; в shm — только список).
+- **payload** телеметрии — пишет **пулер**: **в shm** (бинарный 107 Б, per device,
+  читает web) **и** в **raw tsdb** (`tscontract`).
 - Запись списка: `base`, `id`, `typeId`, `gen`, `lastSeen`, `source`, `state`, `framing`.
 - **`source`** — один дескриптор на все варианты (без различия TCP/SERIAL/слота):
 
@@ -557,7 +559,7 @@ flowchart LR
 | Что | Значение |
 |---|---|
 | Демон / бинарник | `bms-reader` / `malina-bms-reader` |
-| shm | `/dev/shm/malina-bms-state` (16 слотов) |
+| shm | `/dev/shm/malina-bms-state` (список + до 16 телеметрийных слотов 107 Б) |
 | control-сокет | `/run/malina-bms/control.sock` |
 | unit | `malina-bms-reader.service` |
 | `device_type` | `bms` |
