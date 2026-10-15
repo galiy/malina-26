@@ -16,8 +16,10 @@ const (
 	bmsSlots       = 16
 	bmsListItemLen = 200
 	bmsSlotHdr     = 32
-	bmsSlotData    = 107
-	bmsSlotSize    = bmsSlotHdr + bmsSlotData
+	// bmsSlotData — ёмкость слота (кратна 8 под 64-битные atomic на ARM);
+	// фактический payload — bmscontract.Size (107 Б), читается по полю len.
+	bmsSlotData = 112
+	bmsSlotSize = bmsSlotHdr + bmsSlotData
 )
 
 // Смещения записи списка (200 Б) — как в daemons/bms-reader/shm.go.

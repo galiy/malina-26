@@ -98,7 +98,10 @@ func bmsLayout() shm.Layout {
 	return shm.Layout{
 		Slots:    maxDevices,
 		ItemSize: itemSize,
-		SlotData: 107, // bmscontract.Size
+		// Ёмкость слота кратна 8: на ARM (GOARM=7) lib/shm использует 64-битные
+		// atomic по смещению слота, невыровненный stride даёт panicUnaligned.
+		// Полезная нагрузка — bmscontract.Size (107 Б), хвост до 112 не значим.
+		SlotData: 112,
 		Magic:    shmMagic,
 		Version:  shmVersion,
 	}
