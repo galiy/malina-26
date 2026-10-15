@@ -16,6 +16,9 @@ func (antBMS) Name() string   { return "AntBMS-DSP" }
 func (antBMS) Framing() uint8 { return framingNative }
 func (antBMS) Speeds() []int  { return []int{19200} }
 
+// MissThreshold: пассивный поток — нет кадра за окно = сразу потеря (arch §10).
+func (antBMS) MissThreshold() int { return 1 }
+
 // antMarker — заголовок live-кадра.
 var antMarker = []byte{0xAA, 0x55, 0xAA, 0xFF}
 
@@ -122,12 +125,12 @@ func parseAntFrame(f []byte) (bmscontract.Telemetry, error) {
 	}
 	r.TotalCV = uint16(totalMV / 10) // мВ→0.01В
 	r.BalanceMask = binary.BigEndian.Uint32(f[132:136])
-	r.Mode = antMode(r.CurrentDA)
+	r.Mode = modeFromCurrent(r.CurrentDA)
 	return r, nil
 }
 
-// antMode — канонический режим по знаку тока (docs/bms-reader.md §1).
-func antMode(currentDA int32) uint16 {
+// modeFromCurrent — канонический режим по знаку тока (docs/bms-reader.md §1).
+func modeFromCurrent(currentDA int32) uint16 {
 	switch {
 	case currentDA > 0:
 		return bmscontract.ModeDischarge

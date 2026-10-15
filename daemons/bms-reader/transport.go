@@ -85,7 +85,8 @@ func openTCP(host string, port int) (Transport, error) {
 	if host == "" || port <= 0 {
 		return nil, fmt.Errorf("bms: неверный адрес %s:%d", host, port)
 	}
-	c, err := net.DialTimeout("tcp", net.JoinHostPort(host, fmt.Sprint(port)), 2*time.Second)
+	// arch §10: одна попытка с небольшим таймаутом (500 мс — SYN на нагруженном Wi-Fi).
+	c, err := net.DialTimeout("tcp", net.JoinHostPort(host, fmt.Sprint(port)), 500*time.Millisecond)
 	if err != nil {
 		return nil, err
 	}

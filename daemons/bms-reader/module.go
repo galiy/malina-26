@@ -38,6 +38,9 @@ type bmsType interface {
 	Framing() uint8 // framingNative / framingMRTU / framingMTCP
 	// Speeds — список скоростей COM для этого типа (оркестратор перебирает).
 	Speeds() []int
+	// MissThreshold — число подряд неудачных опросов до снятия слота
+	// (активные шинные типы — >1; пассивные — 1, «протупила — потеря», arch §10).
+	MissThreshold() int
 	// Probe распознаёт свои устройства на открытом источнике (порт/скорость —
 	// задаёт оркестратор). Для шинных — перебирает адреса.
 	Probe(t Transport) (probeResult, error)

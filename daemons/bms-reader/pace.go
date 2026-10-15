@@ -106,13 +106,19 @@ func parsePace(b []byte) (paceFrame, error) {
 	fmt.Sscanf(body[2:4], "%02X", &adr)
 	fmt.Sscanf(body[6:8], "%02X", &rtn)
 	f.ADR, f.RTN = adr, rtn
-	infoHex := body[12:] // VER(2)+ADR(2)+46(2)+RTN(2)+LEN(4)
+	var lenFull uint16
+	fmt.Sscanf(body[8:12], "%04X", &lenFull)
+	lenID := lenFull & 0x0FFF // LEN = LCHKSUM<<12 | LENID
+	infoHex := body[12:]      // VER(2)+ADR(2)+46(2)+RTN(2)+LEN(4)
 	if infoHex != "" {
 		info, err := hex.DecodeString(infoHex)
 		if err != nil {
 			return f, fmt.Errorf("pace: info hex")
 		}
 		f.Info = info
+	}
+	if len(f.Info)*2 != int(lenID) {
+		return f, fmt.Errorf("pace: LENID %d != len(INFO)*2 %d", lenID, len(f.Info)*2)
 	}
 	return f, nil
 }

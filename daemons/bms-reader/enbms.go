@@ -17,16 +17,27 @@ func (enBMS) Name() string   { return "EnBMS-RS485" }
 func (enBMS) Framing() uint8 { return framingNative }
 func (enBMS) Speeds() []int  { return []int{19200} }
 
+// MissThreshold: активная шина — снимаем слот только после 3 подряд неудач
+// (устойчивость к помехам; arch §7/§10).
+func (enBMS) MissThreshold() int { return 3 }
+
 const enMaxADR = 15
 
 func u16be(b []byte, o int) uint16 { return binary.BigEndian.Uint16(b[o : o+2]) }
 
-// req — отправка запроса и чтение ответа.
+// req — отправка запроса и чтение ответа; ADR ответа должен совпасть.
 func enReq(t Transport, adr int, cid2 byte, info []byte) (paceFrame, error) {
 	if err := t.Write(buildPace(adr, cid2, info)); err != nil {
 		return paceFrame{}, err
 	}
-	return readPace(t)
+	f, err := readPace(t)
+	if err != nil {
+		return f, err
+	}
+	if f.ADR != adr {
+		return f, fmt.Errorf("enbms: ADR ответа %d != запрошенного %d", f.ADR, adr)
+	}
+	return f, nil
 }
 
 // Probe — скан ADR 0..15 по SN (0xA4). docs/bms/enbms-rs485.md §3.
@@ -62,7 +73,11 @@ func (enBMS) Probe(t Transport) (probeResult, error) {
 func (enBMS) Poll(t Transport, adr int) (bmscontract.Telemetry, error) {
 	f, err := enReq(t, adr, 0x42, nil)
 	if err != nil {
-		return bmscontract.Telemetry{}, err
+		// ретрай один раз (arch §10: 2×500 мс)
+		f, err = enReq(t, adr, 0x42, nil)
+		if err != nil {
+			return bmscontract.Telemetry{}, err
+		}
 	}
 	if f.RTN != 0 {
 		return bmscontract.Telemetry{}, fmt.Errorf("enbms: 0x42 rtn=%d", f.RTN)
@@ -75,7 +90,7 @@ func (enBMS) Poll(t Transport, adr int) (bmscontract.Telemetry, error) {
 	if s, err := enReq(t, adr, 0x44, nil); err == nil && s.RTN == 0 {
 		applyEn44(&r, s.Info)
 	} else {
-		r.Mode = antMode(r.CurrentDA)
+		r.Mode = modeFromCurrent(r.CurrentDA)
 	}
 	return r, nil
 }
@@ -199,7 +214,7 @@ func applyEn44(r *bmscontract.Telemetry, p []byte) {
 		r.Mode = enModeCanon(p[o]) // Mode_Byte
 	}
 	if r.Mode == 0 {
-		r.Mode = antMode(r.CurrentDA)
+		r.Mode = modeFromCurrent(r.CurrentDA)
 	}
 	// alarm: ячейки 4 бита/ячейку (0..63)
 	for i := 0; i < len(cellGB) && i < bmscontract.MaxCells; i++ {
