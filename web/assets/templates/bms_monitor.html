@@ -1,0 +1,9 @@
+{{define "content"}}
+<div class="map-head">
+  <h1 class="map-title">{{index .T "bms.monitor_title"}}</h1>
+  <div class="map-headctl">
+    <a class="btn" href="/bms/settings">{{index .T "menu.bms_settings"}}</a>
+  </div>
+</div>
+<div class="flash">{{index .T "bms.monitor_empty"}}</div>
+{{end}}

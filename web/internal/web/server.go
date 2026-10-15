@@ -59,6 +59,8 @@ type Options struct {
 	TsdbRawSock      string        // сокет raw-tsdb
 	TsdbSock         string        // сокет avg-tsdb
 	TsdbAvgRoot      string        // каталог avg-tsdb (перечисление устройств)
+	BmsConfigPath    string        // путь к bms-gateways.json (BMS-Receiver)
+	BmsControlSock   string        // control-сокет bms-reader (reload)
 }
 
 // Server — HTTP-сервер.
@@ -198,6 +200,12 @@ func New(o Options) (*Server, error) {
 	if o.TsdbAvgRoot == "" {
 		o.TsdbAvgRoot = "/malina/var/malina-ts"
 	}
+	if o.BmsConfigPath == "" {
+		o.BmsConfigPath = "/malina/etc/malina/bms-gateways.json"
+	}
+	if o.BmsControlSock == "" {
+		o.BmsControlSock = "/run/malina-bms/control.sock"
+	}
 	// Источник строк — русский; недостающие ключи добираются из него.
 	bundle, err := i18n.Load(os.DirFS(o.AssetsDir), "i18n", "ru", o.Langs)
 	if err != nil {
@@ -238,6 +246,8 @@ func New(o Options) (*Server, error) {
 		"reboot":          "reboot.html",
 		"master":          "master.html",
 		"master_settings": "master_settings.html",
+		"bms_settings":    "bms_settings.html",
+		"bms_monitor":     "bms_monitor.html",
 		"email":           "email.html",
 		"events":          "events.html",
 		"stats_charts":    "stats_charts.html",
@@ -381,6 +391,8 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/master", s.handleMaster)
 	mux.HandleFunc("/master/panel", s.handleMasterPanel)
 	mux.HandleFunc("/master/settings", s.handleMasterSettings)
+	mux.HandleFunc("/bms/settings", s.handleBmsSettings)
+	mux.HandleFunc("/bms/monitor", s.handleBmsMonitor)
 	mux.HandleFunc("/system/email", s.handleEmail)
 	mux.HandleFunc("/system/email/save", s.handleEmailSave)
 	mux.HandleFunc("/system/email/test", s.handleEmailTest)

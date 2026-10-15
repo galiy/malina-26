@@ -39,6 +39,13 @@
           </div>
         </div>
       </div>
+      <div class="navitem dropdown {{if or (eq .Active "bms_settings") (eq .Active "bms_monitor")}}active{{end}}">
+        <span class="navlink">{{index .T "menu.bms"}} <span class="caret">▾</span></span>
+        <div class="dropdown-menu">
+          <a href="/bms/settings" class="{{if eq .Active "bms_settings"}}active{{end}}">{{index .T "menu.bms_settings"}}</a>
+          <a href="/bms/monitor" class="{{if eq .Active "bms_monitor"}}active{{end}}">{{index .T "menu.bms_monitor"}}</a>
+        </div>
+      </div>
       <div class="navitem dropdown {{if eq .Active "stats"}}active{{end}}">
         <span class="navlink">{{index .T "menu.stats"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">

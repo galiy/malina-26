@@ -1,0 +1,35 @@
+{{define "content"}}
+<div class="map-head">
+  <h1 class="map-title">{{index .T "bms.title"}}</h1>
+  <div class="map-headctl">
+    <a class="btn" href="/bms/monitor">{{index .T "menu.bms_monitor"}}</a>
+  </div>
+</div>
+{{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
+{{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
+<form method="post" action="/bms/settings">
+  <table class="mn-tbl">
+    <thead>
+      <tr><th>{{index .T "bms.host"}}</th><th>{{index .T "bms.port"}}</th><th>{{index .T "bms.mode"}}</th><th></th></tr>
+    </thead>
+    <tbody id="bmsRows">
+    {{range .Gateways}}
+      <tr>
+        <td><input name="host" value="{{.Host}}"></td>
+        <td><input name="port" type="number" min="1" max="65535" value="{{.Port}}"></td>
+        <td><select name="mode">
+          <option value="modbus" {{if eq .Mode "modbus"}}selected{{end}}>{{index $.T "bms.mode_modbus"}}</option>
+          <option value="none" {{if eq .Mode "none"}}selected{{end}}>{{index $.T "bms.mode_none"}}</option>
+        </select></td>
+        <td><button type="button" class="mn-del" title="{{index $.T "bms.del"}}">✕</button></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <div class="mn-actions">
+    <button type="button" id="bmsAdd">{{index .T "bms.add"}}</button>
+    <button type="submit">{{index .T "bms.save"}}</button>
+  </div>
+</form>
+<script src="{{asset "bms_settings.js"}}"></script>
+{{end}}
