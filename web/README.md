@@ -55,9 +55,13 @@
 - `GET /api/stats/extremes?type=&id=` — крайние точки времени устройства по обеим tsdb
   (`{raw:{found,min,max}, avg:{...}}`; из памяти tsdb).
 - `GET /api/stats/series?type=&id=&from=&to=&fields=` — ряды графиков (одним запросом;
-  пусто `fields` → все поля). Ответ `{series:{"<key>":[[t,v],…]}}` без прореживания;
-  источник — сшив `avg`+`raw` (avg всегда, raw в последних 48 ч, приоритет `raw`),
-  без лимита точек/времени (`docs/ui-stat.md` §3.3/§3.6).
+  клиент передаёт `fields` — только поля активных наборов + поля для `calcSeries`;
+  пусто `fields` → все поля). Ответ `{series:{"<key>":[[t,v],…]}}`; серверное
+  прореживание `bucket` (first-point; ~≤1000 точек для широких окон, узкие — без лимита):
+  backend считает `bucket_ms = (to − from)/1000`; порог `min` (raw 1.75 с; avg
+  `PeriodMin × 1.5`) — если `bucket_ms < min`, `bucket` не передаётся (tsdb отдаёт все
+  строки); источник — сшив `avg`+`raw` (avg всегда, raw в последних 48 ч, приоритет
+  `raw`); JSON стримится (`docs/ui-stat.md` §3.3/§3.6).
 - `GET /api/stats/table?type=&id=&from=&to=&dir=from|to&limit=&detail=&rawmin=` — страница
   таблицы (≤200 строк; обе tsdb, приоритет raw в его зоне; `detail=1` — raw+avg,
   иначе только avg). Ответ: `columns:[{id,name,type,unit}]` (id строковый; битфилды
