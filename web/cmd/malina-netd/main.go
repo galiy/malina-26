@@ -24,7 +24,9 @@ const runDir = "/run/malina-net"
 // apIdleRestart — если у AP нет ни одной подключённой станции дольше этого
 // времени, hostapd перезапускается профилактически: brcmfmac в AP-режиме иногда
 // «залипает» (beacon есть, но ассоциации не принимаются) без видимых ошибок.
-const apIdleRestart = 5 * time.Minute
+// Порог намеренно поднят до 2 часов: при пустой сети ежеминутные рестарты
+// дают всплеск kworker/сетевого стека вхолостую (см. docs по наблюдаемости).
+const apIdleRestart = 2 * time.Hour
 
 func main() {
 	log.SetPrefix("malina-netd: ")
