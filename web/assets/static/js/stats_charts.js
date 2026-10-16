@@ -66,7 +66,23 @@
       { t: "stats.c.pack", lines: [{ n: "stats.n.pack", calc: "pack" }] },
       { t: "stats.c.cells_t", cellGroup: 2 },
       { t: "stats.c.cells_i", cellGroup: 0 }
-    ]
+    ],
+    // BMS-Receiver (device_type=bms, v1; docs/bms-reader.md §1). Поля — field_id,
+    // значения в контракте масштабированы → приводим делением (div).
+    bms: (function () {
+      var cells = [], temps = [];
+      for (var i = 0; i < 16; i++) cells.push({ n: "bms.chart.cell", cell: i + 1, k: String(4 + i), div: 1000 });
+      for (var j = 0; j < 8; j++) temps.push({ n: "bms.chart.temp", cell: j + 1, k: String(20 + j), div: 10 });
+      return [
+        { t: "bms.chart.soc", lines: [{ n: "bms.chart.soc", k: "30", div: 10 }] },
+        { t: "bms.chart.pack", lines: [{ n: "bms.chart.pack", k: "36", div: 100 }] },
+        { t: "bms.chart.cur", lines: [{ n: "bms.chart.cur", k: "28", div: 100 }] },
+        { t: "bms.chart.pwr", lines: [{ n: "bms.chart.pwr", k: "29" }] },
+        { t: "bms.cells", lines: cells },
+        { t: "bms.chart.spread", lines: [{ n: "bms.chart.spread", calc: "bmsspread", div: 1000 }] },
+        { t: "bms.chart.temp", lines: temps }
+      ];
+    })()
   };
   function cellGroupLines(group) {
     // group: 1 UakbCell, 2 TakbCell, 0 Q_Cell; id = 3*(i-1)+{1,2,3}
@@ -136,6 +152,13 @@
         if (!vals2.length) return;
         if (calc === "spread") { v = Math.max.apply(null, vals2) - Math.min.apply(null, vals2); }
         else { v = vals2.reduce(function (a, b) { return a + b; }, 0); }
+      }
+      else if (calc === "bmsspread") {
+        // BMS: разброс по ячейкам (field_id 4..19, в мВ; масштаб — div у линии).
+        var cv = [], bm = vals.byKey;
+        for (var id = 4; id <= 19; id++) { var m2 = bm[String(id)]; if (m2) { var x2 = m2.get(t); if (x2 != null) cv.push(x2); } }
+        if (!cv.length) return;
+        v = Math.max.apply(null, cv) - Math.min.apply(null, cv);
       }
       if (v != null && isFinite(v)) out.push([t, v]);
     });
@@ -232,6 +255,14 @@
     });
   }
   function loadDevs() {
+    // Фиксированный режим (страница устройства, напр. /bms): без списка/закладок —
+    // графики только для заданного типа+id (наш контракт).
+    if (window.STATS_FIXED && window.STATS_FIXED.type) {
+      if (tabsEl) { tabsEl.innerHTML = ""; tabsEl.hidden = true; }
+      active = { type: window.STATS_FIXED.type, id: window.STATS_FIXED.id };
+      loadCharts();
+      return Promise.resolve();
+    }
     return api("/api/stats/devices").then(function (j) {
       devs = (j && j.devices) || [];
       if (devs.length) { active = devs[0]; renderTabs(); loadCharts(); }
@@ -273,14 +304,26 @@
     Array.prototype.forEach.call(chartsEl.querySelectorAll(".stats-card"), function (c) { ids.push(c.getAttribute("data-cid")); });
     try { localStorage.setItem(orderKey(), JSON.stringify(ids)); } catch (e) {}
   }
+  // Число карточек в первой строке (колонок сетки) — раскладка общая для всех
+  // страниц графиков; считаем по совпадению верхней границы, чтобы up/down/left/right
+  // работали и при 1 колонке, и при 2+ (адаптив).
+  function colsCount(cards) {
+    if (!cards.length) return 1;
+    var top = cards[0].getBoundingClientRect().top, n = 0;
+    for (var i = 0; i < cards.length; i++) {
+      if (Math.abs(cards[i].getBoundingClientRect().top - top) < 2) n++; else break;
+    }
+    return Math.max(1, n);
+  }
   function moveCard(btn, dir) {
     var card = btn.closest(".stats-card");
     var cards = Array.prototype.slice.call(chartsEl.querySelectorAll(".stats-card"));
-    var idx = cards.indexOf(card), cols = 2, target = -1;
+    var idx = cards.indexOf(card), cols = colsCount(cards), target = -1;
+    if (idx < 0) return;
     if (dir === "up") target = idx - cols;
     else if (dir === "down") target = idx + cols < cards.length ? idx + cols : -1;
-    else if (dir === "left") target = idx % cols === 1 ? idx - 1 : -1;
-    else if (dir === "right") target = idx % cols === 0 && idx + 1 < cards.length ? idx + 1 : -1;
+    else if (dir === "left") target = idx % cols !== 0 ? idx - 1 : -1;
+    else if (dir === "right") target = idx % cols !== cols - 1 && idx + 1 < cards.length ? idx + 1 : -1;
     if (target < 0) return;
     var ref = cards[target];
     if (target > idx) chartsEl.insertBefore(card, ref.nextSibling); else chartsEl.insertBefore(card, ref);
@@ -541,6 +584,7 @@
     var datasets = [];
     lines.forEach(function (ln, li) {
       var data = ln.calc ? calcSeries(ln.calc, vals) : ((series && series[ln.k]) || []).map(function (p) { return [+p[0], +p[1]]; });
+      if (ln.div && ln.div !== 1) { data = data.map(function (p) { return [p[0], p[1] / ln.div]; }); }
       if (!data.length) return;
       var name = T(ln.n) + (ln.cell ? " " + ln.cell : "");
       var keyStr = ln.n + (ln.cell ? ":" + ln.cell : ""); // стабильный ключ для персиста
@@ -630,6 +674,15 @@
     if (!isFinite(fn) || !isFinite(tn) || fn > tn) return; setFollowOff(); range = { from: fn, to: tn }; zoomWin = {}; loadCharts();
   });
   document.getElementById("ch-reload").addEventListener("click", function () { setFollowOff(); loadCharts(); });
+
+  // Перемещение карточек графиков стрелками (↑←↓→) — делегирование на контейнер,
+  // работает для всех страниц графиков; порядок сохраняется per-тип (saveOrder).
+  chartsEl.addEventListener("click", function (ev) {
+    var t = ev.target, btn = t && t.closest ? t.closest(".card-order button") : null;
+    if (!btn) return;
+    var m = /(?:^|\s)ord-(up|down|left|right)(?:\s|$)/.exec(btn.className);
+    if (m) moveCard(btn, m[1]);
+  });
 
   // «Следовать за временем»: переключатель справа вверху.
   var followCb = document.getElementById("ch-follow");

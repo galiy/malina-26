@@ -59,9 +59,10 @@ type mainBmsTile struct {
 	CellMin       int      `json:"cell_min"`        // мВ
 	CellMax       int      `json:"cell_max"`        // мВ
 	CellDiff      int      `json:"cell_diff"`       // мВ (max−min)
-	BalanceMask   uint32   `json:"balance_mask"`    // бит i → ячейка i
-	CellFaultMask uint32   `json:"cell_fault_mask"` // бит i → ошибка ячейки i
-	BmsFault      bool     `json:"bms_fault"`       // ошибка BMS в целом
+	BalanceMask   uint32   `json:"balance_mask"`     // бит i → ячейка i
+	CellWarnMask  uint32   `json:"cell_warn_mask"`   // бит i → предупреждение по ячейке i
+	CellProtMask  uint32   `json:"cell_prot_mask"`   // бит i → защита по ячейке i
+	BmsFault      bool     `json:"bms_fault"`        // ошибка BMS в целом
 }
 
 // alarmAny — есть ли хоть один установленный бит alarm в диапазоне [base, base+w).
@@ -140,16 +141,22 @@ func buildBmsTile(tr map[string]string, b BmsInfo, tel bmscontract.Telemetry) ma
 	tile.BalanceMask = tel.BalanceMask
 
 	// Флаги по типу (alarm — тип-специфичный, раскладка docs/bms/<TYPE>.md).
-	var cellFault uint32
+	var cellWarn, cellProt uint32
 	switch b.TypeID {
-	case 2: // EnBMS: per-cell warn/protect — alarm-биты 0..63 (4 бита/ячейку)
+	case 2: // EnBMS: per-cell warn/protect — alarm-биты 0..63 (4 бита/ячейку:
+		// bit0 high-warn, bit1 high-prot, bit2 low-warn, bit3 low-prot).
+		// Семантика — как на странице /bms (см. bms.js decodeAlarms).
 		for i := 0; i < n; i++ {
-			if alarmAny(&tel, i*4, 4) {
-				cellFault |= 1 << uint(i)
+			if alarmAny(&tel, i*4, 1) || alarmAny(&tel, i*4+2, 1) {
+				cellWarn |= 1 << uint(i)
+			}
+			if alarmAny(&tel, i*4+1, 1) || alarmAny(&tel, i*4+3, 1) {
+				cellProt |= 1 << uint(i)
 			}
 		}
 	}
-	tile.CellFaultMask = cellFault
+	tile.CellWarnMask = cellWarn
+	tile.CellProtMask = cellProt
 
 	switch b.TypeID {
 	case 1: // AntBMS: MOS-коды в alarm (биты 0..3 charge, 4..7 discharge)
@@ -303,6 +310,7 @@ func (s *Server) handleBmsPage(w http.ResponseWriter, r *http.Request) {
 		data["ID"] = b.ID
 		data["Gen"] = b.Gen
 		data["Serial"] = b.Serial
+		data["BmsType"] = b.TypeName
 		data["Title"] = b.MenuLabel(s.trFor(r))
 	} else if sn != "" {
 		// Устройство ещё не обнаружено — страница-ожидание; клиент повторит поиск.

@@ -240,7 +240,8 @@
       for (var i = r; i < end; i++) {
         var bit = (i < 31) ? (1 << i) : 0;
         var cls = "bms-cell";
-        if (d.cell_fault_mask & bit) { cls += " cell-err"; }
+        if (d.cell_prot_mask & bit) { cls += " cell-prot"; }       // защита ячейки — красная рамка + мигание
+        else if (d.cell_warn_mask & bit) { cls += " cell-warn"; }  // предупреждение — оранжевая рамка
         if (d.balance_mask & bit) { cls += " cell-bal"; }
         if (cells[i] === d.cell_max) { cls += " cell-max"; } // максимум — яркий красный
         if (cells[i] === d.cell_min) { cls += " cell-min"; } // минимум — светло-синий

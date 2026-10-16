@@ -200,6 +200,10 @@ func fieldConvFor(typ string, _ uint16, id uint16) (fieldConv, bool) {
 		default:
 			return passConv("А"), true // Q_Cell — ток ячейки, А (u8, как есть)
 		}
+	case "bms":
+		// Контракт bms v1 (docs/bms-reader.md §1): значения в единицах контракта
+		// (мВ, 0.01 А, 0.1 %, …), приведение/масштаб — на клиенте (stats_charts.js div).
+		return rawConv(), true
 	}
 	return fieldConv{}, false
 }

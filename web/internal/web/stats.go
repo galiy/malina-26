@@ -103,7 +103,7 @@ func (s *Server) statsDevices() []statsDev {
 		order = append(order, statsDev{Type: typ, ID: id})
 	}
 
-	var maps, kess []string
+	var maps, kess, bmss []string
 	for _, cli := range []*tsdbclient.Client{tsdbclient.New(s.opts.TsdbRawSock), tsdbclient.New(s.opts.TsdbSock)} {
 		devs, err := cli.List()
 		if err != nil {
@@ -121,11 +121,16 @@ func (s *Server) statsDevices() []statsDev {
 				}
 			case "mbms":
 				mbms[d.ID] = true
+			case "bms":
+				if !containsStr(bmss, d.ID) {
+					bmss = append(bmss, d.ID)
+				}
 			}
 		}
 	}
 	sort.Strings(maps)
 	sort.Strings(kess)
+	sort.Strings(bmss)
 	usedMBMS := map[string]bool{}
 	for _, m := range maps {
 		add("map", m)
@@ -136,6 +141,9 @@ func (s *Server) statsDevices() []statsDev {
 	}
 	for _, k := range kess {
 		add("kes", k)
+	}
+	for _, b := range bmss { // BMS-Receiver (device_type=bms), id — наш серийник/ID
+		add("bms", b)
 	}
 	var orph []string
 	for id := range mbms {

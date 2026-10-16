@@ -10,22 +10,10 @@
 
 <div class="map-tabs">
   <button type="button" class="map-tab active" data-tab="monitor">{{index .T "map.tab_monitor"}}</button>
-  <button type="button" class="map-tab" data-tab="info">{{index .T "map.tab_info"}}</button>
-  <button type="button" class="map-tab" data-tab="control">{{index .T "map.tab_control"}}</button>
 </div>
 
 <div class="map-tabpane" id="tab-monitor">
   <div class="kes-panel" id="kesPanel"></div>
-</div>
-<div class="map-tabpane" id="tab-info" hidden>
-  <div class="mi-subtabs">
-    <button type="button" class="mi-subtab active" data-sub="main">{{index .T "mi.sub_main"}}</button>
-    <button type="button" class="mi-subtab" data-sub="system">{{index .T "mi.sub_system"}}</button>
-  </div>
-  <div id="kesInfo" class="kes-info"></div>
-</div>
-<div class="map-tabpane" id="tab-control" hidden>
-  <div id="kesControl" class="kes-control"></div>
 </div>
 
 <link rel="stylesheet" href="{{asset "legacy/css/glyphicons.css"}}">

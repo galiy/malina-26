@@ -11,7 +11,7 @@
   if (ID == null) { return; }
   function t(k) { return I18N[k] || k; }
 
-  var INTERVAL = 1000, timer = null, inflight = null, lastF = null, curTab = "monitor";
+  var INTERVAL = 1000, timer = null, inflight = null, lastF = null;
 
   var KESE = 0, KESR = 512, KESS = 1024, SLOT = 1536;
   function u8(b, o) { return b[o]; }
@@ -86,7 +86,10 @@
     var rel = "";
     [0, 1, 2].forEach(function (i) {
       var on = ((f.RelayC >> i) & 1) === 1;
-      rel += '<span class="kesp-rel' + (on ? " on" : "") + '" title="' + esc(t("kes.rele" + (i + 1))) + '">' + (on ? '<i class="glyphicons glyphicons-power"></i>' : "") + "</span>";
+      // Кликабельные значки реле: моментальный хинт «Включить/Выключить реле N».
+      var tip = (on ? t("ctl.relay_off") : t("ctl.relay_on")) + " " + (i + 1);
+      rel += '<span class="kesp-rel clickable' + (on ? " on" : "") + '" data-i="' + i +
+        '" data-tip="' + esc(tip) + '"><i class="glyphicons glyphicons-power"></i></span>';
     });
     el.innerHTML =
       // Верхняя полоса: солнце · индикаторы реле · режим · время · мощность · селектор · ID
@@ -110,64 +113,17 @@
           '<span class="kesp-leaf" title="' + esc(t("kes.lbl_energy")) + '"><i class="glyphicons glyphicons-leaf"></i> ' + esc(energy(f) + " " + t("kes.kwh")) + '</span></span></div>' +
         '<div class="kesp-tbat" title="' + esc(t("kes.lbl_temp")) + '"><i class="glyphicons glyphicons-temperature kesp-ico c-temp"></i><span class="kesp-set">' + vcell(temp(f.TempBat) + " " + t("kes.c")) + '</span></div>' +
         '<div class="kesp-st' + (errs.length ? " bad" : "") + '" title="' + esc(t("kes.errors")) + '"><i class="glyphicons glyphicons-rotate-right kesp-ico c-st"></i><span class="kesp-set">' + wind +
-          '<span class="kesp-status">' + esc(status) + '</span></span></div>' +
+          '<span class="kesp-status">' + esc(status) + "</span></span></div>" +
       '</div>';
+    // Серая плашка снизу панели: «Модель XX  Версия ПО X.X» (данные вкладки «Информация»).
+    var mb = document.createElement("div");
+    mb.className = "kesp-modelbar";
+    mb.textContent = t("kes.i.model") + " " + f.ModelPow + "  " + t("kes.i.fw") + " " +
+      ((f.FW & 0x0F) + "." + (f.FW >> 5));
+    el.appendChild(mb);
   }
 
-  // ---- Информация ----
-  function renderInfo(f) {
-    var el = document.getElementById("kesInfo"); if (!el) { return; }
-    if (curSub === "system") {
-      var rows = [
-        [t("kes.i.serial"), f.Serial], [t("kes.i.device"), f.Device], [t("kes.i.pow"), f.Pow],
-        [t("kes.i.fw"), (f.FW & 0x0F) + "." + (f.FW >> 5)], [t("kes.i.modelpow"), (f.ModelPow * 100) + " " + t("kes.w")],
-        [t("kes.i.modelvolt"), (f.ModelVolt * 12) + " " + t("kes.v")], [t("kes.i.pic"), f.Pic], [t("kes.i.net"), f.Net],
-        [t("kes.i.lastseen"), new Date(f.LastSeen * 1000).toLocaleString(navigator.language || undefined, { hour12: false })],
-        [t("kes.i.rse"), f.RSErrSis], [t("kes.i.i2c"), f.I2CErr],
-        [t("kes.i.iexts0"), f1(f.IExts0) + " " + t("kes.a")], [t("kes.i.iexts1"), f1(f.IExts1) + " " + t("kes.a")],
-        [t("kes.i.pexts0"), f.PExts0 + " " + t("kes.w")], [t("kes.i.pexts1"), f.PExts1 + " " + t("kes.w")],
-        [t("kes.i.wind"), (f.Windspeed === 0xFFFF ? "—" : f.Windspeed + " " + t("kes.hz"))]
-      ];
-      el.innerHTML = '<table class="tbl kes-sys"><tbody>' + rows.map(function (r) {
-        return '<tr><th>' + esc(r[0]) + '</th><td>' + esc(r[1]) + '</td></tr>';
-      }).join("") + '</tbody></table>';
-    } else {
-      var main = [
-        [t("kes.i.model"), String(f.ModelPow)],
-        [t("kes.i.fw"), (f.FW & 0x0F) + "." + (f.FW >> 5)],
-        [t("kes.i.serial"), "#" + f.Serial],
-        [t("kes.lbl_mode"), modeStr(f)],
-        [t("kes.lbl_pv"), f1(f.VcPV) + " " + t("kes.v") + " · " + f1(f.IcPV) + " " + t("kes.a") + " · " + f.PPV + " " + t("kes.w")],
-        [t("kes.lbl_bat"), f1(f.VBat) + " " + t("kes.v") + " · " + f1(f.ICh) + " " + t("kes.a") + " · " + f.PCurr + " " + t("kes.w")],
-        [t("kes.lbl_out"), f1(f.IOut) + " " + t("kes.a") + " · " + f.PLoad + " " + t("kes.w")],
-        [t("kes.lbl_temp"), temp(f.TempInt) + t("kes.c") + " / " + temp(f.TempBat) + t("kes.c")],
-        [t("kes.lbl_energy"), energy(f) + " " + t("kes.kwh")]
-      ];
-      el.innerHTML = '<table class="tbl kes-main"><tbody>' + main.map(function (r) {
-        return '<tr><th>' + esc(r[0]) + '</th><td>' + esc(r[1]) + '</td></tr>';
-      }).join("") + '</tbody></table>';
-    }
-  }
-
-  // ---- Управление: реле кнопками (как на МАП) ----
-  function renderControl(f) {
-    var el = document.getElementById("kesControl"); if (!el) { return; }
-    el.innerHTML = '<div class="kesctl-sec"><h3>' + esc(t("kes.lbl_relay")) + '</h3>' +
-      '<div class="ctl-cmdrow" id="kesRelays"></div></div>';
-    var box = el.querySelector("#kesRelays");
-    [0, 1, 2].forEach(function (i) {
-      var on = ((f.RelayC >> i) & 1) === 1;
-      var b = document.createElement("button");
-      b.type = "button";
-      b.className = "ctl-toggle" + (on ? " act-off" : "");
-      b.textContent = (on ? t("ctl.relay_off") : t("ctl.relay_on")) + " " + (i + 1);
-      b.onclick = function () {
-        var bit = 1 << i;
-        postRelay(on ? (f.RelayC & ~bit) : (f.RelayC | bit));
-      };
-      box.appendChild(b);
-    });
-  }
+  // Реле — запись по регистру E3D (используется кликом по значку реле на панели).
   function postRelay(val) {
     var data = ("0" + val.toString(16)).slice(-2);
     fetch("api/kes/write", {
@@ -181,9 +137,7 @@
 
   function render() {
     if (!lastF) { return; }
-    if (curTab === "monitor") { renderPanel(lastF); }
-    else if (curTab === "info") { renderInfo(lastF); }
-    else if (curTab === "control") { renderControl(lastF); }
+    renderPanel(lastF);
   }
 
   function showErr(m) { if (!errBox) { return; } if (m) { errBox.textContent = m; errBox.hidden = false; } else { errBox.hidden = true; } }
@@ -213,27 +167,31 @@
       .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { relocateKes(); return; } if (!(e && e.name === "AbortError")) { showErr(t("kes.connection_lost")); } });
   }
 
-  var curSub = "main";
   function initTabs() {
     var tabs = document.querySelectorAll(".map-tab");
-    var panes = { monitor: document.getElementById("tab-monitor"), info: document.getElementById("tab-info"), control: document.getElementById("tab-control") };
+    var panes = { monitor: document.getElementById("tab-monitor") };
     function show(name) {
-      curTab = name;
       Array.prototype.forEach.call(tabs, function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === name); });
       Object.keys(panes).forEach(function (k) { if (panes[k]) { panes[k].hidden = (k !== name); } });
       render();
     }
     Array.prototype.forEach.call(tabs, function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-tab")); }); });
-    Array.prototype.forEach.call(document.querySelectorAll(".mi-subtab"), function (b) {
-      b.addEventListener("click", function () {
-        curSub = b.getAttribute("data-sub");
-        Array.prototype.forEach.call(document.querySelectorAll(".mi-subtab"), function (x) { x.classList.toggle("active", x === b); });
-        render();
-      });
-    });
     show("monitor");
   }
   initTabs();
+
+  // Клик по значку реле на панели — то же действие, что у кнопок «Управления».
+  var panelEl = document.getElementById("kesPanel");
+  if (panelEl) {
+    panelEl.addEventListener("click", function (e) {
+      var rel = e.target && e.target.closest ? e.target.closest(".kesp-rel") : null;
+      if (!rel || !lastF) { return; }
+      var i = parseInt(rel.getAttribute("data-i"), 10) || 0;
+      var on = ((lastF.RelayC >> i) & 1) === 1;
+      var bit = 1 << i;
+      postRelay(on ? (lastF.RelayC & ~bit) : (lastF.RelayC | bit));
+    });
+  }
 
   function start() { if (timer) { return; } tick(); timer = setInterval(tick, INTERVAL); }
   function stop() { if (timer) { clearInterval(timer); timer = null; } if (inflight) { inflight.abort(); inflight = null; } }
