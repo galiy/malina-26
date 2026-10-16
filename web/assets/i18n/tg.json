@@ -1394,5 +1394,11 @@
   "bms.tab.info": "Маълумот",
   "bms.tab.control": "Идора",
   "bms.memo": "Маълумот (JSON)",
-  "home.sec_bms": "BMS"
+  "home.sec_bms": "BMS",
+  "bms.cells": "Ҳуҷайраҳо",
+  "bms.cell.min": "Мин",
+  "bms.cell.max": "Макс",
+  "bms.cell.diff": "Фарқ",
+  "bms.alert": "Хатои BMS",
+  "bms.ok": "Хато нест"
 }

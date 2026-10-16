@@ -1394,5 +1394,11 @@
   "bms.tab.info": "Ақпарат",
   "bms.tab.control": "Басқару",
   "bms.memo": "Деректер (JSON)",
-  "home.sec_bms": "BMS"
+  "home.sec_bms": "BMS",
+  "bms.cells": "Ұяшықтар",
+  "bms.cell.min": "Мин",
+  "bms.cell.max": "Макс",
+  "bms.cell.diff": "Айырма",
+  "bms.alert": "BMS қатесі",
+  "bms.ok": "Қате жоқ"
 }

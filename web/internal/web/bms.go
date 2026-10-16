@@ -52,15 +52,55 @@ type mainBmsTile struct {
 	Soc    *float64  `json:"soc"`    // % (nullable)
 	Pack   mainBlock `json:"pack"`   // колонка АКБ: U/I/P/T
 	Online bool      `json:"online"`
+
+	// Карта ячеек и флаги (для плитки на главной).
+	CellCount     int      `json:"cell_count"`
+	CellsMV       []uint16 `json:"cells_mv"`        // мВ, первые cell_count
+	CellMin       int      `json:"cell_min"`        // мВ
+	CellMax       int      `json:"cell_max"`        // мВ
+	CellDiff      int      `json:"cell_diff"`       // мВ (max−min)
+	BalanceMask   uint32   `json:"balance_mask"`    // бит i → ячейка i
+	CellFaultMask uint32   `json:"cell_fault_mask"` // бит i → ошибка ячейки i
+	BmsFault      bool     `json:"bms_fault"`       // ошибка BMS в целом
+}
+
+// alarmAny — есть ли хоть один установленный бит alarm в диапазоне [base, base+w).
+func alarmAny(t *bmscontract.Telemetry, base, w int) bool {
+	for k := base; k < base+w && k < bmscontract.AlarmLen*8; k++ {
+		if t.Alarm[k/8]&(1<<uint(k%8)) != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// alarmVal — значение битового поля ширины w (LSB-first) с позиции base.
+func alarmVal(t *bmscontract.Telemetry, base, w int) int {
+	v := 0
+	for k := 0; k < w; k++ {
+		if t.Alarm[(base+k)/8]&(1<<uint((base+k)%8)) != 0 {
+			v |= 1 << uint(k)
+		}
+	}
+	return v
+}
+
+// antMOSFault — код MOS (0..15) считается ошибкой только для защитных состояний
+// (кроме 0=Off, 1=On и 4=battery full / 11=charge on).
+func antMOSFault(code int) bool {
+	switch code {
+	case 2, 3, 5, 6, 7, 8, 9, 10, 12, 13, 14:
+		return true
+	}
+	return false
 }
 
 // buildBmsTile собирает плитку BMS из записи списка и распакованного контракта.
 func buildBmsTile(tr map[string]string, b BmsInfo, tel bmscontract.Telemetry) mainBmsTile {
-	label := bmsTypeLabel(b.TypeID, tr)
 	tile := mainBmsTile{
 		ID:     b.ID,
 		Gen:    b.Gen,
-		Title:  label + " · " + b.Serial,
+		Title:  b.Serial, // только серийник (тип — на странице устройства)
 		Serial: b.Serial,
 		Mode:   bmsModeLabel(tel.Mode&0xFF, tr),
 		Online: time.Since(time.Unix(b.LastSeen, 0)) <= mainOnlineWindow,
@@ -75,6 +115,51 @@ func buildBmsTile(tr map[string]string, b BmsInfo, tel bmscontract.Telemetry) ma
 		tile.Pack.T = mv(float64(tel.TempsDC[0]) / 10) // 0.1 °C → °C
 	} else {
 		tile.Pack.T = mvND()
+	}
+
+	// Карта ячеек: напряжения, min/max/разница (мВ).
+	n := int(tel.CellCount)
+	if n > bmscontract.MaxCells {
+		n = bmscontract.MaxCells
+	}
+	cells := make([]uint16, 0, n)
+	mn, mx := 0, 0
+	for i := 0; i < n; i++ {
+		v := tel.CellsMV[i]
+		cells = append(cells, v)
+		if i == 0 || int(v) < mn {
+			mn = int(v)
+		}
+		if i == 0 || int(v) > mx {
+			mx = int(v)
+		}
+	}
+	tile.CellCount = n
+	tile.CellsMV = cells
+	tile.CellMin, tile.CellMax, tile.CellDiff = mn, mx, mx-mn
+	tile.BalanceMask = tel.BalanceMask
+
+	// Флаги по типу (alarm — тип-специфичный, раскладка docs/bms/<TYPE>.md).
+	var cellFault uint32
+	switch b.TypeID {
+	case 2: // EnBMS: per-cell warn/protect — alarm-биты 0..63 (4 бита/ячейку)
+		for i := 0; i < n; i++ {
+			if alarmAny(&tel, i*4, 4) {
+				cellFault |= 1 << uint(i)
+			}
+		}
+	}
+	tile.CellFaultMask = cellFault
+
+	switch b.TypeID {
+	case 1: // AntBMS: MOS-коды в alarm (биты 0..3 charge, 4..7 discharge)
+		if antMOSFault(alarmVal(&tel, 0, 4)) || antMOSFault(alarmVal(&tel, 4, 4)) {
+			tile.BmsFault = true
+		}
+	case 2: // EnBMS: защиты/предупреждения Ext_Bit Byte0..5 (alarm-биты 100..146)
+		if alarmAny(&tel, 100, 47) {
+			tile.BmsFault = true
+		}
 	}
 	return tile
 }

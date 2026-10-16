@@ -1394,5 +1394,11 @@
   "bms.tab.info": "Ma'lumot",
   "bms.tab.control": "Boshqarish",
   "bms.memo": "Ma'lumotlar (JSON)",
-  "home.sec_bms": "BMS"
+  "home.sec_bms": "BMS",
+  "bms.cells": "Yacheykalar",
+  "bms.cell.min": "Min",
+  "bms.cell.max": "Maks",
+  "bms.cell.diff": "Farq",
+  "bms.alert": "BMS xatosi",
+  "bms.ok": "Xato yo'q"
 }

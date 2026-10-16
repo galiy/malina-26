@@ -1284,3 +1284,58 @@ tr.ctl-changed { background: #fff8e1; }
 .bms-memo-title { font-weight: 600; margin: 0 0 6px; }
 .bms-memo { background: #0f1115; color: #d7e0ea; padding: 12px; border-radius: 6px;
   overflow: auto; max-height: 60vh; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* BMS-плитка: карта ячеек (правая половина) + индикатор ошибки. */
+.home-col-cells { flex: 1 1 50%; }
+.bms-cells { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.bms-cell { min-width: 32px; padding: 2px 4px; text-align: center; font-size: 11px;
+  background: rgba(255,255,255,0.10); border: 2px solid transparent; border-radius: 4px; }
+.bms-cell.cell-bal { border-color: #e6c200; }
+.bms-cell.cell-err { border-color: #d33; }
+.bms-cell.cell-err.cell-bal { animation: bmsCellBlink 0.8s steps(1, end) infinite; }
+@keyframes bmsCellBlink { 0% { border-color: #d33; } 50% { border-color: #e6c200; } 100% { border-color: #d33; } }
+.bms-cells-num { display: flex; justify-content: space-between; font-size: 10px; opacity: .7; margin-top: 2px; }
+.bms-cells-stat { font-size: 11px; margin-top: 4px; opacity: .9; }
+.bms-alert { display: inline-block; width: 16px; height: 16px; line-height: 16px; text-align: center;
+  border-radius: 50%; font-weight: 800; color: #fff; background: #9aa0a6; margin-left: 6px; vertical-align: middle; }
+.bms-alert.on { background: #d33; animation: bmsAlertBlink 0.8s steps(1, end) infinite; }
+@keyframes bmsAlertBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: .25; } }
+
+/* BMS-плитка: «!» слева на обе строки (таблица), фон прозрачный. */
+.bms-head { width: 100%; border-collapse: collapse; }
+.bms-head > tbody > tr > td { padding: 0; vertical-align: top; }
+.bms-alert-cell { width: 1%; white-space: nowrap; vertical-align: middle; padding-right: 8px; }
+.bms-alert { display: inline-block; background: transparent; border: 0; padding: 0;
+  color: #37474f; font-weight: 800; font-size: 2.5em; line-height: 1; }
+.bms-alert.on { color: #d33; animation: bmsAlertBlink 0.8s steps(1, end) infinite; }
+@keyframes bmsAlertBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: .25; } }
+
+/* BMS-плитка: карта ячеек — 4 ряда (column-flow). */
+.bms-cells { display: grid; grid-template-rows: repeat(4, auto); grid-auto-flow: column;
+  gap: 4px; justify-content: start; }
+
+/* BMS-плитка (уточнение): центрировать «!»; ячейки — тонкие рамки, прозрачный
+   фон, салатовый шрифт; max — яркий красный, min — ярко-светло-синий. */
+.bms-alert-cell { width: 2.6em; text-align: center; padding-right: 10px; vertical-align: middle; }
+.bms-cell { background: transparent; border: 1px solid transparent; color: #a6e22e; }
+.bms-cell.cell-bal { border-color: #e6c200; }
+.bms-cell.cell-err { border-color: #d33; }
+.bms-cell.cell-max { color: #ff4136; }
+.bms-cell.cell-min { color: #4dd2ff; }
+
+/* BMS-плитка: min/max/разн — белый шрифт (были невидны). */
+.bms-cells-stat { color: #fff; opacity: 1; }
+.bms-cells-num { color: #fff; opacity: .8; }
+
+/* BMS-плитка: «!» — влево, с отступом до заголовка (был прижат к тексту). */
+.bms-alert-cell { width: auto; text-align: left; padding-right: 18px; }
+
+/* BMS-плитка: убрать «пустоту» слева — шапку («!» + заголовок) прижать в угол
+   карточки (компенсируем padding .home-tile .6rem/.8rem). */
+.bms-head { margin: -0.6rem 0 0 -0.8rem; width: calc(100% + 0.8rem); }
+.bms-alert-cell { padding-left: 0; }
+
+/* BMS-плитка: карта ячеек — таблица 4 в ряд, номера слева/справа каждой строки. */
+.bms-cells-tbl { border-collapse: collapse; }
+.bms-cells-tbl td { padding: 1px 2px; vertical-align: middle; }
+.bms-num { color: #fff; opacity: .8; font-size: 10px; text-align: center; min-width: 12px; }

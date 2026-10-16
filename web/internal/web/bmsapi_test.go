@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/galiy/malina-26/daemons/lib/bmscontract"
@@ -132,8 +131,8 @@ func TestBmsTileFields(t *testing.T) {
 	b := BmsInfo{ID: 0, Gen: 7, Serial: "AntBMS-DSP-160-00001", TypeID: 1, LastSeen: nowSec()}
 	tile := buildBmsTile(tr, b, tel)
 
-	if !strings.Contains(tile.Title, "ANT BMS") || !strings.Contains(tile.Title, "AntBMS-DSP-160-00001") {
-		t.Fatalf("title: %+v", tile)
+	if tile.Title != "AntBMS-DSP-160-00001" {
+		t.Fatalf("title=%q", tile.Title)
 	}
 	if tile.Serial != "AntBMS-DSP-160-00001" {
 		t.Fatalf("serial=%q", tile.Serial)

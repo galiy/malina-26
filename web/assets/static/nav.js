@@ -15,7 +15,7 @@
     });
   }
   function label(d) {
-    if (d.type === "bms") { return d.bms_type_label || d.bms_type || d.serial || ""; }
+    if (d.type === "bms") { return d.serial || d.bms_type_label || d.bms_type || ""; }
     return d.label || "";
   }
   function href(d) {

@@ -1394,5 +1394,11 @@
   "bms.tab.info": "Information",
   "bms.tab.control": "Control",
   "bms.memo": "Data (JSON)",
-  "home.sec_bms": "BMS"
+  "home.sec_bms": "BMS",
+  "bms.cells": "Cells",
+  "bms.cell.min": "Min",
+  "bms.cell.max": "Max",
+  "bms.cell.diff": "Diff",
+  "bms.alert": "BMS fault",
+  "bms.ok": "No faults"
 }

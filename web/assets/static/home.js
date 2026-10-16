@@ -171,12 +171,21 @@
 
   function cardHTML(d, mode) {
     var isKes = mode === "kes", isBms = mode === "bms";
-    var h = '<div class="home-title">' + esc(d.title) + "</div>" +
-      '<div class="home-status"><span class="home-status-mode">' + esc(d.mode || "\u2014") + "</span>";
-    // SOC КЭС/БМС — на строку статуса, прижат вправо (у МАП — в колонке «АКБ»).
-    if (isKes || isBms) { h += statusSocHTML(d.soc); }
-    h += "</div>" +
-      '<div class="home-cols">';
+    var modeHTML = '<span class="home-status-mode">' + esc(d.mode || "\u2014") + "</span>";
+    var h;
+    if (isBms) {
+      // Таблица: «!» слева на обе строки (rowspan=2), справа заголовок/статус;
+      // SOC — на строке статуса (прижат вправо).
+      h = '<table class="bms-head"><tbody>' +
+        '<tr><td class="bms-alert-cell" rowspan="2">' + bmsAlert(d.bms_fault) + "</td>" +
+        '<td class="home-title">' + esc(d.title) + "</td></tr>" +
+        '<tr><td><div class="home-status">' + modeHTML + statusSocHTML(d.soc) + "</div></td></tr>" +
+        "</tbody></table>";
+    } else {
+      h = '<div class="home-title">' + esc(d.title) + "</div>" +
+        '<div class="home-status">' + modeHTML + (isKes ? statusSocHTML(d.soc) : "") + "</div>";
+    }
+    h += '<div class="home-cols">';
     if (isKes) {
       h += colHTML(t("home.col.panel"), d.panel, [
         ["home.cell.u", "u"], ["home.cell.i", "i"], ["home.cell.p", "p", 0], ["home.cell.t", "t"]
@@ -187,11 +196,12 @@
         ["home.cell.p", "p", 0], ["home.cell.t", "t"]
       ], "batt-kes", d.soc);
     } else if (isBms) {
-      // БМС: одна колонка АКБ (U/I/P/T), SOC — на строке статуса.
+      // БМС: колонка АКБ (U/I/P/T) + карта ячеек (правая половина), SOC — на статусе.
       h += colHTML(t("home.col.batt"), d.pack, [
         ["home.cell.u", "u"], ["home.cell.i", "i"],
         ["home.cell.p", "p", 0], ["home.cell.t", "t"]
       ], "batt-kes", d.soc);
+      h += bmsCellsHTML(d);
     } else {
       h += colHTML(t("home.col.grid"), d.grid, [
         ["home.cell.u", "u"], ["home.cell.f", "f"], ["home.cell.i", "i"],
@@ -208,6 +218,45 @@
       ], "load", d.soc);
     }
     return h + "</div></div>";
+  }
+
+  // Индикатор ошибки BMS: «!» в круге; при ошибке — красный (мигает), иначе серый.
+  function bmsAlert(on) {
+    return '<span class="bms-alert' + (on ? " on" : "") + '" title="' +
+      esc(t(on ? "bms.alert" : "bms.ok")) + '">!</span>';
+  }
+
+  // Правая половина плитки БМС: min/max/разница + карта ячеек.
+  // Рамки: жёлтая — балансировка, красная — ошибка ячейки; обе → чередование (CSS).
+  function bmsCellsHTML(d) {
+    var cells = d.cells_mv || [];
+    var cols = 4; // 4 ячейки в ряд
+    var u = esc(t("kes.v"));
+    // Таблица: [номер левой] ячейки... [номер правой] в каждой строке.
+    var tbl = '<table class="bms-cells-tbl"><tbody>';
+    for (var r = 0; r < cells.length; r += cols) {
+      var end = Math.min(r + cols, cells.length);
+      tbl += '<tr><td class="bms-num">' + (r + 1) + "</td>";
+      for (var i = r; i < end; i++) {
+        var bit = (i < 31) ? (1 << i) : 0;
+        var cls = "bms-cell";
+        if (d.cell_fault_mask & bit) { cls += " cell-err"; }
+        if (d.balance_mask & bit) { cls += " cell-bal"; }
+        if (cells[i] === d.cell_max) { cls += " cell-max"; } // максимум — яркий красный
+        if (cells[i] === d.cell_min) { cls += " cell-min"; } // минимум — светло-синий
+        var vv = (cells[i] / 1000).toFixed(3); // мВ → В
+        tbl += '<td><span class="' + cls + '" title="' + (i + 1) + ": " + vv + " " +
+          u + '">' + vv + "</span></td>";
+      }
+      tbl += '<td class="bms-num">' + end + "</td></tr>";
+    }
+    tbl += "</tbody></table>";
+    var stat = '<div class="bms-cells-stat">' +
+      esc(t("bms.cell.min")) + " " + (d.cell_min / 1000).toFixed(3) + " " + u + " \u00b7 " +
+      esc(t("bms.cell.max")) + " " + (d.cell_max / 1000).toFixed(3) + " " + u + " \u00b7 " +
+      esc(t("bms.cell.diff")) + " " + (d.cell_diff / 1000).toFixed(3) + " " + u + "</div>";
+    return '<div class="home-col home-col-cells"><div class="home-col-title">' +
+      esc(t("bms.cells")) + "</div>" + stat + tbl + "</div>";
   }
 
   function setFog(el, state) {

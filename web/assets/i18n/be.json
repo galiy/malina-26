@@ -1394,5 +1394,11 @@
   "bms.tab.info": "Інфармацыя",
   "bms.tab.control": "Кіраванне",
   "bms.memo": "Даныя (JSON)",
-  "home.sec_bms": "БМС"
+  "home.sec_bms": "БМС",
+  "bms.cells": "Ячэйкі",
+  "bms.cell.min": "Мін",
+  "bms.cell.max": "Макс",
+  "bms.cell.diff": "Розн",
+  "bms.alert": "Памылка BMS",
+  "bms.ok": "Няма памылак"
 }

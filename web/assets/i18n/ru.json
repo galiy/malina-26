@@ -1394,5 +1394,11 @@
   "bms.tab.info": "Информация",
   "bms.tab.control": "Управление",
   "bms.memo": "Данные (JSON)",
-  "home.sec_bms": "БМС"
+  "home.sec_bms": "БМС",
+  "bms.cells": "Ячейки",
+  "bms.cell.min": "Мин",
+  "bms.cell.max": "Макс",
+  "bms.cell.diff": "Разн",
+  "bms.alert": "Ошибка BMS",
+  "bms.ok": "Нет ошибок"
 }

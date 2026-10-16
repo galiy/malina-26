@@ -1394,5 +1394,11 @@
   "bms.tab.info": "ინფორმაცია",
   "bms.tab.control": "მართვა",
   "bms.memo": "მონაცემები (JSON)",
-  "home.sec_bms": "BMS"
+  "home.sec_bms": "BMS",
+  "bms.cells": "უჯრედები",
+  "bms.cell.min": "მინ",
+  "bms.cell.max": "მაქს",
+  "bms.cell.diff": "სხვაობა",
+  "bms.alert": "BMS ხარვეზი",
+  "bms.ok": "ხარვეზი არ არის"
 }

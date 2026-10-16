@@ -1394,5 +1394,11 @@
   "bms.tab.info": "信息",
   "bms.tab.control": "控制",
   "bms.memo": "数据 (JSON)",
-  "home.sec_bms": "BMS"
+  "home.sec_bms": "BMS",
+  "bms.cells": "电芯",
+  "bms.cell.min": "最小",
+  "bms.cell.max": "最大",
+  "bms.cell.diff": "压差",
+  "bms.alert": "BMS 故障",
+  "bms.ok": "无故障"
 }

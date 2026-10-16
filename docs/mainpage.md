@@ -104,7 +104,7 @@ mux.HandleFunc("/api/mainlist", s.handleAPIMainList)
 - `maps` / `kes` / `bms` — **всегда** массивы (могут быть `[]`). `null` не отдаём.
   Инициализация: `resp := mainlistResp{Maps: []mainMapTile{}, Kes: []mainKesTile{}, Bms: []mainBmsTile{}}`
   (`mainlist.go`).
-- `bms` — плитки BMS (`mainBmsTile`): `id`, `gen`, `title` (метка типа + серийник),
+- `bms` — плитки BMS (`mainBmsTile`): `id`, `gen`, `title` (серийник/ID),
   `serial` (наш ID), `mode` (режим), `soc`, `pack` (U/I/P/T), `online`; источник — `loadBmsList()` +
   `bmsRawPayload()` + `bmscontract.Decode` (`bms.go`).
 
@@ -197,7 +197,7 @@ type mainlistResp struct {
 }
 ```
 
-> `mainBmsTile` (см. `bms.go`): `id`, `gen`, `title` (локализованная метка типа + серийник),
+> `mainBmsTile` (см. `bms.go`): `id`, `gen`, `title` (серийник/ID),
 > `serial` (наш ID), `mode` (локализованный режим), `soc *float64`, `pack mainBlock`
 > (U/I/P/T), `online`.
 
