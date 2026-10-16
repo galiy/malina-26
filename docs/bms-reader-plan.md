@@ -76,9 +76,11 @@
   `last` (`mode`); avg.
 - **Приёмка:** e2e с эмуляторами → raw/avg в tsdb.
 
-### M7. web-API `/api/bms/*` — **реализовано**; UI — вне рамок
+### M7. web-API `/api/bms/*` — **реализовано**; UI — по ТЗ `docs/bms-ui.md`
 
-> Реализован **API** (по решению владельца — без UI-страницы `web`).
+> **API реализован** (`/api/bms/{devices,raw}`, `mainlist.bms`). **UI** (меню МАП/КЭС/БМС,
+> страница устройства `/bms`, раздел «БМС» на главной; удаление «Монитора») — по ТЗ
+> `docs/bms-ui.md`, **реализация по отмашке**.
 
 - **`web/internal/web/bmsstate.go`** — чтение shm-сегмента BMS (`bms-list` + слот 107 Б),
   раскладка совпадает с `daemons/bms-reader/shm.go`.
