@@ -85,6 +85,30 @@ func setAntCRC(f []byte) {
 	binary.BigEndian.PutUint16(f[138:], uint16(sum))
 }
 
+// TestAntStreamChunked — эмуляция пассивного потока AntBMS: кадр приходит
+// раздробленными порциями (по 7 байт), с мусорным префиксом. readAntFrame
+// должен собрать ровно один валидный кадр за выборку (кадры в потоке избыточны,
+// лишнее за кадром не значимо).
+func TestAntStreamChunked(t *testing.T) {
+	f := buildAntFrame([]uint16{3300, 3301}, 100, 60, 160_000_000)
+	// мусорный префикс (не маркер) + кадр + «хвост» следующего кадра
+	stream := append([]byte{0x00, 0x11, 0xAA, 0x55, 0x01, 0x02}, f...)
+	stream = append(stream, f[:20]...) // обрывок следующего кадра
+
+	tr := &chunkTransport{rb: stream, chunk: 7}
+	g, err := readAntFrame(tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytesEq(g, f) {
+		t.Fatal("кадр извлечён неверно")
+	}
+	tel, err := parseAntFrame(g)
+	if err != nil || tel.CellCount != 2 || tel.SocDP != 600 {
+		t.Fatalf("разбор: %+v (%v)", tel, err)
+	}
+}
+
 // TestAntAlarm — упаковка alarm: коды MOS (4 бита) + system log (16 бит).
 func TestAntAlarm(t *testing.T) {
 	f := buildAntFrame([]uint16{3300}, 0, 50, 100_000_000)
