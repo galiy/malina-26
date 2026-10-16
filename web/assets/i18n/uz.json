@@ -1381,5 +1381,13 @@
   "bms.del": "O'chirish",
   "bms.err_port": "Port noto'g'ri",
   "bms.mode_modbus": "modbus",
-  "bms.mode_none": "none"
+  "bms.mode_none": "none",
+  "bms.type.ant": "ANT BMS",
+  "bms.type.en": "EnBMS (RS485)",
+  "bms.mode.idle": "Kutish",
+  "bms.mode.discharge": "Razryad",
+  "bms.mode.charge": "Zaryad",
+  "bms.mode.maintain": "Qo'llab-quvvatlash",
+  "bms.mode.full": "To'liq zaryad",
+  "bms.mode.shutdown": "O'chirish"
 }

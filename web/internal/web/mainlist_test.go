@@ -50,8 +50,8 @@ func TestMainListEmpty(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("JSON: %v (%q)", err, rec.Body.String())
 	}
-	if resp.Maps == nil || resp.Kes == nil {
-		t.Fatalf("ожидались не-nil массивы (не null): maps=%v kes=%v", resp.Maps, resp.Kes)
+	if resp.Maps == nil || resp.Kes == nil || resp.Bms == nil {
+		t.Fatalf("ожидались не-nil массивы (не null): maps=%v kes=%v bms=%v", resp.Maps, resp.Kes, resp.Bms)
 	}
 	if len(resp.Kes) != 0 {
 		t.Fatalf("kes=%d, ожидалось 0 (пустой сегмент)", len(resp.Kes))

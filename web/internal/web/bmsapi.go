@@ -23,21 +23,24 @@ func (s *Server) handleAPIBmsDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type device struct {
-		Type     string `json:"type"`
-		ID       int    `json:"id"`
-		Gen      uint64 `json:"gen"`
-		Serial   string `json:"serial"`
-		Base     string `json:"base"`
-		BmsType  string `json:"bms_type"`
-		Source   string `json:"source"`
-		Framing  int    `json:"framing"`
-		LastSeen int64  `json:"last_seen"`
+		Type         string `json:"type"`
+		ID           int    `json:"id"`
+		Gen          uint64 `json:"gen"`
+		Serial       string `json:"serial"`
+		Base         string `json:"base"`
+		BmsType      string `json:"bms_type"`
+		BmsTypeLabel string `json:"bms_type_label"` // локализованная метка типа
+		Source       string `json:"source"`
+		Framing      int    `json:"framing"`
+		LastSeen     int64  `json:"last_seen"`
 	}
+	tr := s.trFor(r)
 	out := make([]device, 0, bmsSlots)
 	for _, b := range loadBmsList().Bms {
 		out = append(out, device{
 			Type: "bms", ID: b.ID, Gen: b.Gen, Serial: b.Serial, Base: b.Base,
-			BmsType: b.TypeName, Source: b.Source, Framing: b.Framing, LastSeen: b.LastSeen,
+			BmsType: b.TypeName, BmsTypeLabel: bmsTypeLabel(b.TypeID, tr),
+			Source: b.Source, Framing: b.Framing, LastSeen: b.LastSeen,
 		})
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

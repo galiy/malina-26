@@ -1381,5 +1381,13 @@
   "bms.del": "წაშლა",
   "bms.err_port": "არასწორი პორტი",
   "bms.mode_modbus": "modbus",
-  "bms.mode_none": "none"
+  "bms.mode_none": "none",
+  "bms.type.ant": "ANT BMS",
+  "bms.type.en": "EnBMS (RS485)",
+  "bms.mode.idle": "ლოდინი",
+  "bms.mode.discharge": "განმუხტვა",
+  "bms.mode.charge": "დატვირთვა",
+  "bms.mode.maintain": "შენარჩუნება",
+  "bms.mode.full": "სრული დატვირთვა",
+  "bms.mode.shutdown": "გამორთვა"
 }

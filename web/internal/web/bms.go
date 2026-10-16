@@ -7,7 +7,76 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/galiy/malina-26/daemons/lib/bmscontract"
 )
+
+// bmsTypeLabel — локализованная метка типа BMS по внутреннему коду.
+func bmsTypeLabel(typeID int, tr map[string]string) string {
+	switch typeID {
+	case 1:
+		return pickLabel(tr, "bms.type.ant", "ANT BMS")
+	case 2:
+		return pickLabel(tr, "bms.type.en", "EnBMS (RS485)")
+	default:
+		return "BMS"
+	}
+}
+
+// bmsModeLabel — локализованная метка канонического режима (младший байт).
+func bmsModeLabel(code uint16, tr map[string]string) string {
+	keys := []string{"bms.mode.idle", "bms.mode.discharge", "bms.mode.charge", "bms.mode.maintain", "bms.mode.full", "bms.mode.shutdown"}
+	if int(code) < len(keys) {
+		return pickLabel(tr, keys[code], "")
+	}
+	return ""
+}
+
+func pickLabel(tr map[string]string, key, fallback string) string {
+	if tr != nil {
+		if s := tr[key]; s != "" {
+			return s
+		}
+	}
+	return fallback
+}
+
+// mainBmsTile — плитка BMS для /api/mainlist (по образцу МАП/КЭС).
+type mainBmsTile struct {
+	ID     int       `json:"id"`
+	Gen    uint64    `json:"gen"`
+	Title  string    `json:"title"` // метка типа + серийник/ID
+	Type   string    `json:"type"`  // локализованная метка типа
+	Mode   string    `json:"mode"`  // локализованный режим
+	Soc    *float64  `json:"soc"`   // % (nullable)
+	Pack   mainBlock `json:"pack"`  // колонка АКБ: U/I/P/T
+	Online bool      `json:"online"`
+}
+
+// buildBmsTile собирает плитку BMS из записи списка и распакованного контракта.
+func buildBmsTile(tr map[string]string, b BmsInfo, tel bmscontract.Telemetry) mainBmsTile {
+	label := bmsTypeLabel(b.TypeID, tr)
+	tile := mainBmsTile{
+		ID:     b.ID,
+		Gen:    b.Gen,
+		Type:   label,
+		Title:  label + " · " + b.Serial,
+		Mode:   bmsModeLabel(tel.Mode&0xFF, tr),
+		Online: time.Since(time.Unix(b.LastSeen, 0)) <= mainOnlineWindow,
+	}
+	soc := float64(tel.SocDP) / 10 // слот активен (иначе не в списке)
+	tile.Soc = &soc
+	tile.Pack.U = mv(float64(tel.TotalCV) / 100)   // 0.01 В → В
+	tile.Pack.I = mv(float64(tel.CurrentDA) / 100) // 0.01 А → А
+	tile.Pack.P = mv(float64(tel.PowerW))          // Вт
+	if tel.TempCount > 0 {
+		tile.Pack.T = mv(float64(tel.TempsDC[0]) / 10) // 0.1 °C → °C
+	} else {
+		tile.Pack.T = mvND()
+	}
+	return tile
+}
 
 // Страницы BMS: /bms/settings (шлюзы IP:PORT + режим) и /bms/monitor (заготовка).
 // Конфиг — /malina/etc/malina/bms-gateways.json (тот же, что читает bms-reader);

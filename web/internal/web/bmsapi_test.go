@@ -7,7 +7,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/galiy/malina-26/daemons/lib/bmscontract"
 )
 
 // writeBmsShmSegTest создаёт временный shm-сегмент BMS с одним устройством
@@ -118,5 +121,30 @@ func TestBmsRaw(t *testing.T) {
 	s.handleAPIBmsRaw(rec, authedReq(http.MethodGet, "/api/bms/raw?id=0", ""))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("без gen: code=%d, ожидалось 400", rec.Code)
+	}
+}
+
+// TestBmsTileFields — плитка BMS: единицы, метки типа/режима, online.
+func TestBmsTileFields(t *testing.T) {
+	tr := map[string]string{"bms.type.ant": "ANT BMS", "bms.mode.charge": "Заряд"}
+	tel := bmscontract.Telemetry{CellCount: 2, TempCount: 1, SocDP: 500, TotalCV: 5300, CurrentDA: 123, PowerW: 65, Mode: bmscontract.ModeCharge}
+	tel.TempsDC[0] = 250
+	b := BmsInfo{ID: 0, Gen: 7, Serial: "AntBMS-DSP-160-00001", TypeID: 1, LastSeen: nowSec()}
+	tile := buildBmsTile(tr, b, tel)
+
+	if tile.Type != "ANT BMS" || !strings.Contains(tile.Title, "AntBMS-DSP-160-00001") {
+		t.Fatalf("type/title: %+v", tile)
+	}
+	if tile.Mode != "Заряд" {
+		t.Fatalf("mode=%q", tile.Mode)
+	}
+	if tile.Pack.U.V != 53 || tile.Pack.I.V != 1.23 || tile.Pack.P.V != 65 || tile.Pack.T.V != 25 {
+		t.Fatalf("pack: %+v", tile.Pack)
+	}
+	if tile.Soc == nil || *tile.Soc != 50 {
+		t.Fatalf("soc=%v", tile.Soc)
+	}
+	if !tile.Online {
+		t.Fatal("online должен быть true")
 	}
 }

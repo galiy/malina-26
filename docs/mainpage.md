@@ -24,6 +24,10 @@
   (`home.js`), сервер цветов **не** присылает.
 - Период опроса клиента — **1 секунда** (§9.1 п.6).
 - Разделы показываются только при наличии устройств.
+- Ответ `/api/mainlist` содержит блоки `maps`, `kes` и **`bms`** (плитки BMS:
+  `type` — локализованная метка типа, `mode` — локализованный канонический режим,
+  `soc`, `pack` (U/I/P/T), `online`); источник — `loadBmsList()` + `bmsRawPayload()` +
+  `bmscontract.Decode`, см. `bms.go`.
 
 ---
 
@@ -44,6 +48,9 @@
 | `web/internal/web/mapmode` (пакет) | `Mode(reg func(string) uint32) uint32` — композитный режим МАП |
 | `web/internal/web/legacy.go` | `handleReadJSON` (панель 1 legacy-снимок) |
 | `web/internal/web/mode_text.go` | `modeLabelStatic` / `modeTextDynamic` |
+| `web/internal/web/bmsstate.go` | `BmsInfo`, `loadBmsList()`, `bmsRawPayload(id, gen)` |
+| `web/internal/web/bmsapi.go` | `handleAPIBmsDevices` (`bms_type_label`), `handleAPIBmsRaw` |
+| `web/internal/web/bms.go` | `bmsTypeLabel`/`bmsModeLabel`, `mainBmsTile`, `buildBmsTile`; страницы `/bms/*` |
 | `web/internal/web/server.go` | регистрация маршрутов (`mux.HandleFunc`) |
 | `web/internal/web/handlers.go` | `handleIndex` (сейчас пустая главная), `baseData`, `render`, `tr` |
 

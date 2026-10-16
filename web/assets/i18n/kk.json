@@ -1381,5 +1381,13 @@
   "bms.del": "Жою",
   "bms.err_port": "Порт дұрыс емес",
   "bms.mode_modbus": "modbus",
-  "bms.mode_none": "none"
+  "bms.mode_none": "none",
+  "bms.type.ant": "ANT BMS",
+  "bms.type.en": "EnBMS (RS485)",
+  "bms.mode.idle": "Күту",
+  "bms.mode.discharge": "Разряд",
+  "bms.mode.charge": "Зарядтау",
+  "bms.mode.maintain": "Қолдау",
+  "bms.mode.full": "Толық заряд",
+  "bms.mode.shutdown": "Өшіру"
 }

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/galiy/malina-26/daemons/lib/bmscontract"
 	"github.com/galiy/malina-26/web/internal/mapmode"
 )
 
@@ -68,6 +69,7 @@ type mainlistResp struct {
 	Updated int64         `json:"updated"`
 	Maps    []mainMapTile `json:"maps"`
 	Kes     []mainKesTile `json:"kes"`
+	Bms     []mainBmsTile `json:"bms"`
 }
 
 // handleAPIMainList — сводка по всем устройствам. Под авторизацией (cookie || Bearer).
@@ -83,7 +85,7 @@ func (s *Server) handleAPIMainList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tr := s.bundle.Translations(s.lang(r))
-	resp := mainlistResp{Updated: time.Now().Unix(), Maps: []mainMapTile{}, Kes: []mainKesTile{}}
+	resp := mainlistResp{Updated: time.Now().Unix(), Maps: []mainMapTile{}, Kes: []mainKesTile{}, Bms: []mainBmsTile{}}
 
 	for _, m := range loadMapList().Maps {
 		payload := mapRawPayload(m.ID)
@@ -107,6 +109,18 @@ func (s *Server) handleAPIMainList(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		resp.Kes = append(resp.Kes, buildKesTile(tr, k, kf))
+	}
+
+	for _, b := range loadBmsList().Bms {
+		payload := bmsRawPayload(b.ID, b.Gen)
+		if payload == nil {
+			continue
+		}
+		tel, err := bmscontract.Decode(payload)
+		if err != nil {
+			continue
+		}
+		resp.Bms = append(resp.Bms, buildBmsTile(tr, b, tel))
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
