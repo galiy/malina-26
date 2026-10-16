@@ -1366,12 +1366,9 @@
   "kes.dt1": "ДТ1",
   "kes.dt2": "ДТ2",
   "kes.lbl_cs": "Датчикҳои ҷараён",
-  "menu.bms": "BMS",
+  "menu.bms": "БМС",
   "menu.bms_settings": "Танзим",
-  "menu.bms_monitor": "Монитор",
   "bms.title": "BMS — танзими шлюзҳо",
-  "bms.monitor_title": "BMS — монитор",
-  "bms.monitor_empty": "Монитор ҳоло холӣ аст",
   "bms.host": "Хост / IP",
   "bms.port": "Порт",
   "bms.mode": "Ҳолат",
@@ -1389,5 +1386,13 @@
   "bms.mode.charge": "Заряд",
   "bms.mode.maintain": "Нигоҳдорӣ",
   "bms.mode.full": "Пурра заряд",
-  "bms.mode.shutdown": "Хомӯшкунӣ"
+  "bms.mode.shutdown": "Хомӯшкунӣ",
+  "menu.map_settings": "Танзим",
+  "menu.kes_settings": "Танзим",
+  "dev.stub": "Дар коркард",
+  "bms.tab.panel": "Панел",
+  "bms.tab.info": "Маълумот",
+  "bms.tab.control": "Идора",
+  "bms.memo": "Маълумот (JSON)",
+  "home.sec_bms": "BMS"
 }

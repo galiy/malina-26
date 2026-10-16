@@ -1368,10 +1368,7 @@
   "kes.lbl_cs": "Current sensors",
   "menu.bms": "BMS",
   "menu.bms_settings": "Settings",
-  "menu.bms_monitor": "Monitor",
   "bms.title": "BMS — gateway settings",
-  "bms.monitor_title": "BMS — monitor",
-  "bms.monitor_empty": "Monitor is empty for now",
   "bms.host": "Host / IP",
   "bms.port": "Port",
   "bms.mode": "Mode",
@@ -1389,5 +1386,13 @@
   "bms.mode.charge": "Charge",
   "bms.mode.maintain": "Maintain",
   "bms.mode.full": "Full charge",
-  "bms.mode.shutdown": "Shutdown"
+  "bms.mode.shutdown": "Shutdown",
+  "menu.map_settings": "Settings",
+  "menu.kes_settings": "Settings",
+  "dev.stub": "Under development",
+  "bms.tab.panel": "Panel",
+  "bms.tab.info": "Information",
+  "bms.tab.control": "Control",
+  "bms.memo": "Data (JSON)",
+  "home.sec_bms": "BMS"
 }

@@ -1366,12 +1366,9 @@
   "kes.dt1": "ДТ1",
   "kes.dt2": "ДТ2",
   "kes.lbl_cs": "Датчики тока",
-  "menu.bms": "BMS",
+  "menu.bms": "БМС",
   "menu.bms_settings": "Настройка",
-  "menu.bms_monitor": "Монитор",
   "bms.title": "BMS — настройка шлюзов",
-  "bms.monitor_title": "BMS — монитор",
-  "bms.monitor_empty": "Монитор пока пуст",
   "bms.host": "Хост / IP",
   "bms.port": "Порт",
   "bms.mode": "Режим",
@@ -1389,5 +1386,13 @@
   "bms.mode.charge": "Заряд",
   "bms.mode.maintain": "Поддержание",
   "bms.mode.full": "Полный заряд",
-  "bms.mode.shutdown": "Выключение"
+  "bms.mode.shutdown": "Выключение",
+  "menu.map_settings": "Настройка",
+  "menu.kes_settings": "Настройка",
+  "dev.stub": "В разработке",
+  "bms.tab.panel": "Панель",
+  "bms.tab.info": "Информация",
+  "bms.tab.control": "Управление",
+  "bms.memo": "Данные (JSON)",
+  "home.sec_bms": "БМС"
 }

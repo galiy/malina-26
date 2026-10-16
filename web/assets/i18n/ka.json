@@ -1368,10 +1368,7 @@
   "kes.lbl_cs": "დენის სენსორები",
   "menu.bms": "BMS",
   "menu.bms_settings": "პარამეტრები",
-  "menu.bms_monitor": "მონიტორი",
   "bms.title": "BMS — შლიუზების პარამეტრები",
-  "bms.monitor_title": "BMS — მონიტორი",
-  "bms.monitor_empty": "მონიტორი ჯერჯერობით ცარიელია",
   "bms.host": "ჰოსტი / IP",
   "bms.port": "პორტი",
   "bms.mode": "რეჟიმი",
@@ -1389,5 +1386,13 @@
   "bms.mode.charge": "დატვირთვა",
   "bms.mode.maintain": "შენარჩუნება",
   "bms.mode.full": "სრული დატვირთვა",
-  "bms.mode.shutdown": "გამორთვა"
+  "bms.mode.shutdown": "გამორთვა",
+  "menu.map_settings": "პარამეტრები",
+  "menu.kes_settings": "პარამეტრები",
+  "dev.stub": "მუშავდება",
+  "bms.tab.panel": "პანელი",
+  "bms.tab.info": "ინფორმაცია",
+  "bms.tab.control": "მართვა",
+  "bms.memo": "მონაცემები (JSON)",
+  "home.sec_bms": "BMS"
 }

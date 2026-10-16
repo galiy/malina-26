@@ -1,0 +1,33 @@
+{{define "content"}}
+<div class="map-head">
+  <h1 class="map-title">{{.Title}}</h1>
+  <div class="map-headctl">
+    <label class="map-pause"><input type="checkbox" id="bmsPause"> {{index .T "map.disable_update"}}</label>
+  </div>
+</div>
+
+<div class="flash err" id="bmsErr" hidden></div>
+
+<div class="map-tabs">
+  <button type="button" class="map-tab active" data-tab="panel">{{index .T "bms.tab.panel"}}</button>
+  <button type="button" class="map-tab" data-tab="info">{{index .T "bms.tab.info"}}</button>
+  <button type="button" class="map-tab" data-tab="control">{{index .T "bms.tab.control"}}</button>
+</div>
+
+<div class="map-tabpane" id="tab-panel"><div class="flash">{{index .T "dev.stub"}}</div></div>
+<div class="map-tabpane" id="tab-info" hidden><div class="flash">{{index .T "dev.stub"}}</div></div>
+<div class="map-tabpane" id="tab-control" hidden><div class="flash">{{index .T "dev.stub"}}</div></div>
+
+<div class="bms-memo-wrap">
+  <div class="bms-memo-title">{{index .T "bms.memo"}}</div>
+  <pre class="bms-memo" id="bmsMemo"></pre>
+</div>
+
+<script>
+window.I18N = {{json .T}};
+window.BMS_ID = {{.ID}};
+window.BMS_GEN = {{.Gen}};
+window.BMS_SERIAL = "{{.Serial}}";
+</script>
+<script src="{{asset "bms.js"}}"></script>
+{{end}}

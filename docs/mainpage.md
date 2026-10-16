@@ -95,13 +95,18 @@ mux.HandleFunc("/api/mainlist", s.handleAPIMainList)
 {
   "updated": 1720000001,
   "maps": [ /* 0..N плиток МАП, порядок — как в loadMapList() */ ],
-  "kes":  [ /* 0..M плиток КЭС, порядок — как в loadKesList() */ ]
+  "kes":  [ /* 0..M плиток КЭС, порядок — как в loadKesList() */ ],
+  "bms":  [ /* 0..K плиток БМС, порядок — как в loadBmsList() */ ]
 }
 ```
 
 - `updated` — `time.Now().Unix()` (момент сборки).
-- `maps` / `kes` — **всегда** массивы (могут быть `[]`). `null` не отдаём.
-  Инициализация: `resp := mainlistResp{Maps: []mainMapTile{}, Kes: []mainKesTile{}}`.
+- `maps` / `kes` / `bms` — **всегда** массивы (могут быть `[]`). `null` не отдаём.
+  Инициализация: `resp := mainlistResp{Maps: []mainMapTile{}, Kes: []mainKesTile{}, Bms: []mainBmsTile{}}`
+  (`mainlist.go`).
+- `bms` — плитки BMS (`mainBmsTile`): `id`, `gen`, `title` (метка типа + серийник),
+  `serial` (наш ID), `mode` (режим), `soc`, `pack` (U/I/P/T), `online`; источник — `loadBmsList()` +
+  `bmsRawPayload()` + `bmscontract.Decode` (`bms.go`).
 
 ### 3.4 Логика сборки (сервер, псевдокод)
 
@@ -188,8 +193,13 @@ type mainlistResp struct {
     Updated int64         `json:"updated"`
     Maps    []mainMapTile `json:"maps"`
     Kes     []mainKesTile `json:"kes"`
+    Bms     []mainBmsTile `json:"bms"`
 }
 ```
+
+> `mainBmsTile` (см. `bms.go`): `id`, `gen`, `title` (локализованная метка типа + серийник),
+> `serial` (наш ID), `mode` (локализованный режим), `soc *float64`, `pack mainBlock`
+> (U/I/P/T), `online`.
 
 > `Soc` у обеих плиток — `*float64` (nullable). У КЭС `Soc=nil` при отсутствии
 > данных (`ModelVolt=0` или `VBat=0`) — единое поведение с МАП (см. §5.3.1).
@@ -598,6 +608,10 @@ func kesModeString(f *kesFields) string {
     <h2>{{index .T "home.sec_kes"}}</h2>
     <div class="home-tiles" id="homeKesTiles"></div>
   </section>
+  <section class="home-section" id="homeBms" hidden>
+    <h2>{{index .T "home.sec_bms"}}</h2>
+    <div class="home-tiles" id="homeBmsTiles"></div>
+  </section>
 </div>
 <script>
   window.I18N = {{json .T}};
@@ -608,7 +622,9 @@ func kesModeString(f *kesFields) string {
 
 - `{{asset "home.js"}}` — новый файл `web/assets/static/home.js`.
 - Заголовок страницы (`<h1>`) не выводится; разделы подписаны ключами
-  `home.sec_map`/`home.sec_kes`. Весь набор ключей `home.*` — во **всех** локалях
+  `home.sec_map`/`home.sec_kes`/`home.sec_bms`. Раздел «БМС» (плитки BMS) рисует
+  `home.js` по тому же принципу (одна колонка U/I/P/T, SOC на строке статуса, ссылка
+  `/bms?id&gen&serial`). Весь набор ключей `home.*` — во **всех** локалях
   `web/assets/i18n/*.json` (ru/be/zh/en/ka/kk/uz/tg).
 
 ### 10.2 `home.js` — логика клиента
@@ -685,6 +701,7 @@ func kesModeString(f *kesFields) string {
 |---|---|
 | `home.sec_map` | `МАП` |
 | `home.sec_kes` | `КЭС` |
+| `home.sec_bms` | `БМС` |
 | `home.nd` | `н/д` |
 | `home.err` | `Нет связи` |
 | `home.col.grid` / `.batt` / `.load` | заголовки колонок МАП (Сеть/АКБ/Нагрузка) |

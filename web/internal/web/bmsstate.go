@@ -50,6 +50,11 @@ type BmsInfo struct {
 	LastSeen int64  `json:"last_seen"` // unix
 }
 
+// MenuLabel — подпись устройства для меню: метка типа + серийник/ID.
+func (b BmsInfo) MenuLabel(tr map[string]string) string {
+	return bmsTypeLabel(b.TypeID, tr) + " · " + b.Serial
+}
+
 // BmsList — документ списка BMS.
 type BmsList struct {
 	Updated int64     `json:"updated"`

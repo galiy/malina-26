@@ -132,8 +132,11 @@ func TestBmsTileFields(t *testing.T) {
 	b := BmsInfo{ID: 0, Gen: 7, Serial: "AntBMS-DSP-160-00001", TypeID: 1, LastSeen: nowSec()}
 	tile := buildBmsTile(tr, b, tel)
 
-	if tile.Type != "ANT BMS" || !strings.Contains(tile.Title, "AntBMS-DSP-160-00001") {
-		t.Fatalf("type/title: %+v", tile)
+	if !strings.Contains(tile.Title, "ANT BMS") || !strings.Contains(tile.Title, "AntBMS-DSP-160-00001") {
+		t.Fatalf("title: %+v", tile)
+	}
+	if tile.Serial != "AntBMS-DSP-160-00001" {
+		t.Fatalf("serial=%q", tile.Serial)
 	}
 	if tile.Mode != "Заряд" {
 		t.Fatalf("mode=%q", tile.Mode)

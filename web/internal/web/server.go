@@ -247,7 +247,8 @@ func New(o Options) (*Server, error) {
 		"master":          "master.html",
 		"master_settings": "master_settings.html",
 		"bms_settings":    "bms_settings.html",
-		"bms_monitor":     "bms_monitor.html",
+		"bms":             "bms.html",
+		"page_stub":       "page_stub.html",
 		"email":           "email.html",
 		"events":          "events.html",
 		"stats_charts":    "stats_charts.html",
@@ -391,8 +392,10 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/master", s.handleMaster)
 	mux.HandleFunc("/master/panel", s.handleMasterPanel)
 	mux.HandleFunc("/master/settings", s.handleMasterSettings)
+	mux.HandleFunc("/bms", s.handleBmsPage)
 	mux.HandleFunc("/bms/settings", s.handleBmsSettings)
-	mux.HandleFunc("/bms/monitor", s.handleBmsMonitor)
+	mux.HandleFunc("/map/settings", s.handleMapSettings)
+	mux.HandleFunc("/kes/settings", s.handleKesSettings)
 	mux.HandleFunc("/system/email", s.handleEmail)
 	mux.HandleFunc("/system/email/save", s.handleEmailSave)
 	mux.HandleFunc("/system/email/test", s.handleEmailTest)

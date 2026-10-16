@@ -1278,3 +1278,9 @@ tr.ctl-changed { background: #fff8e1; }
   box-shadow: 0 4px 16px rgba(0,0,0,.35); font-size: 13px; line-height: 1.35;
   white-space: normal; text-align: left;
 }
+
+/* BMS: Memo с JSON под закладками (страница /bms). */
+.bms-memo-wrap { margin-top: 14px; }
+.bms-memo-title { font-weight: 600; margin: 0 0 6px; }
+.bms-memo { background: #0f1115; color: #d7e0ea; padding: 12px; border-radius: 6px;
+  overflow: auto; max-height: 60vh; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }

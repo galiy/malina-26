@@ -95,6 +95,8 @@
   var mapWrap = document.getElementById("homeMapTiles");
   var kesSection = document.getElementById("homeKes");
   var kesWrap = document.getElementById("homeKesTiles");
+  var bmsSection = document.getElementById("homeBms");
+  var bmsWrap = document.getElementById("homeBmsTiles");
   var errBox = document.getElementById("homeErr");
 
   // Реестр плиток: key ("map:3"/"kes:5") -> элемент .home-tile.
@@ -167,11 +169,12 @@
     return '<span class="home-status-soc' + cls + '">' + lab + Math.round(soc) + " %</span>";
   }
 
-  function cardHTML(d, isKes) {
+  function cardHTML(d, mode) {
+    var isKes = mode === "kes", isBms = mode === "bms";
     var h = '<div class="home-title">' + esc(d.title) + "</div>" +
       '<div class="home-status"><span class="home-status-mode">' + esc(d.mode || "\u2014") + "</span>";
-    // SOC КЭС — на строку статуса, прижат вправо (у МАП остаётся в колонке «АКБ»).
-    if (isKes) { h += statusSocHTML(d.soc); }
+    // SOC КЭС/БМС — на строку статуса, прижат вправо (у МАП — в колонке «АКБ»).
+    if (isKes || isBms) { h += statusSocHTML(d.soc); }
     h += "</div>" +
       '<div class="home-cols">';
     if (isKes) {
@@ -181,6 +184,12 @@
       // Ток АКБ — 2 знака; u/i/p бежевые, t — по темпу АКБ (SOC — на строке статуса).
       h += colHTML(t("home.col.batt"), d.batt, [
         ["home.cell.u", "u"], ["home.cell.i", "i", 2],
+        ["home.cell.p", "p", 0], ["home.cell.t", "t"]
+      ], "batt-kes", d.soc);
+    } else if (isBms) {
+      // БМС: одна колонка АКБ (U/I/P/T), SOC — на строке статуса.
+      h += colHTML(t("home.col.batt"), d.pack, [
+        ["home.cell.u", "u"], ["home.cell.i", "i"],
         ["home.cell.p", "p", 0], ["home.cell.t", "t"]
       ], "batt-kes", d.soc);
     } else {
@@ -218,7 +227,7 @@
 
   // Обновление одного раздела: in-place обновление, добавление новых, затуманивание
   // пропавших и устаревших, без изменения позиций существующих плиток.
-  function applySection(secEl, wrapEl, arr, prefix, isKes) {
+  function applySection(secEl, wrapEl, arr, prefix, mode) {
     var seen = {};
     (arr || []).forEach(function (d) {
       var key = prefix + d.id;
@@ -228,17 +237,18 @@
         el = document.createElement("div");
         el.className = "home-tile";
         el.setAttribute("data-key", key);
-        // Ссылка на страницу устройства (МАП/КЭС) по id+gen, как пункты меню.
-        var page = isKes ? "kes" : "map";
-        var url = page + "?id=" + encodeURIComponent(d.id) +
+        // Ссылка на страницу устройства (МАП/КЭС/БМС) по id+gen, как пункты меню.
+        // serial добавляем только если сервер его отдал (иначе параметр пустой).
+        var url = mode + "?id=" + encodeURIComponent(d.id) +
           "&gen=" + encodeURIComponent(d.gen || "");
+        if (d.serial) { url += "&serial=" + encodeURIComponent(d.serial); }
         el.innerHTML = '<a class="home-tile-link" href="' + url + '">' +
           '<div class="home-card"></div></a>' +
           '<div class="home-fog" hidden><span class="home-fog-text"></span></div>';
         wrapEl.appendChild(el); // только в конец — новая плитка
         tiles[key] = el;
       }
-      el.querySelector(".home-card").innerHTML = cardHTML(d, isKes);
+      el.querySelector(".home-card").innerHTML = cardHTML(d, mode);
       setFog(el, d.online ? "" : "stale");
     });
     // Пропавшие из ответа устройства — затуманиваются, но не удаляются.
@@ -271,8 +281,9 @@
       .then(function (d) {
         if (!d) { return; }
         showErr("");
-        applySection(mapSection, mapWrap, d.maps || [], "map:", false);
-        applySection(kesSection, kesWrap, d.kes || [], "kes:", true);
+        applySection(mapSection, mapWrap, d.maps || [], "map:", "map");
+        applySection(kesSection, kesWrap, d.kes || [], "kes:", "kes");
+        applySection(bmsSection, bmsWrap, d.bms || [], "bms:", "bms");
       })
       .catch(function (e) {
         showErr(t("home.err"));

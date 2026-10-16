@@ -46,11 +46,11 @@ func pickLabel(tr map[string]string, key, fallback string) string {
 type mainBmsTile struct {
 	ID     int       `json:"id"`
 	Gen    uint64    `json:"gen"`
-	Title  string    `json:"title"` // метка типа + серийник/ID
-	Type   string    `json:"type"`  // локализованная метка типа
-	Mode   string    `json:"mode"`  // локализованный режим
-	Soc    *float64  `json:"soc"`   // % (nullable)
-	Pack   mainBlock `json:"pack"`  // колонка АКБ: U/I/P/T
+	Title  string    `json:"title"`  // метка типа + серийник/ID
+	Serial string    `json:"serial"` // наш ID (для ссылки/перепривязки на странице)
+	Mode   string    `json:"mode"`   // локализованный режим
+	Soc    *float64  `json:"soc"`    // % (nullable)
+	Pack   mainBlock `json:"pack"`   // колонка АКБ: U/I/P/T
 	Online bool      `json:"online"`
 }
 
@@ -60,8 +60,8 @@ func buildBmsTile(tr map[string]string, b BmsInfo, tel bmscontract.Telemetry) ma
 	tile := mainBmsTile{
 		ID:     b.ID,
 		Gen:    b.Gen,
-		Type:   label,
 		Title:  label + " · " + b.Serial,
+		Serial: b.Serial,
 		Mode:   bmsModeLabel(tel.Mode&0xFF, tr),
 		Online: time.Since(time.Unix(b.LastSeen, 0)) <= mainOnlineWindow,
 	}
@@ -79,7 +79,8 @@ func buildBmsTile(tr map[string]string, b BmsInfo, tel bmscontract.Telemetry) ma
 	return tile
 }
 
-// Страницы BMS: /bms/settings (шлюзы IP:PORT + режим) и /bms/monitor (заготовка).
+// Страницы BMS: /bms (конкретное устройство, закладки + Memo-JSON) и
+// /bms/settings (шлюзы IP:PORT + режим).
 // Конфиг — /malina/etc/malina/bms-gateways.json (тот же, что читает bms-reader);
 // сохранение → запись конфига + reload демона через control-сокет (SIGHUP-эквивалент).
 
@@ -194,15 +195,54 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 	s.render(w, http.StatusOK, "bms_settings", data)
 }
 
-// handleBmsMonitor — страница «Монитор» (пока пустая).
-func (s *Server) handleBmsMonitor(w http.ResponseWriter, r *http.Request) {
+// handleBmsPage — страница конкретной BMS (/bms?id&gen): закладки-заглушки
+// «Панель/Информация/Управление» + Memo с JSON (bms.js). По образцу handleKesPage.
+func (s *Server) handleBmsPage(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
-	initPage(w)
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	id, _ := strconv.Atoi(r.URL.Query().Get("id"))
+	sn := r.URL.Query().Get("serial")
+	b, ok := findBms(id)
+	if !ok && sn != "" {
+		b, ok = findBmsBySerial(sn)
+	}
 	data := s.baseData(r)
-	data["Active"] = "bms_monitor"
-	s.render(w, http.StatusOK, "bms_monitor", data)
+	data["Active"] = "bms"
+	if ok {
+		data["ID"] = b.ID
+		data["Gen"] = b.Gen
+		data["Serial"] = b.Serial
+		data["Title"] = b.MenuLabel(s.trFor(r))
+	} else if sn != "" {
+		// Устройство ещё не обнаружено — страница-ожидание; клиент повторит поиск.
+		data["ID"] = id
+		data["Gen"] = 0
+		data["Serial"] = sn
+		data["Title"] = bmsTypeLabel(0, s.trFor(r)) + " · " + sn
+	} else {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	s.render(w, http.StatusOK, "bms", data)
+}
+
+// findBmsBySerial — поиск записи списка BMS по серийнику (при устаревшем id/gen).
+func findBmsBySerial(serial string) (BmsInfo, bool) {
+	if serial == "" {
+		return BmsInfo{}, false
+	}
+	for _, b := range loadBmsList().Bms {
+		if b.Serial == serial {
+			return b, true
+		}
+	}
+	return BmsInfo{}, false
 }
 
 // parseBmsForm собирает шлюзы из формы; возвращает текст ошибки (или "").

@@ -1366,12 +1366,9 @@
   "kes.dt1": "ДТ1",
   "kes.dt2": "ДТ2",
   "kes.lbl_cs": "Ток датчиктері",
-  "menu.bms": "BMS",
+  "menu.bms": "БМС",
   "menu.bms_settings": "Баптау",
-  "menu.bms_monitor": "Монитор",
   "bms.title": "BMS — шлюздерді баптау",
-  "bms.monitor_title": "BMS — монитор",
-  "bms.monitor_empty": "Монитор әзірге бос",
   "bms.host": "Хост / IP",
   "bms.port": "Порт",
   "bms.mode": "Режим",
@@ -1389,5 +1386,13 @@
   "bms.mode.charge": "Зарядтау",
   "bms.mode.maintain": "Қолдау",
   "bms.mode.full": "Толық заряд",
-  "bms.mode.shutdown": "Өшіру"
+  "bms.mode.shutdown": "Өшіру",
+  "menu.map_settings": "Баптау",
+  "menu.kes_settings": "Баптау",
+  "dev.stub": "Әзірленуде",
+  "bms.tab.panel": "Панель",
+  "bms.tab.info": "Ақпарат",
+  "bms.tab.control": "Басқару",
+  "bms.memo": "Деректер (JSON)",
+  "home.sec_bms": "BMS"
 }

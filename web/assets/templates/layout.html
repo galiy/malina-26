@@ -19,31 +19,25 @@
           {{index .T "menu.home"}}
         </a>
       </div>
-      <div class="navitem dropdown {{if eq .Active "map"}}active{{end}}">
+      <div class="navitem dropdown {{if or (eq .Active "map") (eq .Active "map_settings")}}active{{end}}">
         <span class="navlink">{{index .T "menu.map"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
-          <div id="mapMenuWrap" {{if not .Maps}}hidden{{end}}>
-            <div id="mapMenuItems">
-              {{range .Maps}}<a class="dropdown-sub" href="/map?id={{.ID}}&gen={{.Gen}}&serial={{.SerialLabel}}">{{.MenuLabel $.T}}</a>{{end}}
-            </div>
-          </div>
+          <div id="mapMenuItems">{{range .Maps}}<a class="dropdown-sub" href="/map?id={{.ID}}&gen={{.Gen}}&serial={{.SerialLabel}}">{{.MenuLabel $.T}}</a>{{end}}</div>
+          <a href="/map/settings" class="{{if eq .Active "map_settings"}}active{{end}}">{{index .T "menu.map_settings"}}</a>
         </div>
       </div>
-      <div class="navitem dropdown {{if eq .Active "kes"}}active{{end}}">
+      <div class="navitem dropdown {{if or (eq .Active "kes") (eq .Active "kes_settings")}}active{{end}}">
         <span class="navlink">{{index .T "menu.kes"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
-          <div id="kesMenuWrap" {{if not .Kes}}hidden{{end}}>
-            <div id="kesMenuItems">
-              {{range .Kes}}<a class="dropdown-sub" href="/kes?id={{.ID}}&gen={{.Gen}}&serial={{.SerialLabel}}">{{.MenuLabel $.T}}</a>{{end}}
-            </div>
-          </div>
+          <div id="kesMenuItems">{{range .Kes}}<a class="dropdown-sub" href="/kes?id={{.ID}}&gen={{.Gen}}&serial={{.SerialLabel}}">{{.MenuLabel $.T}}</a>{{end}}</div>
+          <a href="/kes/settings" class="{{if eq .Active "kes_settings"}}active{{end}}">{{index .T "menu.kes_settings"}}</a>
         </div>
       </div>
-      <div class="navitem dropdown {{if or (eq .Active "bms_settings") (eq .Active "bms_monitor")}}active{{end}}">
+      <div class="navitem dropdown {{if or (eq .Active "bms") (eq .Active "bms_settings")}}active{{end}}">
         <span class="navlink">{{index .T "menu.bms"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
+          <div id="bmsMenuItems">{{range .Bms}}<a class="dropdown-sub" href="/bms?id={{.ID}}&gen={{.Gen}}&serial={{.Serial}}">{{.MenuLabel $.T}}</a>{{end}}</div>
           <a href="/bms/settings" class="{{if eq .Active "bms_settings"}}active{{end}}">{{index .T "menu.bms_settings"}}</a>
-          <a href="/bms/monitor" class="{{if eq .Active "bms_monitor"}}active{{end}}">{{index .T "menu.bms_monitor"}}</a>
         </div>
       </div>
       <div class="navitem dropdown {{if eq .Active "stats"}}active{{end}}">

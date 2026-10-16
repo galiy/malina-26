@@ -1,9 +1,6 @@
 {{define "content"}}
 <div class="map-head">
   <h1 class="map-title">{{index .T "bms.title"}}</h1>
-  <div class="map-headctl">
-    <a class="btn" href="/bms/monitor">{{index .T "menu.bms_monitor"}}</a>
-  </div>
 </div>
 {{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
 {{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}

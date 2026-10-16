@@ -1368,10 +1368,7 @@
   "kes.lbl_cs": "电流传感器",
   "menu.bms": "BMS",
   "menu.bms_settings": "设置",
-  "menu.bms_monitor": "监控",
   "bms.title": "BMS — 网关设置",
-  "bms.monitor_title": "BMS — 监控",
-  "bms.monitor_empty": "监控暂无内容",
   "bms.host": "主机 / IP",
   "bms.port": "端口",
   "bms.mode": "模式",
@@ -1389,5 +1386,13 @@
   "bms.mode.charge": "充电",
   "bms.mode.maintain": "维持",
   "bms.mode.full": "充满",
-  "bms.mode.shutdown": "关机"
+  "bms.mode.shutdown": "关机",
+  "menu.map_settings": "设置",
+  "menu.kes_settings": "设置",
+  "dev.stub": "开发中",
+  "bms.tab.panel": "面板",
+  "bms.tab.info": "信息",
+  "bms.tab.control": "控制",
+  "bms.memo": "数据 (JSON)",
+  "home.sec_bms": "BMS"
 }

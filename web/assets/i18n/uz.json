@@ -1368,10 +1368,7 @@
   "kes.lbl_cs": "Tok datchiklari",
   "menu.bms": "BMS",
   "menu.bms_settings": "Sozlash",
-  "menu.bms_monitor": "Monitor",
   "bms.title": "BMS — shlyuzlarni sozlash",
-  "bms.monitor_title": "BMS — monitor",
-  "bms.monitor_empty": "Monitor hozircha bo'sh",
   "bms.host": "Xost / IP",
   "bms.port": "Port",
   "bms.mode": "Rejim",
@@ -1389,5 +1386,13 @@
   "bms.mode.charge": "Zaryad",
   "bms.mode.maintain": "Qo'llab-quvvatlash",
   "bms.mode.full": "To'liq zaryad",
-  "bms.mode.shutdown": "O'chirish"
+  "bms.mode.shutdown": "O'chirish",
+  "menu.map_settings": "Sozlash",
+  "menu.kes_settings": "Sozlash",
+  "dev.stub": "Ishlab chiqilmoqda",
+  "bms.tab.panel": "Panel",
+  "bms.tab.info": "Ma'lumot",
+  "bms.tab.control": "Boshqarish",
+  "bms.memo": "Ma'lumotlar (JSON)",
+  "home.sec_bms": "BMS"
 }

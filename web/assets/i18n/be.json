@@ -1366,12 +1366,9 @@
   "kes.dt1": "ДТ1",
   "kes.dt2": "ДТ2",
   "kes.lbl_cs": "Датчыкі току",
-  "menu.bms": "BMS",
+  "menu.bms": "БМС",
   "menu.bms_settings": "Наладка",
-  "menu.bms_monitor": "Манітор",
   "bms.title": "BMS — наладка шлюзаў",
-  "bms.monitor_title": "BMS — манітор",
-  "bms.monitor_empty": "Манітор пакуль пусты",
   "bms.host": "Хост / IP",
   "bms.port": "Порт",
   "bms.mode": "Рэжым",
@@ -1389,5 +1386,13 @@
   "bms.mode.charge": "Зарад",
   "bms.mode.maintain": "Падтрымка",
   "bms.mode.full": "Поўны зарад",
-  "bms.mode.shutdown": "Выключэнне"
+  "bms.mode.shutdown": "Выключэнне",
+  "menu.map_settings": "Наладка",
+  "menu.kes_settings": "Наладка",
+  "dev.stub": "У распрацоўцы",
+  "bms.tab.panel": "Панэль",
+  "bms.tab.info": "Інфармацыя",
+  "bms.tab.control": "Кіраванне",
+  "bms.memo": "Даныя (JSON)",
+  "home.sec_bms": "БМС"
 }
