@@ -19,28 +19,28 @@ type udpManager struct {
 }
 
 // sync приводит состояние слушателя к заданному адресу (пусто — выключить).
+// Неудачный старт НЕ кэшируется: при m.cur == nil повторный sync с тем же адресом
+// снова пытается запустить слушатель (важно для reload/периодического перечитывания).
 func (m *udpManager) sync(addr string, d *daemon) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	addr = strings.TrimSpace(addr)
-	if addr == m.addr {
+	if addr == m.addr && (addr == "" || m.cur != nil) {
 		return
 	}
-	if m.cur != nil {
-		_ = m.cur.conn.Close()
-		<-m.cur.done
-		m.cur = nil
-	}
-	m.addr = addr
+	m.stopLocked()
 	if addr == "" {
+		m.addr = ""
 		infof("UDP-слушатель выключен")
 		return
 	}
 	ul, err := newUDPListener(addr, d)
 	if err != nil {
 		errorf("UDP-слушатель не запущен (%s): %v", addr, err)
+		m.addr = "" // не кэшируем неуспех — повторим при следующем sync
 		return
 	}
+	m.addr = addr
 	m.cur = ul
 	go ul.serve()
 }
@@ -49,7 +49,14 @@ func (m *udpManager) sync(addr string, d *daemon) {
 func (m *udpManager) stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.stopLocked()
+}
+
+// stopLocked останавливает текущий слушатель (под m.mu): сигнал stop, закрытие
+// сокета, ожидание выхода serve().
+func (m *udpManager) stopLocked() {
 	if m.cur != nil {
+		close(m.cur.stop)
 		_ = m.cur.conn.Close()
 		<-m.cur.done
 		m.cur = nil
@@ -64,6 +71,7 @@ type udpListener struct {
 	conn *net.UDPConn
 	d    *daemon
 	done chan struct{} // закрывается при выходе serve()
+	stop chan struct{} // сигнал остановки (закрывает sync/stop перед conn.Close)
 }
 
 // newUDPListener поднимает UDP-сокет на addr (например, "0.0.0.0:502").
@@ -76,7 +84,7 @@ func newUDPListener(addr string, d *daemon) (*udpListener, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &udpListener{conn: c, d: d, done: make(chan struct{})}, nil
+	return &udpListener{conn: c, d: d, done: make(chan struct{}), stop: make(chan struct{})}, nil
 }
 
 // serve читает датаграммы и отвечает на PACE-запросы телеметрии. Возврат — при
@@ -88,16 +96,16 @@ func (u *udpListener) serve() {
 	for {
 		n, addr, err := u.conn.ReadFromUDP(buf)
 		if err != nil {
+			// Штатная остановка: sync/stop закрыли stop и сокет.
 			select {
-			case <-u.d.stop:
+			case <-u.stop:
 				return
 			default:
 			}
+			// Транзиентная ошибка приёма — не глушим слушатель, продолжаем.
 			warnf("UDP-приём: %v", err)
-			if ne, ok := err.(net.Error); ok && ne.Timeout() {
-				continue
-			}
-			return
+			time.Sleep(200 * time.Millisecond)
+			continue
 		}
 		req := parseRequest(buf[:n])
 		if req == nil || req.CID2 != cid2Tel {

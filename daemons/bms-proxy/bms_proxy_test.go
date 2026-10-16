@@ -2,11 +2,62 @@ package main
 
 import (
 	"encoding/binary"
+	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/galiy/malina-26/daemons/lib/bmscontract"
 )
+
+// TestFrameUpperHex — INFO в кадре должен быть в ВЕРХНЕМ регистре hex
+// (инвертор принимает только верхний; на нижнем показывал 9.99).
+func TestFrameUpperHex(t *testing.T) {
+	var tel bmscontract.Telemetry
+	tel.CellCount = 16
+	tel.TempCount = 6
+	for i := 0; i < 16; i++ {
+		tel.CellsMV[i] = 3200 + uint16(i)
+	}
+	fr := buildTelemetryFrame(2, buildSeplosInfo(&tel))
+	body := string(fr[1 : len(fr)-1])
+	if strings.ToUpper(body) != body {
+		t.Fatalf("кадр не в верхнем регистре: %s", body)
+	}
+	if !checkPaceChk(body) {
+		t.Fatal("CHK невалиден")
+	}
+}
+
+// TestUDPSyncRetry — неудачный старт UDP-слушателя (порт занят) не кэшируется:
+// повторный sync с тем же адресом после освобождения порта обязан поднять его.
+func TestUDPSyncRetry(t *testing.T) {
+	occ, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := occ.LocalAddr().String()
+	d := &daemon{cfg: newConfig(), sh: &shared{}, udp: &udpManager{}, sc: newPortScanner(make(chan struct{}))}
+
+	d.udp.sync(addr, d)
+	if d.udp.cur != nil {
+		d.udp.stop()
+		t.Fatal("слушатель поднялся на занятом порту")
+	}
+	if d.udp.addr != "" {
+		t.Fatalf("неуспех закэширован: addr=%q", d.udp.addr)
+	}
+	_ = occ.Close()
+
+	d.udp.sync(addr, d)
+	if d.udp.cur == nil {
+		t.Fatal("повторный sync не поднял слушатель после освобождения порта")
+	}
+	d.udp.stop()
+	if d.udp.cur != nil {
+		t.Fatal("stop не остановил слушатель")
+	}
+}
 
 func TestParseRequest(t *testing.T) {
 	// Собираем корректный запрос `~ VER ADR 46 42 E002 NN CHK CR`.

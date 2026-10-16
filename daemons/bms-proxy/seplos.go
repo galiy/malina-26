@@ -36,10 +36,18 @@ func buildSeplosInfo(t *bmscontract.Telemetry) []byte {
 	// заголовок: dataflag=0x00, командная группа/адрес пака = 0x01 (как в эталоне)
 	b = append(b, 0x00, 0x01)
 
-	// число ячеек (1..16)
+	// число ячеек (1..16). Если контракт не заполнил CellCount (0) — считаем по
+	// ненулевым CellsMV (эталон при n<=0 берёт len(cells)).
 	n := int(t.CellCount)
 	if n > bmscontract.MaxCells {
 		n = bmscontract.MaxCells
+	}
+	if n <= 0 {
+		for i := 0; i < bmscontract.MaxCells; i++ {
+			if t.CellsMV[i] != 0 {
+				n = i + 1
+			}
+		}
 	}
 	b = append(b, byte(n&0xFF))
 
@@ -63,8 +71,17 @@ func buildSeplosInfo(t *bmscontract.Telemetry) []byte {
 	// ток: контракт 0.01 А, «разряд +»; SEPLOS: разряд «−» → знак инвертируем
 	b = binary.BigEndian.AppendUint16(b, uint16(-t.CurrentDA)&0xFFFF)
 
-	// общее напряжение (0.01 В → raw = TotalCV)
-	b = binary.BigEndian.AppendUint16(b, t.TotalCV)
+	// общее напряжение (0.01 В). Если TotalCV не заполнен (0) — считаем суммой
+	// ячеек (эталон: total_v = tv or sum(cells)); сумма мВ → 0.01 В = /10.
+	totalCV := t.TotalCV
+	if totalCV == 0 {
+		var sum int
+		for i := 0; i < n; i++ {
+			sum += int(t.CellsMV[i])
+		}
+		totalCV = uint16(sum / 10)
+	}
+	b = binary.BigEndian.AppendUint16(b, totalCV)
 
 	// остаточная ёмкость (0.001 А·ч → 0.01 А·ч: /10)
 	b = binary.BigEndian.AppendUint16(b, uint16(t.RemainingMAh/10))
@@ -102,7 +119,7 @@ func buildSeplosInfo(t *bmscontract.Telemetry) []byte {
 	// (эталон: port_v = port_voltage_v or total_v).
 	portCV := t.PortCV
 	if portCV == 0 {
-		portCV = t.TotalCV
+		portCV = totalCV
 	}
 	b = binary.BigEndian.AppendUint16(b, portCV)
 

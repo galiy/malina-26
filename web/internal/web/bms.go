@@ -267,6 +267,9 @@ type bmsProxyCfg struct {
 	Baud     int    `json:"baud"`
 	LogLevel string `json:"log_level"`
 	AddrMode string `json:"addr_mode"`
+	// UDPListen — скрытая опция (в UI не показывается). Читается из конфига и
+	// СОХРАНЯЕТСЯ как есть, чтобы сохранение формы прокси её не стирало.
+	UDPListen string `json:"udp_listen,omitempty"`
 }
 
 // bmsProxyBauds — допустимые скорости порта bms-proxy.
@@ -415,6 +418,8 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 				Baud:     baudFromForm(r.Form.Get("proxy_baud")),
 				LogLevel: r.Form.Get("proxy_log_level"),
 				AddrMode: r.Form.Get("proxy_addr_mode"),
+				// скрытую опцию не берём из формы — сохраняем текущую из конфига
+				UDPListen: pc.UDPListen,
 			}
 			lv, lvOK := normalizeBmsProxyLevel(np.LogLevel)
 			am, amOK := normalizeBmsProxyAddrMode(np.AddrMode)
@@ -439,8 +444,16 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 			}
 			data["ProxyEnabled"] = np.Enabled
 			data["ProxyBaud"] = np.Baud
-			data["ProxyLevel"] = np.LogLevel
-			data["ProxyAddrMode"] = np.AddrMode
+			if lvOK {
+				data["ProxyLevel"] = lv
+			} else {
+				data["ProxyLevel"] = pc.LogLevel
+			}
+			if amOK {
+				data["ProxyAddrMode"] = am
+			} else {
+				data["ProxyAddrMode"] = pc.AddrMode
+			}
 		} else {
 			// форма шлюзов BMS
 			gws, verr := parseBmsForm(r)
