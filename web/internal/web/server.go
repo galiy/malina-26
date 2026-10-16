@@ -211,7 +211,7 @@ func New(o Options) (*Server, error) {
 		o.TsdbAvgRoot = "/malina/var/malina-ts"
 	}
 	if o.BmsConfigPath == "" {
-		o.BmsConfigPath = "/malina/etc/malina/bms-gateways.json"
+		o.BmsConfigPath = "/malina/etc/malina/bms-reader.json"
 	}
 	if o.BmsControlSock == "" {
 		o.BmsControlSock = "/run/malina-bms/control.sock"

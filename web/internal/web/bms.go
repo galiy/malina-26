@@ -173,7 +173,8 @@ func buildBmsTile(tr map[string]string, b BmsInfo, tel bmscontract.Telemetry) ma
 
 // Страницы BMS: /bms (конкретное устройство, закладки + Memo-JSON) и
 // /bms/settings (шлюзы IP:PORT + режим).
-// Конфиг — /malina/etc/malina/bms-gateways.json (тот же, что читает bms-reader);
+// Конфиг — /malina/etc/malina/bms-reader.json (тот же, что читает bms-reader;
+// при отсутствии читается legacy bms-gateways.json);
 // сохранение → запись конфига + reload демона через control-сокет (SIGHUP-эквивалент).
 
 type bmsGateway struct {
@@ -193,7 +194,7 @@ func (s *Server) bmsCfgPath() string {
 	if s.opts.BmsConfigPath != "" {
 		return s.opts.BmsConfigPath
 	}
-	return "/malina/etc/malina/bms-gateways.json"
+	return "/malina/etc/malina/bms-reader.json"
 }
 
 func (s *Server) bmsSock() string {
@@ -221,6 +222,11 @@ func (s *Server) bmsProxySock() string {
 func loadBmsGateways(path string) (bmsGatewaysFile, error) {
 	var f bmsGatewaysFile
 	b, err := os.ReadFile(path)
+	if err != nil && os.IsNotExist(err) && strings.HasSuffix(path, "bms-reader.json") {
+		// Миграция: старое имя конфига.
+		legacy := filepath.Join(filepath.Dir(path), "bms-gateways.json")
+		b, err = os.ReadFile(legacy)
+	}
 	if err != nil {
 		if os.IsNotExist(err) {
 			return f, nil
@@ -415,6 +421,7 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 	data["ProxyBaud"] = pc.Baud
 	data["ProxyLevel"] = pc.LogLevel
 	data["ProxyAddrMode"] = pc.AddrMode
+	data["ProxyUDPListen"] = pc.UDPListen
 	// Список шлюзов всегда в данных: при ошибке сохранения любой из форм
 	// страница рендерится повторно и не должна терять таблицу шлюзов.
 	data["Gateways"] = cfg.Gateways
@@ -433,12 +440,11 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 		if r.Form.Get("proxy_baud") != "" {
 			// форма настроек БМС-Прокси
 			np := bmsProxyCfg{
-				Enabled:  r.Form.Get("proxy_enabled") == "on",
-				Baud:     baudFromForm(r.Form.Get("proxy_baud")),
-				LogLevel: r.Form.Get("proxy_log_level"),
-				AddrMode: r.Form.Get("proxy_addr_mode"),
-				// скрытую опцию не берём из формы — сохраняем текущую из конфига
-				UDPListen: pc.UDPListen,
+				Enabled:   r.Form.Get("proxy_enabled") == "on",
+				Baud:      baudFromForm(r.Form.Get("proxy_baud")),
+				LogLevel:  r.Form.Get("proxy_log_level"),
+				AddrMode:  r.Form.Get("proxy_addr_mode"),
+				UDPListen: strings.TrimSpace(r.Form.Get("udp_listen")),
 			}
 			lv, lvOK := normalizeBmsProxyLevel(np.LogLevel)
 			am, amOK := normalizeBmsProxyAddrMode(np.AddrMode)
@@ -473,6 +479,7 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 			} else {
 				data["ProxyAddrMode"] = pc.AddrMode
 			}
+			data["ProxyUDPListen"] = np.UDPListen
 		} else if r.Form.Get("bmsr_log_level") != "" {
 			// форма BMS-Reader (bms-reader: включено + уровень логирования)
 			en := r.Form.Get("bmsr_enabled") == "on"

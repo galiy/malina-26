@@ -77,7 +77,7 @@ flowchart TB
     PROBES["Набор probe по типам BMS"]
     POOL[("Пул доступных источников")]
     REG[("Реестр ID<br/>bms-ident.json")]
-    GWCFG[("Конфиг шлюзов<br/>bms-gateways.json")]
+    GWCFG[("Конфиг шлюзов<br/>bms-reader.json")]
     PULLER["Пулеры (1 на источник)"]
     MOD["Модуль опроса (per slot)"]
     SHM[("shm<br/>malina-bms-state")]
@@ -336,7 +336,7 @@ sequenceDiagram
 
   U->>SD: systemctl reload malina-bms-reader
   SD->>O: SIGHUP
-  O->>O: перечитать bms-gateways.json (только IP:PORT)
+  O->>O: перечитать bms-reader.json (только IP:PORT)
   O->>O: реконсиляция: добавить/удалить/сменить режим источников
   O->>PL: при удалении источника — cancel контекста
   PL-->>O: останов опроса
@@ -474,7 +474,7 @@ flowchart TD
 | BASE | **≤ 44 символа** |
 | ID (`BASE-NNNNN`) | **≤ 50 символов** |
 | Serial-сканирование кандидатов | `scanIdle` 10 с / `scanActive` 1 мин |
-| TCP-источники | из `bms-gateways.json` (не сканируются); недоступный шлюз → backoff-лестница 15 с→5 мин |
+| TCP-источники | из `bms-reader.json` (не сканируются); недоступный шлюз → backoff-лестница 15 с→5 мин |
 
 ---
 
@@ -530,9 +530,11 @@ flowchart LR
 
 ## 13. Настройка и веб-админка
 
-- **`/malina/etc/malina/bms-gateways.json`** — список `IP:PORT` (+ режим
+- **`/malina/etc/malina/bms-reader.json`** — список `IP:PORT` (+ режим
   `modbus`/`none`) **и настройки демона** `enabled`/`log_level`. Перечитывается по
-  **`reload`** (SIGHUP или команда `reload` по control-сокету).
+  **`reload`** (SIGHUP или команда `reload` по control-сокету). Прежнее имя файла —
+  `bms-gateways.json`; читается как **fallback**, если нового файла нет (запись всегда
+  в `bms-reader.json`).
   - `enabled` — вкл/выкл опрос (**умолчание — выключен**). При `false` демон
     активен, но не опрашивает BMS и публикует **пустой список/shm** (оркестратор
     останавливается вместе с пулерами); ждёт `reload`.
@@ -545,7 +547,7 @@ flowchart LR
   слотов/записей из shm-списка → закрытие соединения (§6.5).
 - **Страница в веб-админке** (`/bms/settings`): список шлюзов (валидация `host:port`,
   дубликаты, режим) + рамка **«BMS-Reader»** (Включено + Уровень логирования;
-  сохранить → `bms-gateways.json` + `reload`). i18n — все языки проекта
+  сохранить → `bms-reader.json` + `reload`). i18n — все языки проекта
   (ru/be/zh/en/ka/kk/uz/tg, дефолт en).
 
 ---
@@ -558,7 +560,7 @@ flowchart LR
     UNIT["malina-bms-reader.service"] --> BIN["/malina/.../malina-bms-reader"]
     BIN --> SHM["/dev/shm/malina-bms-state"]
     BIN --> SOCK["/run/malina-bms/control.sock"]
-    BIN --> CFG["/malina/etc/malina/bms-gateways.json"]
+    BIN --> CFG["/malina/etc/malina/bms-reader.json"]
     BIN --> IDENT["/malina/etc/malina/bms-ident.json"]
     BIN --> RAW["raw tsdb /run/malina-ts-raw/tsdb.sock"]
     WEB["malina-web"] --> SHM

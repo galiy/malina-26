@@ -20,7 +20,7 @@
     (сохранить → `kes-reader.json` + `reload` демона `kes-reader`);
   - БМС → `/bms/settings` — таблица IP-шлюзов BMS-Receiver (сохранить→конфиг+reload)
     + рамка **«BMS-Reader»** (Включено / Уровень логирования; сохранить →
-    `bms-gateways.json` + reload демона `bms-reader`)
+    `bms-reader.json` + reload демона `bms-reader`)
     + рамка **«БМС-Прокси»** (Включено / Скорость порта / Уровень логирования /
     Адресация инвертора; сохранить→`bms-proxy.json`+reload демона `bms-proxy`).
 - Подпункт **«Монитор» удалить** (пункт, страница `/bms/monitor`, шаблон

@@ -90,7 +90,12 @@
         </select>
       </td>
     </tr>
+    <tr>
+      <th>{{index .T "bms.proxy_udp_label"}}</th>
+      <td><input name="udp_listen" value="{{.ProxyUDPListen}}" placeholder="0.0.0.0:502" size="24"></td>
+    </tr>
   </table>
+  <p class="mn-hint">{{index .T "bms.proxy_udp_desc"}}</p>
   <div class="mn-actions">
     <button type="submit">{{index .T "bms.save"}}</button>
   </div>

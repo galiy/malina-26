@@ -1389,6 +1389,8 @@
   "bms.proxy_log_level": "Jurnal darajasi",
   "bms.proxy_bad_level": "Jurnal darajasi noto‘g‘ri",
   "bms.proxy_addr_mode": "Inverter manzillashuvi",
+  "bms.proxy_udp_label": "UDP tinglovchi (shlyuz)",
+  "bms.proxy_udp_desc": "Ixtiyoriy ikkinchi tinglovchi: agar invertor shaffof UDP↔RS485 shlyuzi orqali ulangan bo‘lsa, tinglash manzilini ko‘rsating (masalan 0.0.0.0:502) — demon COM portdagidek BMS ma’lumotlari bilan javob beradi. Bo‘sh — o‘chirilgan. Shlyuz invertor RS485 so‘rovlarining UDP datagrammalarini shu manzil va portga uzatishi kerak.",
   "bms.proxy_bad_addr_mode": "Inverter manzillashuvi noto‘g‘ri",
   "bms.proxy_addr.0-15": "0–15",
   "bms.proxy_addr.1-16": "1–16",

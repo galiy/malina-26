@@ -1389,6 +1389,8 @@
   "bms.proxy_log_level": "Log level",
   "bms.proxy_bad_level": "Invalid log level",
   "bms.proxy_addr_mode": "Inverter addressing",
+  "bms.proxy_udp_label": "UDP listener (gateway)",
+  "bms.proxy_udp_desc": "Optional second listener: if the inverter is connected via a transparent UDP↔RS485 gateway, set the listen address (e.g. 0.0.0.0:502) and the daemon will answer with the same BMS data as on the COM port. Empty — disabled. The gateway must forward UDP datagrams of encapsulated inverter RS485 requests to this address and port.",
   "bms.proxy_bad_addr_mode": "Invalid inverter addressing",
   "bms.proxy_addr.0-15": "0–15",
   "bms.proxy_addr.1-16": "1–16",

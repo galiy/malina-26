@@ -107,7 +107,7 @@
   `/etc/systemd/system/malina-bms-reader.service`.
 - **Списки сервисов `deploy/deploy.sh`:** добавить `malina-bms-reader` в `enable`,
   `restart`, `is-active` (там же, где `map-reader`/`kes-reader`/`malina-tsdb`).
-- **`deploy/manifest.tsv`:** строки для бинаря, юнита и конфигов (`bms-gateways.json`,
+- **`deploy/manifest.tsv`:** строки для бинаря, юнита и конфигов (`bms-reader.json`,
   `bms-ident.json`) — первичное развёртывание (`--first-run`).
 - **`deploy/local/stage2.sh` + `deploy/local-deploy.md` + `deploy/restore.md`:** офлайн-карта
   и восстановление (демон/юнит/конфиги/каталоги rw).
@@ -124,7 +124,7 @@
 
 - **Go-модуль:** демон в `daemons/bms-reader` (в модуле `daemons`); общий код — в
   `daemons/lib` (новое: TCP-транспорт, контракт-кодек).
-- **Конфиги (подтверждено):** `bms-gateways.json` — `[{host, port, mode:"modbus"|"none"}]`;
+- **Конфиги (подтверждено):** `bms-reader.json` — `[{host, port, mode:"modbus"|"none"}]`;
   `bms-ident.json` — `{counter, entries:[{base,id,binding}]}`.
 - **control-сокет (подтверждено):** команды `reload`, `list`.
 - **shm:** сегмент: **список + до 16 телеметрийных слотов (107 Б)** — по образцу `map`/`kes`.

@@ -1389,6 +1389,8 @@
   "bms.proxy_log_level": "日志级别",
   "bms.proxy_bad_level": "日志级别无效",
   "bms.proxy_addr_mode": "逆变器寻址",
+  "bms.proxy_udp_label": "UDP 监听（网关）",
+  "bms.proxy_udp_desc": "可选的第二个监听器：如果逆变器通过透明的 UDP↔RS485 网关连接，请设置监听地址（例如 0.0.0.0:502），守护进程将以与 COM 端口相同的 BMS 数据应答。留空 — 禁用。网关须将封装的逆变器 RS485 请求的 UDP 数据报转发到此地址和端口。",
   "bms.proxy_bad_addr_mode": "逆变器寻址无效",
   "bms.proxy_addr.0-15": "0–15",
   "bms.proxy_addr.1-16": "1–16",

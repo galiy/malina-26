@@ -388,7 +388,7 @@ remount,rw /` … `remount,ro`), каталог `/malina` — уже rw.
 
 ## Настройки reader-демонов (map/kes/bms-reader)
 
-`map-reader.json`, `kes-reader.json` и `bms-gateways.json` (поля `enabled`,
+`map-reader.json`, `kes-reader.json` и `bms-reader.json` (поля `enabled`,
 `log_level`) ставятся по `deploy/manifest.tsv` с политикой **`if_absent`** —
 существующие на устройстве файлы **не перезаписываются**.
 
@@ -400,5 +400,11 @@ remount,rw /` … `remount,ro`), каталог `/malina` — уже rw.
 
 > На рабочем устройстве (`.60`) все три включены (требование «у нас»): выставьте
 > `enabled:true` в `/malina/etc/malina/{map,kes}-reader.json` и в
-> `/malina/etc/malina/bms-gateways.json`, затем `systemctl reload`/команда
+> `/malina/etc/malina/bms-reader.json`, затем `systemctl reload`/команда
 > `reload` по сокету.
+
+> **Переименование конфига BMS-Receiver:** прежний `bms-gateways.json` → `bms-reader.json`.
+> Демон и веб читают старое имя как **fallback**, поэтому шлюзы не теряются; запись
+> идёт уже в `bms-reader.json`. При желании перенести заранее:
+> `cp /malina/etc/malina/bms-gateways.json /malina/etc/malina/bms-reader.json`
+> (только на существующем устройстве; на чистом ставится новый файл по манифесту).

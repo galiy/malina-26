@@ -9,11 +9,14 @@ import (
 
 // Пути и лимиты (docs/bms-reader-arch.md §13/§14).
 const (
-	shmPath   = "/dev/shm/malina-bms-state"
-	sockPath  = "/run/malina-bms/control.sock"
-	gwPath    = "/malina/etc/malina/bms-gateways.json"
-	identPath = "/malina/etc/malina/bms-ident.json"
-	rawSock   = "/run/malina-ts-raw/tsdb.sock"
+	shmPath  = "/dev/shm/malina-bms-state"
+	sockPath = "/run/malina-bms/control.sock"
+	gwPath   = "/malina/etc/malina/bms-reader.json"
+	// gwPathLegacy — прежнее имя конфига (bms-gateways.json). Читается как
+	// fallback, если нового файла нет; запись всегда идёт в gwPath.
+	gwPathLegacy = "/malina/etc/malina/bms-gateways.json"
+	identPath    = "/malina/etc/malina/bms-ident.json"
+	rawSock      = "/run/malina-ts-raw/tsdb.sock"
 
 	maxDevices = 16 // глобальный MaxDevices (и число слотов shm)
 )
@@ -48,23 +51,39 @@ type identFile struct {
 	Entries []identEntry `json:"entries"`
 }
 
-// loadGateways читает список шлюзов (пустой файл/отсутствие — пустой список).
+// loadGateways читает конфиг bms-reader (настройки + шлюзы). Если нового файла
+// bms-reader.json нет — читает legacy bms-gateways.json (миграция без потери
+// шлюзов); отсутствие обоих — пустой конфиг.
 func loadGateways() (gatewaysFile, error) {
-	var g gatewaysFile
-	b, err := os.ReadFile(gwPath)
-	if err != nil {
-		if os.IsNotExist(err) {
+	for _, p := range []string{gwPath, gwPathLegacy} {
+		g, ok, err := loadGatewaysFile(p)
+		if err != nil {
+			return g, err
+		}
+		if ok {
 			return g, nil
 		}
-		return g, err
+	}
+	return gatewaysFile{}, nil
+}
+
+// loadGatewaysFile читает один файл: (g, существует, err).
+func loadGatewaysFile(path string) (gatewaysFile, bool, error) {
+	var g gatewaysFile
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return g, false, nil
+		}
+		return g, false, err
 	}
 	if len(b) == 0 {
-		return g, nil
+		return g, false, nil
 	}
 	if err := json.Unmarshal(b, &g); err != nil {
-		return g, fmt.Errorf("bms-gateways.json: %w", err)
+		return g, false, fmt.Errorf("%s: %w", path, err)
 	}
-	return g, nil
+	return g, true, nil
 }
 
 // loadIdent читает реестр идентификаторов (отсутствие — пустой).
