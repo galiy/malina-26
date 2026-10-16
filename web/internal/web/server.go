@@ -28,39 +28,41 @@ import (
 
 // Options задаёт параметры сервера.
 type Options struct {
-	Addr             string
-	AssetsDir        string
-	Auth             auth.Authenticator
-	User             string
-	Langs            []string
-	DefaultLang      string
-	SessionIdle      time.Duration // скользящий TTL сессий/токенов
-	AuthStorePath    string        // /dev/shm/malina-auth
-	ControlSock      string        // control-сокет map-reader
-	KesControlSock   string        // control-сокет kes-reader
-	BasicCacheTTL    time.Duration // TTL кэша успешных Basic-проверок (legacy)
-	MapTimeSyncOff   string        // флаг-файл отключения синхронизации времени МАП
-	AuditEnabled     bool          // аудит-журнал действий (syslog)
-	AuditTag         string        // syslog-тег аудита (по умолчанию malina-web-audit)
-	MasterConfigPath string        // путь к nodes.json (мастер-узел)
-	MasterCacheDir   string        // каталог кэша мастер-узла (tmpfs)
-	MasterTTL        time.Duration // TTL кэша мастер-узла (по умолчанию 5s)
-	EmailConfigPath  string        // путь к email.json
-	EmailKeyPath     string        // путь к ключу шифрования секрета
-	EmailOutboxDir   string        // каталог аутбокса (tmpfs)
-	EventsConfigPath string        // путь к events.json (менеджер событий)
-	EventsStatePath  string        // путь к состоянию правил (tmpfs)
-	EventsLogTag     string        // syslog-тег лога менеджера событий
-	SNMPPort         int           // UDP-порт SNMP-агента (161)
-	SNMPCommunity    string        // community агента (public)
-	SNMPMonitoring   string        // путь к настройке периодических трапов
-	AccConfigPath    string        // настройка аккумулятора (json)
-	TsdbRawRoot      string        // каталог raw-tsdb (перечисление устройств)
-	TsdbRawSock      string        // сокет raw-tsdb
-	TsdbSock         string        // сокет avg-tsdb
-	TsdbAvgRoot      string        // каталог avg-tsdb (перечисление устройств)
-	BmsConfigPath    string        // путь к bms-gateways.json (BMS-Receiver)
-	BmsControlSock   string        // control-сокет bms-reader (reload)
+	Addr                string
+	AssetsDir           string
+	Auth                auth.Authenticator
+	User                string
+	Langs               []string
+	DefaultLang         string
+	SessionIdle         time.Duration // скользящий TTL сессий/токенов
+	AuthStorePath       string        // /dev/shm/malina-auth
+	ControlSock         string        // control-сокет map-reader
+	KesControlSock      string        // control-сокет kes-reader
+	BasicCacheTTL       time.Duration // TTL кэша успешных Basic-проверок (legacy)
+	MapTimeSyncOff      string        // флаг-файл отключения синхронизации времени МАП
+	AuditEnabled        bool          // аудит-журнал действий (syslog)
+	AuditTag            string        // syslog-тег аудита (по умолчанию malina-web-audit)
+	MasterConfigPath    string        // путь к nodes.json (мастер-узел)
+	MasterCacheDir      string        // каталог кэша мастер-узла (tmpfs)
+	MasterTTL           time.Duration // TTL кэша мастер-узла (по умолчанию 5s)
+	EmailConfigPath     string        // путь к email.json
+	EmailKeyPath        string        // путь к ключу шифрования секрета
+	EmailOutboxDir      string        // каталог аутбокса (tmpfs)
+	EventsConfigPath    string        // путь к events.json (менеджер событий)
+	EventsStatePath     string        // путь к состоянию правил (tmpfs)
+	EventsLogTag        string        // syslog-тег лога менеджера событий
+	SNMPPort            int           // UDP-порт SNMP-агента (161)
+	SNMPCommunity       string        // community агента (public)
+	SNMPMonitoring      string        // путь к настройке периодических трапов
+	AccConfigPath       string        // настройка аккумулятора (json)
+	TsdbRawRoot         string        // каталог raw-tsdb (перечисление устройств)
+	TsdbRawSock         string        // сокет raw-tsdb
+	TsdbSock            string        // сокет avg-tsdb
+	TsdbAvgRoot         string        // каталог avg-tsdb (перечисление устройств)
+	BmsConfigPath       string        // путь к bms-gateways.json (BMS-Receiver)
+	BmsControlSock      string        // control-сокет bms-reader (reload)
+	BmsProxyConfigPath  string        // путь к bms-proxy.json (BMS-Proxy)
+	BmsProxyControlSock string        // control-сокет bms-proxy (reload)
 }
 
 // Server — HTTP-сервер.
@@ -205,6 +207,12 @@ func New(o Options) (*Server, error) {
 	}
 	if o.BmsControlSock == "" {
 		o.BmsControlSock = "/run/malina-bms/control.sock"
+	}
+	if o.BmsProxyConfigPath == "" {
+		o.BmsProxyConfigPath = "/malina/etc/malina/bms-proxy.json"
+	}
+	if o.BmsProxyControlSock == "" {
+		o.BmsProxyControlSock = "/run/malina-bms-proxy/control.sock"
 	}
 	// Источник строк — русский; недостающие ключи добираются из него.
 	bundle, err := i18n.Load(os.DirFS(o.AssetsDir), "i18n", "ru", o.Langs)

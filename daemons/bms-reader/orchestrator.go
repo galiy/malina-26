@@ -195,6 +195,12 @@ func (o *orchestrator) trySource(src *source) {
 				continue
 			}
 			if o.probeAndAct(src, tr) {
+				// Источник принят (matched) — транспорт остаётся открытым у пулера.
+				// Если услышали ЧУЖОЙ трафик (sawNotMine), источник не зарегистрирован:
+				// порт не наш, fd не держим (иначе блокируем другие демоны).
+				if !o.hasState(src.desc) {
+					tr.Close()
+				}
 				return
 			}
 			tr.Close()
@@ -206,9 +212,10 @@ func (o *orchestrator) trySource(src *source) {
 		o.bumpBackoff(src.desc, false)
 		return
 	}
-	if !o.probeAndAct(src, tr) {
-		tr.Close()
+	if o.probeAndAct(src, tr) && o.hasState(src.desc) {
+		return // источник принят — транспорт остаётся открытым
 	}
+	tr.Close()
 }
 
 func (o *orchestrator) probeAndAct(src *source, tr Transport) bool {

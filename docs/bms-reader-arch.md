@@ -371,6 +371,9 @@ stateDiagram-v2
 - Устройство, выданное пулеру, backoff не имеет; при потере возвращается в пул.
 - **Бан `NotMine`** — на ту запись пула, что ждала: порт целиком → бан порта, слот →
   бан слота.
+- **Чужой трафик (`NotMine`) → fd не удерживаем:** источник не принимается, поэтому
+  транспорт **закрывается сразу**, порт уходит в бан. Иначе открытый fd блокировал бы
+  другой демон на том же порту (напр. `bms-proxy` на общем CH340-адаптере инвертора).
 
 ---
 
@@ -551,6 +554,7 @@ flowchart LR
     BIN --> IDENT["/malina/etc/malina/bms-ident.json"]
     BIN --> RAW["raw tsdb /run/malina-ts-raw/tsdb.sock"]
     WEB["malina-web"] --> SHM
+    PROXY["malina-bms-proxy"] --> SHM
   end
   ACC["аккумулятор (web)"] --> TS["avg tsdb /malina/var/malina-ts"]
   RAW --> ACC
@@ -559,7 +563,7 @@ flowchart LR
 | Что | Значение |
 |---|---|
 | Демон / бинарник | `bms-reader` / `malina-bms-reader` |
-| shm | `/dev/shm/malina-bms-state` (список + до 16 телеметрийных слотов 107 Б) |
+| shm | `/dev/shm/malina-bms-state` (список + до 16 телеметрийных слотов 107 Б); читатели: `malina-web`, `malina-bms-proxy` |
 | control-сокет | `/run/malina-bms/control.sock` |
 | unit | `malina-bms-reader.service` |
 | `device_type` | `bms` |

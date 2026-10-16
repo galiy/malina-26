@@ -144,6 +144,8 @@ $SUDO install -D -o root -g root -m0755 "$SRC/web/dist/malina-netd-armv7" "$MALM
 $SUDO install -D -o root -g root -m0755 "$SRC/daemons/map-reader/dist/map-reader-armv7" "$MALM/usr/local/sbin/map-reader"
 $SUDO install -D -o root -g root -m0755 "$SRC/daemons/kes-reader/dist/kes-reader-armv7" "$MALM/usr/local/sbin/kes-reader"
 $SUDO install -D -o root -g root -m0755 "$SRC/daemons/tsdb/dist/malina-tsdb-armv7" "$MALM/usr/local/sbin/malina-tsdb"
+$SUDO install -D -o root -g root -m0755 "$SRC/daemons/bms-reader/dist/bms-reader-armv7" "$MALM/usr/local/sbin/bms-reader"
+$SUDO install -D -o root -g root -m0755 "$SRC/daemons/bms-proxy/dist/bms-proxy-armv7" "$MALM/usr/local/sbin/bms-proxy"
 
 # --- 2.9 веб-ассеты (на /malina) ---
 log "веб-ассеты"
@@ -179,7 +181,7 @@ fi
 
 # --- 2.12 юниты offline ---
 log "enable/mask/disable юнитов"
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-tsdb malina-tsdb-raw; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-tsdb malina-tsdb-raw; do
 	$SUDO systemctl --root="$ROOTM" enable "$u" >/dev/null 2>&1 || true
 done
 [ -f "$PROV/masked.txt" ]   && while read -r u; do [ -n "$u" ] && $SUDO systemctl --root="$ROOTM" mask "$u"    >/dev/null 2>&1 || true; done < "$PROV/masked.txt"

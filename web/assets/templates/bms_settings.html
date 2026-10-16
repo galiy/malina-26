@@ -29,4 +29,47 @@
   </div>
 </form>
 <script src="{{asset "bms_settings.js"}}"></script>
+
+<h2 class="map-title">{{index .T "bms.proxy_title"}}</h2>
+<form method="post" action="/bms/settings" id="bmsProxyForm">
+  <table class="mn-tbl">
+    <tr>
+      <th>{{index .T "bms.proxy_enabled"}}</th>
+      <td><label><input type="checkbox" name="proxy_enabled" {{if .ProxyEnabled}}checked{{end}}>&nbsp;{{index .T "bms.proxy_enabled_hint"}}</label></td>
+    </tr>
+    <tr>
+      <th>{{index .T "bms.proxy_baud"}}</th>
+      <td>
+        <select name="proxy_baud">
+          {{range .Bauds}}
+          <option value="{{.}}" {{if eq (printf "%d" .) (printf "%d" $.ProxyBaud)}}selected{{end}}>{{.}}</option>
+          {{end}}
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <th>{{index .T "bms.proxy_log_level"}}</th>
+      <td>
+        <select name="proxy_log_level">
+          {{range .Levels}}
+          <option value="{{.}}" {{if eq . $.ProxyLevel}}selected{{end}}>{{index $.T (printf "bms.proxy_level.%s" .)}}</option>
+          {{end}}
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <th>{{index .T "bms.proxy_addr_mode"}}</th>
+      <td>
+        <select name="proxy_addr_mode">
+          {{range .AddrModes}}
+          <option value="{{.}}" {{if eq . $.ProxyAddrMode}}selected{{end}}>{{index $.T (printf "bms.proxy_addr.%s" .)}}</option>
+          {{end}}
+        </select>
+      </td>
+    </tr>
+  </table>
+  <div class="mn-actions">
+    <button type="submit">{{index .T "bms.save"}}</button>
+  </div>
+</form>
 {{end}}

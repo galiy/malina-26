@@ -94,6 +94,7 @@ make -C web arm
 make -C daemons/map-reader arm
 make -C daemons/kes-reader arm
 make -C daemons/bms-reader arm
+make -C daemons/bms-proxy arm
 make -C daemons/tsdb arm
 ```
 Определить SD (`lsblk -o NAME,SIZE,TYPE,LABEL,MOUNTPOINT`), **отключить авто-монтирование**
@@ -163,6 +164,7 @@ install -D -o root -g root -m0755 web/dist/malina-netd-armv7          $ROOT/usr/
 install -D -o root -g root -m0755 daemons/map-reader/dist/map-reader-armv7  $ROOT/usr/local/sbin/map-reader
 install -D -o root -g root -m0755 daemons/kes-reader/dist/kes-reader-armv7  $ROOT/usr/local/sbin/kes-reader
 install -D -o root -g root -m0755 daemons/bms-reader/dist/bms-reader-armv7  $ROOT/usr/local/sbin/bms-reader
+install -D -o root -g root -m0755 daemons/bms-proxy/dist/bms-proxy-armv7  $ROOT/usr/local/sbin/bms-proxy
 install -D -o root -g root -m0755 daemons/tsdb/dist/malina-tsdb-armv7        $ROOT/usr/local/sbin/malina-tsdb
 ```
 
@@ -191,7 +193,7 @@ rm -f $ROOT/tmp/malina-pamcheck $ROOT/usr/bin/qemu-arm-static
 
 **2.12. Юниты offline (включение/маски/отключение):**
 ```
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy; do
   systemctl --root=$ROOT enable "$u" || true
 done
 # mask/disable по system/provision/{masked,disabled}.txt
@@ -214,7 +216,7 @@ umount $MAL $ROOT   # (для loop: losetup -d)
 # владельцы: не root там, где должен быть root
 find $ROOT/etc $ROOT/usr $MAL/usr -not -user root -printf '%u %p\n' | head
 # ключевые файлы и режимы
-ls -l $ROOT/etc/systemd/system/malina-*.service $ROOT/usr/local/bin/malina-web $ROOT/usr/local/sbin/{map-reader,kes-reader,bms-reader,malina-netd}
+ls -l $ROOT/etc/systemd/system/malina-*.service $ROOT/usr/local/bin/malina-web $ROOT/usr/local/sbin/{map-reader,kes-reader,bms-reader,bms-proxy,malina-netd}
 ls -l $MAL/etc/malina/network $MAL/usr/local/share/malina/web | head
 readlink $ROOT/root $ROOT/home $ROOT/etc/wpa_supplicant $ROOT/etc/resolv.conf
 grep malina $ROOT/etc/fstab
@@ -319,7 +321,7 @@ grep malina $ROOT/etc/fstab
 ```
 systemctl --failed
 journalctl -b -p warning --no-pager
-systemctl status malina-web map-reader kes-reader bms-reader malina-net rsyslog ssh
+systemctl status malina-web map-reader kes-reader bms-reader bms-proxy malina-net rsyslog ssh
 ip -br a ; nft list ruleset
 curl -sI http://127.0.0.1/login | head -1
 ```
@@ -356,13 +358,13 @@ deploy/local/stage2.sh /dev/sdX
 (штатно — `deploy/deploy.sh` без флага).
 
 `deploy/deploy.sh --only s1,s2,…` — **точечное обновление**: выкладывает и перезапускает
-**только выбранные сервисы** (`web,netd,map,kes,bms,tsdb`). **Без `--only`/`--all` обычный
+**только выбранные сервисы** (`web,netd,map,kes,bmsr,bmsp,tsdb`). **Без `--only`/`--all` обычный
 деплой не запускается** (правило: на `.60` — только изменённые сервисы); `--all` — весь
 скрипт; `netd` никогда не перезапускается; при `--first-run` `--only` игнорируется.
 Полный деплой выкладывает бинарники (`malina-web`,
-`malina-netd`, `map-reader`, `kes-reader`, `bms-reader`, `malina-tsdb`) + веб-ассеты и обновляет
+`malina-netd`, `map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`) + веб-ассеты и обновляет
 **unit-файлы сервисов** — `malina-tsdb`, `malina-tsdb-raw`, `map-reader`,
-`kes-reader` (коротким rw-окном под `/etc`). Локальные **drop-in**'ы
+`kes-reader`, `malina-bms-reader`, `malina-bms-proxy` (коротким rw-окном под `/etc`). Локальные **drop-in**'ы
 (`*.service.d/*.conf`, напр. `map-reader.service.d/sim.conf`) — отдельный каталог,
 этим не затрагиваются. `malina-netd` не перезапускается (сетевой стек).
 

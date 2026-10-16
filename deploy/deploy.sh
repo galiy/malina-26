@@ -11,7 +11,7 @@
 #                legacy; корень монтируется rw на весь блок. (Всегда полное;
 #                `--only` при `--first-run` игнорируется.)
 #   --only LIST  точечное обновление ТОЛЬКО выбранных сервисов (через запятую):
-#                web,netd,map,kes,bms,tsdb.
+#                web,netd,map,kes,bmsr,bmsp,tsdb.
 #   --all        обновить ВСЕ сервисы (весь скрипт). Без `--only`/`--all` обычный
 #                деплой НЕ запускается (правило: на .60 деплоим только изменённые).
 #   (без флага)  точечное ОБНОВЛЕНИЕ работающего устройства: только бинарники +
@@ -21,13 +21,13 @@
 #
 # Пароль SSH: env MALINA_PASS или строка MALINA_PASS=... в .kilo/secrets (не коммитится).
 #
-# Сервисы: malina-web, malina-netd, map-reader, kes-reader, bms-reader,
-# malina-tsdb (avg), malina-tsdb-raw. `malina-netd` НЕ перезапускается.
+# Сервисы: malina-web, malina-netd, map-reader, kes-reader, bms-reader (bmsr),
+# bms-proxy (bmsp), malina-tsdb (avg), malina-tsdb-raw. `malina-netd` НЕ перезапускается.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-ALL_SERVICES="web netd map kes bms tsdb"
+ALL_SERVICES="web netd map kes bmsr bmsp tsdb"
 
 BUILD=0 FIRST=0 ALL=0 HOSTARG="" ONLY=""
 parse() {
@@ -89,7 +89,8 @@ if [ "$BUILD" = 1 ]; then
   has web  && make -C "$ROOT/web" arm
   has map  && make -C "$ROOT/daemons/map-reader" arm
   has kes  && make -C "$ROOT/daemons/kes-reader" arm
-  has bms  && make -C "$ROOT/daemons/bms-reader" arm
+  has bmsr && make -C "$ROOT/daemons/bms-reader" arm
+  has bmsp && make -C "$ROOT/daemons/bms-proxy" arm
   has tsdb && make -C "$ROOT/daemons/tsdb" arm
 fi
 # netd собирается вместе с web (один модуль web)
@@ -101,7 +102,8 @@ BIN_WEB="$ROOT/web/dist/malina-web-armv7"
 BIN_NETD="$ROOT/web/dist/malina-netd-armv7"
 BIN_MAP="$ROOT/daemons/map-reader/dist/map-reader-armv7"
 BIN_KES="$ROOT/daemons/kes-reader/dist/kes-reader-armv7"
-BIN_BMS="$ROOT/daemons/bms-reader/dist/bms-reader-armv7"
+BIN_BMSR="$ROOT/daemons/bms-reader/dist/bms-reader-armv7"
+BIN_BMSP="$ROOT/daemons/bms-proxy/dist/bms-proxy-armv7"
 BIN_TSDB="$ROOT/daemons/tsdb/dist/malina-tsdb-armv7"
 
 req() { [ -f "$1" ] || { echo "нет $1 (собери: $0 --build --only $2)"; exit 1; }; }
@@ -109,7 +111,8 @@ has web  && { req "$BIN_WEB"  web; }
 has netd && { req "$BIN_NETD" netd; }
 has map  && { req "$BIN_MAP"  map; }
 has kes  && { req "$BIN_KES"  kes; }
-has bms  && { req "$BIN_BMS"  bms; }
+has bmsr && { req "$BIN_BMSR" bmsr; }
+has bmsp && { req "$BIN_BMSP" bmsp; }
 has tsdb && { req "$BIN_TSDB" tsdb; }
 
 STAGE="$(mktemp -d)"
@@ -118,7 +121,8 @@ has web  && cp "$BIN_WEB"  "$STAGE/malina-web"
 has netd && cp "$BIN_NETD" "$STAGE/malina-netd"
 has map  && cp "$BIN_MAP"  "$STAGE/map-reader"
 has kes  && cp "$BIN_KES"  "$STAGE/kes-reader"
-has bms  && cp "$BIN_BMS"  "$STAGE/bms-reader"
+has bmsr && cp "$BIN_BMSR" "$STAGE/bms-reader"
+has bmsp && cp "$BIN_BMSP" "$STAGE/bms-proxy"
 has tsdb && cp "$BIN_TSDB" "$STAGE/malina-tsdb"
 
 # --- сборка списка файлов для передачи ---
@@ -127,7 +131,8 @@ has web  && FILES+=( "$STAGE/malina-web" )
 has netd && FILES+=( "$STAGE/malina-netd" )
 has map  && FILES+=( "$STAGE/map-reader" )
 has kes  && FILES+=( "$STAGE/kes-reader" )
-has bms  && FILES+=( "$STAGE/bms-reader" )
+has bmsr && FILES+=( "$STAGE/bms-reader" )
+has bmsp && FILES+=( "$STAGE/bms-proxy" )
 has tsdb && FILES+=( "$STAGE/malina-tsdb" )
 
 if [ "$FIRST" = 1 ]; then
@@ -147,7 +152,8 @@ else
   UNITS=( )
   has map  && { cp "$ROOT/daemons/map-reader/map-reader.service"     "$STAGE/map-reader.service";        UNITS+=( "$STAGE/map-reader.service" ); }
   has kes  && { cp "$ROOT/daemons/kes-reader/kes-reader.service"     "$STAGE/kes-reader.service";        UNITS+=( "$STAGE/kes-reader.service" ); }
-  has bms  && { cp "$ROOT/daemons/bms-reader/bms-reader.service"     "$STAGE/malina-bms-reader.service"; UNITS+=( "$STAGE/malina-bms-reader.service" ); }
+  has bmsr && { cp "$ROOT/daemons/bms-reader/bms-reader.service"     "$STAGE/malina-bms-reader.service"; UNITS+=( "$STAGE/malina-bms-reader.service" ); }
+  has bmsp && { cp "$ROOT/daemons/bms-proxy/bms-proxy.service"       "$STAGE/malina-bms-proxy.service"; UNITS+=( "$STAGE/malina-bms-proxy.service" ); }
   has tsdb && { cp "$ROOT/daemons/tsdb/tsdb.service"                 "$STAGE/malina-tsdb.service";       UNITS+=( "$STAGE/malina-tsdb.service" ); }
   has tsdb && { cp "$ROOT/system/systemd/malina-tsdb-raw.service"    "$STAGE/malina-tsdb-raw.service";   UNITS+=( "$STAGE/malina-tsdb-raw.service" ); }
   echo "==> обновление на $HOST: $ONLY"
@@ -169,16 +175,19 @@ else
 	cd /malina/.deploy/tmp
 fi
 
-# бинарники (web — bin, остальные — sbin)
-[ -f malina-web ]    && sudo install -D -m0755 malina-web    /malina/usr/local/bin/malina-web
-[ -f malina-netd ]   && sudo install -D -m0755 malina-netd   /malina/usr/local/sbin/malina-netd
-[ -f map-reader ]    && sudo install -D -m0755 map-reader    /malina/usr/local/sbin/map-reader
-[ -f kes-reader ]    && sudo install -D -m0755 kes-reader    /malina/usr/local/sbin/kes-reader
-[ -f bms-reader ]    && sudo install -D -m0755 bms-reader    /malina/usr/local/sbin/bms-reader
-[ -f malina-tsdb ]   && sudo install -D -m0755 malina-tsdb   /malina/usr/local/sbin/malina-tsdb
+# бинарники (web — bin, остальные — sbin). Эхо — чтобы видеть, что реально уехало.
+echo "install: $(ls -1 2>/dev/null | tr '\n' ' ')"
+[ -f malina-web ]    && { sudo install -D -m0755 malina-web    /malina/usr/local/bin/malina-web;  echo "inst /malina/usr/local/bin/malina-web"; }
+[ -f malina-netd ]   && { sudo install -D -m0755 malina-netd   /malina/usr/local/sbin/malina-netd; echo "inst malina-netd"; }
+[ -f map-reader ]    && { sudo install -D -m0755 map-reader    /malina/usr/local/sbin/map-reader;  echo "inst map-reader"; }
+[ -f kes-reader ]    && { sudo install -D -m0755 kes-reader    /malina/usr/local/sbin/kes-reader;  echo "inst kes-reader"; }
+[ -f bms-reader ]    && { sudo install -D -m0755 bms-reader    /malina/usr/local/sbin/bms-reader;  echo "inst bms-reader"; }
+[ -f bms-proxy ]     && { sudo install -D -m0755 bms-proxy     /malina/usr/local/sbin/bms-proxy;   echo "inst bms-proxy"; }
+[ -f malina-tsdb ]   && { sudo install -D -m0755 malina-tsdb   /malina/usr/local/sbin/malina-tsdb; echo "inst malina-tsdb"; }
 
 # веб-ассеты — только если уезжали (обновление web/first-run)
 if [ -f assets.tar ] || [ "${FIRST:-0}" = 1 ]; then
+	echo "inst assets.tar -> /malina/usr/local/share/malina/web"
 	sudo rm -rf /malina/usr/local/share/malina/web
 	sudo install -d -m0755 /malina/usr/local/share/malina/web
 	if [ "${FIRST:-0}" = 1 ]; then
@@ -228,18 +237,19 @@ if [ "${FIRST:-0}" = 1 ]; then
 	sudo mkdir -p /run/malina-ts-raw
 	sudo mountpoint -q /run/malina-ts-raw || sudo mount /run/malina-ts-raw 2>/dev/null || true
 
-	for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-tsdb malina-tsdb-raw; do
+	for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-tsdb malina-tsdb-raw; do
 		sudo systemctl enable "$u" >/dev/null 2>&1 || true
 	done
 else
 	# --- точечное обновление: unit-файлы выбранных сервисов (rw-окно под /etc) ---
-	if [ -f malina-tsdb.service ] || [ -f malina-tsdb-raw.service ] || [ -f map-reader.service ] || [ -f kes-reader.service ] || [ -f malina-bms-reader.service ]; then
+	if [ -f malina-tsdb.service ] || [ -f malina-tsdb-raw.service ] || [ -f map-reader.service ] || [ -f kes-reader.service ] || [ -f malina-bms-reader.service ] || [ -f malina-bms-proxy.service ]; then
 		sudo mount -o remount,rw /
 		[ -f malina-tsdb.service ]       && sudo install -m0644 malina-tsdb.service       /etc/systemd/system/malina-tsdb.service
 		[ -f malina-tsdb-raw.service ]   && sudo install -m0644 malina-tsdb-raw.service   /etc/systemd/system/malina-tsdb-raw.service
 		[ -f map-reader.service ]        && sudo install -m0644 map-reader.service        /etc/systemd/system/map-reader.service
 		[ -f kes-reader.service ]        && sudo install -m0644 kes-reader.service        /etc/systemd/system/kes-reader.service
 		[ -f malina-bms-reader.service ] && sudo install -m0644 malina-bms-reader.service /etc/systemd/system/malina-bms-reader.service
+		[ -f malina-bms-proxy.service ]  && sudo install -m0644 malina-bms-proxy.service  /etc/systemd/system/malina-bms-proxy.service
 		sudo systemctl daemon-reload
 		sync
 		sudo mount -o remount,ro / || true
@@ -251,7 +261,8 @@ RESTART=""
 has web  && RESTART="$RESTART malina-web"
 has map  && RESTART="$RESTART map-reader"
 has kes  && RESTART="$RESTART kes-reader"
-has bms  && RESTART="$RESTART malina-bms-reader"
+has bmsr && RESTART="$RESTART malina-bms-reader"
+has bmsp && RESTART="$RESTART malina-bms-proxy"
 has tsdb && RESTART="$RESTART malina-tsdb malina-tsdb-raw"
 for u in $RESTART; do
 	[ -n "$u" ] || continue

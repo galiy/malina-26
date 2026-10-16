@@ -10,4 +10,6 @@ review/
 /malina-netd
 /map-reader
 /kes-reader
+/bms-reader
+/bms-proxy
 /malina-tsdb

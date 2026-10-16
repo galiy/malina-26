@@ -16,10 +16,12 @@ import (
 // Поддерживаемые скорости. Стандартные — через termios; нестандартные RS485
 // (312500/625000) — через termios2/BOTHER.
 var baudTable = map[int]uint32{
+	2400:   syscall.B2400,
 	9600:   syscall.B9600,
 	19200:  syscall.B19200,
 	57600:  syscall.B57600,
 	115200: syscall.B115200,
+	230400: syscall.B230400,
 }
 
 // Нестандартные скорости (RS485): задаются через termios2 c BOTHER.

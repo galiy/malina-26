@@ -1,0 +1,19 @@
+[Unit]
+Description=Malina BMS proxy (мост телеметрии BMS к инвертору по RS485)
+After=local-fs.target rsyslog.service network.target
+Wants=rsyslog.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/malina/usr/local/sbin/bms-proxy
+ExecReload=/bin/kill -HUP $MAINPID
+# /run/malina-bms-proxy под control-сокет создаётся systemd (переживает рестарты/ребут).
+RuntimeDirectory=malina-bms-proxy
+RuntimeDirectoryMode=0755
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

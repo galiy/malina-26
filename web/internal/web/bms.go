@@ -54,15 +54,15 @@ type mainBmsTile struct {
 	Online bool      `json:"online"`
 
 	// Карта ячеек и флаги (для плитки на главной).
-	CellCount     int      `json:"cell_count"`
-	CellsMV       []uint16 `json:"cells_mv"`        // мВ, первые cell_count
-	CellMin       int      `json:"cell_min"`        // мВ
-	CellMax       int      `json:"cell_max"`        // мВ
-	CellDiff      int      `json:"cell_diff"`       // мВ (max−min)
-	BalanceMask   uint32   `json:"balance_mask"`     // бит i → ячейка i
-	CellWarnMask  uint32   `json:"cell_warn_mask"`   // бит i → предупреждение по ячейке i
-	CellProtMask  uint32   `json:"cell_prot_mask"`   // бит i → защита по ячейке i
-	BmsFault      bool     `json:"bms_fault"`        // ошибка BMS в целом
+	CellCount    int      `json:"cell_count"`
+	CellsMV      []uint16 `json:"cells_mv"`       // мВ, первые cell_count
+	CellMin      int      `json:"cell_min"`       // мВ
+	CellMax      int      `json:"cell_max"`       // мВ
+	CellDiff     int      `json:"cell_diff"`      // мВ (max−min)
+	BalanceMask  uint32   `json:"balance_mask"`   // бит i → ячейка i
+	CellWarnMask uint32   `json:"cell_warn_mask"` // бит i → предупреждение по ячейке i
+	CellProtMask uint32   `json:"cell_prot_mask"` // бит i → защита по ячейке i
+	BmsFault     bool     `json:"bms_fault"`      // ошибка BMS в целом
 }
 
 // alarmAny — есть ли хоть один установленный бит alarm в диапазоне [base, base+w).
@@ -200,6 +200,21 @@ func (s *Server) bmsSock() string {
 	return "/run/malina-bms/control.sock"
 }
 
+// bmsProxyCfgPath / bmsProxySock — пути для настроек БМС-Прокси.
+func (s *Server) bmsProxyCfgPath() string {
+	if s.opts.BmsProxyConfigPath != "" {
+		return s.opts.BmsProxyConfigPath
+	}
+	return "/malina/etc/malina/bms-proxy.json"
+}
+
+func (s *Server) bmsProxySock() string {
+	if s.opts.BmsProxyControlSock != "" {
+		return s.opts.BmsProxyControlSock
+	}
+	return "/run/malina-bms-proxy/control.sock"
+}
+
 func loadBmsGateways(path string) (bmsGatewaysFile, error) {
 	var f bmsGatewaysFile
 	b, err := os.ReadFile(path)
@@ -246,7 +261,127 @@ func saveBmsGateways(path string, f bmsGatewaysFile) error {
 	return os.Rename(name, path)
 }
 
+// bmsProxyCfg — содержимое bms-proxy.json (настройки БМС-Прокси).
+type bmsProxyCfg struct {
+	Enabled  bool   `json:"enabled"`
+	Baud     int    `json:"baud"`
+	LogLevel string `json:"log_level"`
+	AddrMode string `json:"addr_mode"`
+}
+
+// bmsProxyBauds — допустимые скорости порта bms-proxy.
+// bmsProxyLevels — допустимые уровни логирования bms-proxy.
+// bmsProxyAddrModes — виды адресации инвертора (ADR=0..15 и ADR=1..16).
+var bmsProxyBauds = []int{2400, 9600, 19200, 57600, 115200, 230400}
+var bmsProxyLevels = []string{"debug", "info", "warn", "error"}
+var bmsProxyAddrModes = []string{"1-16", "0-15"}
+
+func defaultBmsProxyCfg() bmsProxyCfg {
+	return bmsProxyCfg{Enabled: false, Baud: 19200, LogLevel: "info", AddrMode: "1-16"}
+}
+
+func loadBmsProxyCfg(path string) bmsProxyCfg {
+	c := defaultBmsProxyCfg()
+	b, err := os.ReadFile(path)
+	if err != nil || len(b) == 0 {
+		return c
+	}
+	if err := json.Unmarshal(b, &c); err != nil {
+		return defaultBmsProxyCfg()
+	}
+	if !bmsProxyBaudOK(c.Baud) {
+		c.Baud = defaultBmsProxyCfg().Baud
+	}
+	if lv, ok := normalizeBmsProxyLevel(c.LogLevel); ok {
+		c.LogLevel = lv
+	} else {
+		c.LogLevel = defaultBmsProxyCfg().LogLevel
+	}
+	if am, ok := normalizeBmsProxyAddrMode(c.AddrMode); ok {
+		c.AddrMode = am
+	} else {
+		c.AddrMode = defaultBmsProxyCfg().AddrMode
+	}
+	return c
+}
+
+func saveBmsProxyCfg(path string, c bmsProxyCfg) error {
+	b, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n')
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".bms-proxy-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, path)
+}
+
+func bmsProxyBaudOK(b int) bool {
+	for _, v := range bmsProxyBauds {
+		if b == v {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeBmsProxyLevel приводит уровень к канонической форме (в нижнем
+// регистре, "warning"→"warn"); ("", false), если значение неизвестно.
+func normalizeBmsProxyLevel(s string) (string, bool) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "warning" {
+		s = "warn"
+	}
+	for _, v := range bmsProxyLevels {
+		if s == v {
+			return s, true
+		}
+	}
+	return "", false
+}
+
+// normalizeBmsProxyAddrMode приводит вид адресации к «0-15»/«1-16»
+// (принимает "1..16", "1_16" и т.п.); ("", false), если не распознано.
+func normalizeBmsProxyAddrMode(s string) (string, bool) {
+	t := strings.ToLower(strings.TrimSpace(s))
+	t = strings.ReplaceAll(t, "..", "-")
+	t = strings.ReplaceAll(t, "_", "-")
+	t = strings.ReplaceAll(t, " ", "")
+	for _, v := range bmsProxyAddrModes {
+		if t == v {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// baudFromForm парсит скорость порта из формы; невалидное → 0.
+func baudFromForm(v string) int {
+	b, err := strconv.Atoi(v)
+	if err != nil {
+		return 0
+	}
+	return b
+}
+
 // handleBmsSettings — страница настройки шлюзов (GET) и сохранение (POST).
+// Обрабатывает две формы: шлюзы BMS и настройки БМС-Прокси (по полю proxy_baud).
 func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
@@ -257,32 +392,75 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	pc := loadBmsProxyCfg(s.bmsProxyCfgPath())
 	data := s.baseData(r)
 	data["Active"] = "bms_settings"
+	data["Bauds"] = bmsProxyBauds
+	data["Levels"] = bmsProxyLevels
+	data["AddrModes"] = bmsProxyAddrModes
+	data["ProxyEnabled"] = pc.Enabled
+	data["ProxyBaud"] = pc.Baud
+	data["ProxyLevel"] = pc.LogLevel
+	data["ProxyAddrMode"] = pc.AddrMode
+	// Список шлюзов всегда в данных: при ошибке сохранения любой из форм
+	// страница рендерится повторно и не должна терять таблицу шлюзов.
+	data["Gateways"] = cfg.Gateways
 
 	if r.Method == http.MethodPost {
 		_ = r.ParseForm()
-		gws, verr := parseBmsForm(r)
-		if verr != "" {
-			data["Err"] = verr
-			data["Gateways"] = gws
+		if r.Form.Get("proxy_baud") != "" {
+			// форма настроек БМС-Прокси
+			np := bmsProxyCfg{
+				Enabled:  r.Form.Get("proxy_enabled") == "on",
+				Baud:     baudFromForm(r.Form.Get("proxy_baud")),
+				LogLevel: r.Form.Get("proxy_log_level"),
+				AddrMode: r.Form.Get("proxy_addr_mode"),
+			}
+			lv, lvOK := normalizeBmsProxyLevel(np.LogLevel)
+			am, amOK := normalizeBmsProxyAddrMode(np.AddrMode)
+			switch {
+			case !bmsProxyBaudOK(np.Baud):
+				data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_baud")
+			case !lvOK:
+				data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_level")
+			case !amOK:
+				data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_addr_mode")
+			default:
+				np.LogLevel = lv
+				np.AddrMode = am
+				if err := saveBmsProxyCfg(s.bmsProxyCfgPath(), np); err != nil {
+					data["Err"] = err.Error()
+				} else {
+					// reload демона прокси (не критично, если он сейчас не запущен)
+					_, _ = controlCall(s.bmsProxySock(), []byte(`{"cmd":"reload"}`))
+					http.Redirect(w, r, "/bms/settings?ok=1", http.StatusSeeOther)
+					return
+				}
+			}
+			data["ProxyEnabled"] = np.Enabled
+			data["ProxyBaud"] = np.Baud
+			data["ProxyLevel"] = np.LogLevel
+			data["ProxyAddrMode"] = np.AddrMode
 		} else {
-			cfg.Gateways = gws
-			if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
-				data["Err"] = err.Error()
+			// форма шлюзов BMS
+			gws, verr := parseBmsForm(r)
+			if verr != "" {
+				data["Err"] = verr
 				data["Gateways"] = gws
 			} else {
-				// reload демона (не критично, если он сейчас не запущен)
-				_, _ = controlCall(s.bmsSock(), []byte(`{"cmd":"reload"}`))
-				http.Redirect(w, r, "/bms/settings?ok=1", http.StatusSeeOther)
-				return
+				cfg.Gateways = gws
+				if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
+					data["Err"] = err.Error()
+					data["Gateways"] = gws
+				} else {
+					_, _ = controlCall(s.bmsSock(), []byte(`{"cmd":"reload"}`))
+					http.Redirect(w, r, "/bms/settings?ok=1", http.StatusSeeOther)
+					return
+				}
 			}
 		}
-	} else {
-		data["Gateways"] = cfg.Gateways
-		if r.URL.Query().Get("ok") != "" {
-			data["Ok"] = s.tr(s.lang(r), "bms.saved")
-		}
+	} else if r.URL.Query().Get("ok") != "" {
+		data["Ok"] = s.tr(s.lang(r), "bms.saved")
 	}
 	s.render(w, http.StatusOK, "bms_settings", data)
 }
