@@ -68,6 +68,7 @@ func buildBmsTile(tr map[string]string, b BmsInfo, tel bmscontract.Telemetry) ma
 	soc := float64(tel.SocDP) / 10 // слот активен (иначе не в списке)
 	tile.Soc = &soc
 	tile.Pack.U = mv(float64(tel.TotalCV) / 100)   // 0.01 В → В
+	tile.Pack.F = mvND()                           // у BMS частоты нет
 	tile.Pack.I = mv(float64(tel.CurrentDA) / 100) // 0.01 А → А
 	tile.Pack.P = mv(float64(tel.PowerW))          // Вт
 	if tel.TempCount > 0 {
