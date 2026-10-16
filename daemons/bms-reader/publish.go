@@ -57,5 +57,6 @@ func publishRaw(sink *stat.Sink, id string, tel bmscontract.Telemetry) {
 	if err != nil {
 		return
 	}
-	sink.Publish("bms", id, time.Now().Unix(), 1, payload)
+	// Время ряда — в МИЛЛИСЕКУНДАХ (как у map/kes и как ждёт tsdb/аккумулятор).
+	sink.Publish("bms", id, time.Now().UnixMilli(), 1, payload)
 }
