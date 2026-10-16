@@ -10,9 +10,10 @@ import (
 // control — синхронные команды через Unix-сокет (каркас — lib/control):
 // ping, list, write (запись ячеек КЭС; реле — ячейкой 0x0E3D, см. docs/kes-reader.md §4.2).
 type control struct {
-	cfg  *config
-	reg  *Registry
-	stop chan struct{}
+	cfg    *config
+	reg    *Registry
+	stop   chan struct{}
+	reload func() // перечитать настройки (enabled/log_level)
 }
 
 type ctlRequest struct {
@@ -49,6 +50,11 @@ func (c *control) handleLine(line []byte) any {
 		return ctlResponse{OK: true, State: &d}
 	case "write":
 		return c.dispatchWrite(writeRequest{Cmd: "write", ID: req.ID, Gen: req.Gen, NoFrame: req.NoFrame, Ops: req.Ops})
+	case "reload":
+		if c.reload != nil {
+			c.reload()
+		}
+		return ctlResponse{OK: true}
 	default:
 		return ctlResponse{OK: false, Code: "bad_request", Error: "unknown command"}
 	}

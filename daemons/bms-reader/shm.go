@@ -48,6 +48,19 @@ type listRecord struct {
 // bmsShm — обёртка сегмента: параллельные списки Item (метаданные) и Slot (107 Б).
 type bmsShm struct{ seg *shm.Segment }
 
+// releaseAll — освободить все занятые слоты (пустой список/пустой shm); нужно
+// при переходе демона в «спящий» режим (enabled=false). Индекс слота — позиция в
+// сегменте, а НЕ порядок в компактном срезе list().
+func (s *bmsShm) releaseAll() {
+	for i := 0; i < s.seg.Slots(); i++ {
+		b := s.seg.Item(i).Bytes()
+		if binary.LittleEndian.Uint32(b[0:4]) == 0 {
+			continue
+		}
+		s.release(i)
+	}
+}
+
 func openShm() (*bmsShm, error) {
 	seg, err := shm.Open(shmPath, bmsLayout())
 	if err != nil {

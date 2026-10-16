@@ -1,3 +1,5 @@
 {
+  "enabled": false,
+  "log_level": "debug",
   "gateways": []
 }

@@ -10,9 +10,10 @@ import (
 // control — синхронные команды через Unix domain socket (запрос → ответ):
 // ping, list, write (запись в МАП). Каркас сокета/JSON — lib/control.
 type control struct {
-	cfg  *config
-	reg  *Registry
-	stop chan struct{}
+	cfg    *config
+	reg    *Registry
+	stop   chan struct{}
+	reload func() // перечитать настройки (enabled/log_level)
 }
 
 type ctlRequest struct {
@@ -52,6 +53,11 @@ func (c *control) handleLine(line []byte) any {
 		return ctlResponse{OK: true, State: &d}
 	case "write":
 		return c.dispatchWrite(writeRequest{Cmd: "write", ID: req.ID, Gen: req.Gen, NoFrame: req.NoFrame, Ops: req.Ops})
+	case "reload":
+		if c.reload != nil {
+			c.reload()
+		}
+		return ctlResponse{OK: true}
 	default:
 		return ctlResponse{OK: false, Code: "bad_request", Error: "unknown command"}
 	}

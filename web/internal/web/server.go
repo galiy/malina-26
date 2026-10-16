@@ -63,6 +63,8 @@ type Options struct {
 	BmsControlSock      string        // control-сокет bms-reader (reload)
 	BmsProxyConfigPath  string        // путь к bms-proxy.json (BMS-Proxy)
 	BmsProxyControlSock string        // control-сокет bms-proxy (reload)
+	MapReaderConfigPath string        // путь к map-reader.json (вкл/выкл + лог)
+	KesReaderConfigPath string        // путь к kes-reader.json (вкл/выкл + лог)
 }
 
 // Server — HTTP-сервер.
@@ -144,6 +146,12 @@ func New(o Options) (*Server, error) {
 	}
 	if o.KesControlSock == "" {
 		o.KesControlSock = "/run/malina-kes/control.sock"
+	}
+	if o.MapReaderConfigPath == "" {
+		o.MapReaderConfigPath = "/malina/etc/malina/map-reader.json"
+	}
+	if o.KesReaderConfigPath == "" {
+		o.KesReaderConfigPath = "/malina/etc/malina/kes-reader.json"
 	}
 	if o.BasicCacheTTL == 0 {
 		o.BasicCacheTTL = 5 * time.Minute
@@ -254,9 +262,10 @@ func New(o Options) (*Server, error) {
 		"reboot":          "reboot.html",
 		"master":          "master.html",
 		"master_settings": "master_settings.html",
+		"map_settings":    "map_settings.html",
+		"kes_settings":    "kes_settings.html",
 		"bms_settings":    "bms_settings.html",
 		"bms":             "bms.html",
-		"page_stub":       "page_stub.html",
 		"email":           "email.html",
 		"events":          "events.html",
 		"stats_charts":    "stats_charts.html",

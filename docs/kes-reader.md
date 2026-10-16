@@ -9,6 +9,22 @@
 `docs/map-reader.md`, `docs/map-contract.md`, `docs/events.md` (§11 — заглушки КЭС),
 `docs/legacy/kes-legacy-malina2.md` (разбор legacy КЭС из бэкапа `.60`).
 
+## 0. Настройки (kes-reader.json)
+
+Файл `/malina/etc/malina/kes-reader.json` (ставится деплоем, `if_absent`):
+
+```json
+{ "enabled": false, "log_level": "debug" }
+```
+
+- **`enabled`** — вкл/выкл опрос. **Умолчание — выключен.** При `false` демон
+  остаётся активным, ничего не опрашивает, публикует **пустой список / пустой shm**
+  и ждёт `reload`.
+- **`log_level`** — `debug|info|warn|error` (умолчание `info`; в поставке `debug`),
+  меняется по `reload` без рестарта.
+- Смена настроек — командой **`reload`** по control-сокету
+  (`/run/malina-kes/control.sock`); при выключении пулеры портов останавливаются.
+
 ## 1. Что делаем
 
 Новый демон **`kes-reader`**: читает один/несколько **КЭС** по **протоколу MicroArt**

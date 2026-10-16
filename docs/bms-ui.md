@@ -14,9 +14,13 @@
   - КЭС: `/kes?id=<slot>&gen=<gen>`;
   - **БМС: `/bms?id=<slot>&gen=<gen>`** (как у map/kes).
 - **«Настройка»**:
-  - МАП → `/map/settings`, КЭС → `/kes/settings` — **пустые страницы-заглушки
-    «в разработке»**;
+  - МАП → `/map/settings` — **Включено** + **Уровень логирования** map-reader
+    (сохранить → `map-reader.json` + `reload` демона `map-reader`);
+  - КЭС → `/kes/settings` — **Включено** + **Уровень логирования** kes-reader
+    (сохранить → `kes-reader.json` + `reload` демона `kes-reader`);
   - БМС → `/bms/settings` — таблица IP-шлюзов BMS-Receiver (сохранить→конфиг+reload)
+    + рамка **«BMS-Reader»** (Включено / Уровень логирования; сохранить →
+    `bms-gateways.json` + reload демона `bms-reader`)
     + рамка **«БМС-Прокси»** (Включено / Скорость порта / Уровень логирования /
     Адресация инвертора; сохранить→`bms-proxy.json`+reload демона `bms-proxy`).
 - Подпункт **«Монитор» удалить** (пункт, страница `/bms/monitor`, шаблон

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -76,7 +75,39 @@ type orchestrator struct {
 
 	events chan devEvent
 
-	stop chan struct{}
+	stop   chan struct{}
+	pollWg sync.WaitGroup // пулеры источников (для джойна при остановке)
+}
+
+// stopped — закрыт ли канал остановки.
+func (o *orchestrator) stopped() bool {
+	select {
+	case <-o.stop:
+		return true
+	default:
+		return false
+	}
+}
+
+// waitPollers ждёт завершения всех пулеров источников.
+func (o *orchestrator) waitPollers() { o.pollWg.Wait() }
+
+// closeAll закрывает транспорты всех активных источников (при остановке) и
+// очищает карты состояния — иначе fd/порт остаются удержанными.
+func (o *orchestrator) closeAll() {
+	o.mu.Lock()
+	sts := make([]*srcState, 0, len(o.states))
+	for _, st := range o.states {
+		sts = append(sts, st)
+	}
+	o.states = make(map[string]*srcState)
+	o.devByID = make(map[string]*device)
+	o.mu.Unlock()
+	for _, st := range sts {
+		if st.src != nil && st.src.tr != nil {
+			_ = st.src.tr.Close()
+		}
+	}
 }
 
 func newOrchestrator(seg *bmsShm, sink *stat.Sink, idr *idRegistry, stop chan struct{}) *orchestrator {
@@ -156,8 +187,14 @@ func busyRdevs() map[uint64]bool {
 }
 
 func (o *orchestrator) scan() {
+	if o.stopped() {
+		return
+	}
 	busy := busyRdevs()
 	for _, path := range ports.ListPorts(serialPatterns) {
+		if o.stopped() {
+			return
+		}
 		desc := "serial:" + path
 		if o.hasState(desc) {
 			continue
@@ -168,6 +205,9 @@ func (o *orchestrator) scan() {
 		o.trySource(&source{desc: desc, serial: path})
 	}
 	for _, g := range o.gateways().Gateways {
+		if o.stopped() {
+			return
+		}
 		desc := "tcp:" + g.Host + ":" + itoa(g.Port)
 		if o.hasState(desc) {
 			continue
@@ -185,7 +225,7 @@ func (o *orchestrator) hasState(desc string) bool {
 
 // trySource — открыть источник, прогнать probe-последовательность (§19).
 func (o *orchestrator) trySource(src *source) {
-	if o.inBackoff(src.desc) {
+	if o.stopped() || o.inBackoff(src.desc) {
 		return
 	}
 	if src.serial != "" {
@@ -270,7 +310,11 @@ func (o *orchestrator) addSource(src *source, bt bmsType, slots []probeSlot) {
 		}
 	}
 	if added && !ok {
-		go o.sourcePoller(st)
+		o.pollWg.Add(1)
+		go func() {
+			defer o.pollWg.Done()
+			o.sourcePoller(st)
+		}()
 	}
 	// публикуем список для добавленных устройств (оркестратор — единственный писатель)
 	for _, d := range o.snapshot(st) {
@@ -305,7 +349,7 @@ func (o *orchestrator) addSlot(st *srcState, s probeSlot) bool {
 	o.mu.Lock()
 	o.devByID[id] = d
 	o.mu.Unlock()
-	log.Printf("bms-reader: + %s (%s) на %s addr=%d slot=%d", id, st.bt.Name(), st.src.desc, s.Addr, slot)
+	lx.Infof("bms-reader: + %s (%s) на %s addr=%d slot=%d", id, st.bt.Name(), st.src.desc, s.Addr, slot)
 	return true
 }
 
@@ -337,7 +381,7 @@ func (o *orchestrator) sourcePoller(st *srcState) {
 				d.miss++
 				if d.miss >= st.bt.MissThreshold() {
 					if err != errTimeout {
-						log.Printf("bms-reader: - %s: %v", d.id, err)
+						lx.Warnf("bms-reader: - %s: %v", d.id, err)
 					}
 					select {
 					case o.events <- devEvent{d: d, lost: true}:
@@ -419,6 +463,9 @@ func (o *orchestrator) loseDevice(d *device) {
 
 // rescan — перебор адресов активных шин (добавление новых слотов).
 func (o *orchestrator) rescan() {
+	if o.stopped() {
+		return
+	}
 	o.mu.Lock()
 	sts := make([]*srcState, 0, len(o.states))
 	for _, st := range o.states {
@@ -426,6 +473,9 @@ func (o *orchestrator) rescan() {
 	}
 	o.mu.Unlock()
 	for _, st := range sts {
+		if o.stopped() {
+			return
+		}
 		st.src.mu.Lock()
 		res, err := st.bt.Probe(st.src.tr)
 		st.src.mu.Unlock()

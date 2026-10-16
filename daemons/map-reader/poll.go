@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"time"
 )
 
@@ -75,7 +74,7 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 				// Промах ЦИКЛА: не удалась ни одна из попыток.
 				miss[e]++
 				if miss[e] >= cfg.maxMiss {
-					log.Printf("МАП %s unit=%d потерян (%d неудачных циклов подряд, причина: %v)", port, e.unit, miss[e], firstErr)
+					lx.Warnf("МАП %s unit=%d потерян (%d неудачных циклов подряд, причина: %v)", port, e.unit, miss[e], firstErr)
 					delete(miss, e)
 					reg.Remove(e)
 					continue
@@ -86,14 +85,14 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 					if np, rerr := openPort(port); rerr == nil {
 						p.Close()
 						p = np
-						log.Printf("poll %s unit=%d: переоткрыт порт после %d промахов (причина: %v)", port, e.unit, miss[e], firstErr)
+						lx.Infof("poll %s unit=%d: переоткрыт порт после %d промахов (причина: %v)", port, e.unit, miss[e], firstErr)
 					} else {
-						log.Printf("poll %s unit=%d: переоткрытие порта не удалось: %v", port, e.unit, rerr)
+						lx.Warnf("poll %s unit=%d: переоткрытие порта не удалось: %v", port, e.unit, rerr)
 					}
 				}
 				// Точная причина промаха (таймаут «не МАП» / «ошибочный ответ» / чужое
 				// устройство) — всегда в лог, чтобы видеть доминирующий тип сбоя.
-				log.Printf("poll %s unit=%d: промах %d/%d (%v)", port, e.unit, miss[e], cfg.maxMiss, firstErr)
+				lx.Debugf("poll %s unit=%d: промах %d/%d (%v)", port, e.unit, miss[e], cfg.maxMiss, firstErr)
 				alive = append(alive, e)
 				continue
 			}

@@ -1,0 +1,28 @@
+{{define "content"}}
+<div class="map-head">
+  <h1 class="map-title">{{index .T "menu.kes_settings"}}</h1>
+</div>
+{{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
+{{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
+<form method="post" action="/kes/settings">
+  <table class="mn-tbl">
+    <tr>
+      <th>{{index .T "bms.proxy_enabled"}}</th>
+      <td><label><input type="checkbox" name="kes_enabled" {{if .Enabled}}checked{{end}}>&nbsp;{{index .T "reader.enabled_hint"}}</label></td>
+    </tr>
+    <tr>
+      <th>{{index .T "bms.proxy_log_level"}}</th>
+      <td>
+        <select name="kes_log_level">
+          {{range .Levels}}
+          <option value="{{.}}" {{if eq . $.Level}}selected{{end}}>{{index $.T (printf "bms.proxy_level.%s" .)}}</option>
+          {{end}}
+        </select>
+      </td>
+    </tr>
+  </table>
+  <div class="mn-actions">
+    <button type="submit">{{index .T "bms.save"}}</button>
+  </div>
+</form>
+{{end}}

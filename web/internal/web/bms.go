@@ -183,6 +183,9 @@ type bmsGateway struct {
 }
 
 type bmsGatewaysFile struct {
+	// Настройки bms-reader (вкл/выкл опрос + уровень логов).
+	Enabled  bool         `json:"enabled"`
+	LogLevel string       `json:"log_level"`
 	Gateways []bmsGateway `json:"gateways"`
 }
 
@@ -229,6 +232,13 @@ func loadBmsGateways(path string) (bmsGatewaysFile, error) {
 	}
 	if err := json.Unmarshal(b, &f); err != nil {
 		return f, err
+	}
+	// Нормализуем уровень (нет поля/невалидно → info), чтобы сохранение формы
+	// шлюзов не писало пустое значение.
+	if lv, ok := normalizeBmsProxyLevel(f.LogLevel); ok {
+		f.LogLevel = lv
+	} else {
+		f.LogLevel = "info"
 	}
 	return f, nil
 }
@@ -408,6 +418,15 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 	// Список шлюзов всегда в данных: при ошибке сохранения любой из форм
 	// страница рендерится повторно и не должна терять таблицу шлюзов.
 	data["Gateways"] = cfg.Gateways
+	// Рамка BMS-Reader (bms-reader: вкл/выкл + уровень логов).
+	data["BmsrEnabled"] = cfg.Enabled
+	bmsrLvl := cfg.LogLevel
+	if lv, ok := normalizeBmsProxyLevel(bmsrLvl); ok {
+		bmsrLvl = lv
+	} else {
+		bmsrLvl = "info"
+	}
+	data["BmsrLevel"] = bmsrLvl
 
 	if r.Method == http.MethodPost {
 		_ = r.ParseForm()
@@ -453,6 +472,33 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 				data["ProxyAddrMode"] = am
 			} else {
 				data["ProxyAddrMode"] = pc.AddrMode
+			}
+		} else if r.Form.Get("bmsr_log_level") != "" {
+			// форма BMS-Reader (bms-reader: включено + уровень логирования)
+			en := r.Form.Get("bmsr_enabled") == "on"
+			lv, ok := normalizeBmsProxyLevel(r.Form.Get("bmsr_log_level"))
+			if !ok {
+				data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_level")
+				data["BmsrEnabled"] = en
+				cur := cfg.LogLevel
+				if c, ok := normalizeBmsProxyLevel(cur); ok {
+					cur = c
+				} else {
+					cur = "info"
+				}
+				data["BmsrLevel"] = cur
+			} else {
+				cfg.Enabled = en
+				cfg.LogLevel = lv
+				if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
+					data["Err"] = err.Error()
+				} else {
+					_, _ = controlCall(s.bmsSock(), []byte(`{"cmd":"reload"}`))
+					http.Redirect(w, r, "/bms/settings?ok=1", http.StatusSeeOther)
+					return
+				}
+				data["BmsrEnabled"] = en
+				data["BmsrLevel"] = lv
 			}
 		} else {
 			// форма шлюзов BMS

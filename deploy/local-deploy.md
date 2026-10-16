@@ -385,3 +385,20 @@ ssh malina@<ip> 'sudo mount -o remount,rw / && \
 Для ассетов аналогично копируется содержимое `web/assets/{templates,static,i18n}` в
 `/malina/usr/local/share/malina/web/`. Root-файлы требуют rw-окна (`mount -o
 remount,rw /` … `remount,ro`), каталог `/malina` — уже rw.
+
+## Настройки reader-демонов (map/kes/bms-reader)
+
+`map-reader.json`, `kes-reader.json` и `bms-gateways.json` (поля `enabled`,
+`log_level`) ставятся по `deploy/manifest.tsv` с политикой **`if_absent`** —
+существующие на устройстве файлы **не перезаписываются**.
+
+Дефолты в поставляемых файлах: **МАП — включён**, **КЭС — выключен**,
+**БМС — выключен**. Поэтому на чистом образе КЭС и BMS-опрос стартуют
+**выключенными**; включаются в веб-админке (МАП → Настройка, КЭС → Настройка,
+БМС → Настройка → рамка «BMS-Reader») либо записью `enabled:true` в конфиг +
+`reload` по control-сокету.
+
+> На рабочем устройстве (`.60`) все три включены (требование «у нас»): выставьте
+> `enabled:true` в `/malina/etc/malina/{map,kes}-reader.json` и в
+> `/malina/etc/malina/bms-gateways.json`, затем `systemctl reload`/команда
+> `reload` по сокету.

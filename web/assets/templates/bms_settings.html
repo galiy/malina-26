@@ -30,6 +30,29 @@
 </form>
 <script src="{{asset "bms_settings.js"}}"></script>
 
+<h2 class="map-title">{{index .T "bms.reader_title"}}</h2>
+<form method="post" action="/bms/settings" id="bmsReaderForm">
+  <table class="mn-tbl">
+    <tr>
+      <th>{{index .T "bms.proxy_enabled"}}</th>
+      <td><label><input type="checkbox" name="bmsr_enabled" {{if .BmsrEnabled}}checked{{end}}>&nbsp;{{index .T "reader.enabled_hint"}}</label></td>
+    </tr>
+    <tr>
+      <th>{{index .T "bms.proxy_log_level"}}</th>
+      <td>
+        <select name="bmsr_log_level">
+          {{range .Levels}}
+          <option value="{{.}}" {{if eq . $.BmsrLevel}}selected{{end}}>{{index $.T (printf "bms.proxy_level.%s" .)}}</option>
+          {{end}}
+        </select>
+      </td>
+    </tr>
+  </table>
+  <div class="mn-actions">
+    <button type="submit">{{index .T "bms.save"}}</button>
+  </div>
+</form>
+
 <h2 class="map-title">{{index .T "bms.proxy_title"}}</h2>
 <form method="post" action="/bms/settings" id="bmsProxyForm">
   <table class="mn-tbl">

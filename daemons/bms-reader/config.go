@@ -26,7 +26,12 @@ type Gateway struct {
 }
 
 // gatewaysFile — содержимое bms-gateways.json.
+//
+// Enabled/LogLevel — настройки демона (вкл/выкл опрос и уровень логов). При
+// отсутствии полей: Enabled=false (умолчание «выключен»), LogLevel=info.
 type gatewaysFile struct {
+	Enabled  bool      `json:"enabled"`
+	LogLevel string    `json:"log_level"`
 	Gateways []Gateway `json:"gateways"`
 }
 

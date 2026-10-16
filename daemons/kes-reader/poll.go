@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"time"
 
 	"github.com/galiy/malina-26/daemons/lib/transport"
@@ -49,7 +48,7 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *transport.Port,
 		if err != nil {
 			miss++
 			if miss >= cfg.maxMiss {
-				log.Printf("КЭС %s потерян (%d неудачных циклов: %v)", e.port, miss, firstErr)
+				lx.Warnf("КЭС %s потерян (%d неудачных циклов: %v)", e.port, miss, firstErr)
 				reg.Remove(e)
 				return
 			}
