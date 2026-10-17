@@ -252,7 +252,7 @@ $SUDO mount -o ro "$(PART 3)" "$MALM"
 echo "[verify] /malina dir: $( [ -d "$ROOTM/malina" ] && echo ok || echo MISSING )"
 echo "[verify] fstab: malina=$(grep -c 'LABEL=malina' "$ROOTM/etc/fstab") dhcp=$(grep -c '/var/lib/dhcp' "$ROOTM/etc/fstab") nm=$(grep -c NetworkManager "$ROOTM/etc/fstab")"
 echo "[verify] /malina binaries: $(ls "$MALM/usr/local/bin" "$MALM/usr/local/sbin" 2>/dev/null | grep -cE 'malina-web|malina-netd|map-reader|kes-reader|bms-reader|bms-proxy|malina-tsdb')/7"
-echo "[verify] rootfs /usr/local пусто: $(ls -A "$ROOTM/usr/local/bin" "$ROOTM/usr/local/sbin" 2>/dev/null | wc -l)"
+echo "[verify] rootfs /usr/local пусто: $(find "$ROOTM/usr/local/bin" "$ROOTM/usr/local/sbin" -type f 2>/dev/null | wc -l)"
 echo "[verify] assets: $(find "$MALM/usr/local/share/malina/web" -type f 2>/dev/null | wc -l)"
 $SUDO umount "$MALM" "$ROOTM"
 [ -n "$LOOP" ] && { $SUDO losetup -d "$LOOP"; LOOP=""; }
