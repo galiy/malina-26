@@ -35,9 +35,9 @@ func ValidatePeriod(p int) bool {
 	return false
 }
 
-// Load читает настройку; при отсутствии — дефолт (выкл., 5 мин).
+// Load читает настройку; при отсутствии/неполном файле — дефолт (вкл., 5 мин).
 func Load(path string) Config {
-	cfg := Config{Enabled: false, PeriodMin: 5}
+	cfg := Config{Enabled: true, PeriodMin: 5}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return cfg

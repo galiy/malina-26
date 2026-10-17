@@ -1,10 +1,36 @@
 package accumulator
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/galiy/malina-26/daemons/lib/tscontract"
 )
+
+// TestLoadDefaults — без файла аккумулятор включён с периодом 5 мин;
+// явные значения из файла сохраняются, невалидный период сбрасывается на 5.
+func TestLoadDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "accumulator.json")
+	cfg := Load(path)
+	if !cfg.Enabled || cfg.PeriodMin != 5 {
+		t.Fatalf("дефолт: %+v, ожидалось enabled=true period=5", cfg)
+	}
+	if err := os.WriteFile(path, []byte(`{"enabled":false,"period_min":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg = Load(path)
+	if cfg.Enabled || cfg.PeriodMin != 1 {
+		t.Fatalf("из файла: %+v, ожидалось enabled=false period=1", cfg)
+	}
+	if err := os.WriteFile(path, []byte(`{"enabled":true,"period_min":7}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg = Load(path)
+	if !cfg.Enabled || cfg.PeriodMin != 5 {
+		t.Fatalf("невалидный период: %+v, ожидалось enabled=true period=5", cfg)
+	}
+}
 
 func mkVals(kv map[uint16]tscontract.Value) map[uint16]tscontract.Value { return kv }
 
