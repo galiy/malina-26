@@ -36,6 +36,11 @@ MicroArt) на голый образ (Raspberry Pi OS bookworm) и развер�
 **Цель:** исключить любые записи в разделы перед перезаливкой.
 **Инвентарь снимать заново** для конкретного хоста; ниже — пример, снятый на `.68`.
 
+Команды инвентаря должны работать на старом jessie: `ip -4 addr` (опция `-br`
+появилась позже), `lsblk`, `fdisk -l`, `mount`, `lsof +D`, `crontab -l`,
+`systemctl list-units`. Размер p3 (`/settings`) — произвольный; пример ниже не
+эталон: важны p1/p2 и свободное место на карте.
+
 Пример инвентаря `.68`:
 - ОС Raspbian 8 jessie, ядро `4.14.50-v7+`; `eth0` = `192.168.13.68/24`.
 - SD 7,4 ГиБ (8 ГиБ карта): `p1` boot 63M (ro), `p2` root 4G (ro), `p3`
@@ -96,7 +101,7 @@ socat -u FILE:<IMG> TCP-LISTEN:9000,reuseaddr  # в фоне, отдаёт до 
 ```
 Для повтора — перезапустить `socat`.
 
-### 3.2. Приём — фоновым процессом, без ребута (B2)
+### 3.2. Приём — фоновым процессом, авторебут после вердикта (B2)
 
 Заливка идёт ~5–7 мин (медленная карта — дольше). Инструмент агента по умолчанию
 обрывает вызов через **2 мин**, поэтому нельзя держать приём в одном коротком
@@ -111,7 +116,7 @@ socat -u FILE:<IMG> TCP-LISTEN:9000,reuseaddr  # в фоне, отдаёт до 
 **с offset 0** (карта частично перезаписана).
 
 **Шаг A. Подготовка (короткий SSH-вызов, до фонового приёма):**
-1. `echo 1 > /proc/sys/kernel/sysrq` — иначе ребут на шаге D не сработает.
+1. `echo 1 > /proc/sys/kernel/sysrq` — иначе авторебут после вердикта не сработает.
 2. `umount /settings && sync` (единственный rw-раздел; путь сверять с инвентарём).
    Предпроверка: `grep -E '^(Dirty|Writeback):' /proc/meminfo` → оба **0 kB**;
    `mount | grep mmcblk0` → только `ro`.
@@ -119,7 +124,7 @@ socat -u FILE:<IMG> TCP-LISTEN:9000,reuseaddr  # в фоне, отдаёт до 
    после перезаписи корня они должны уже быть в RAM.
 4. Убедиться, что `SHA` (с `<SENDER_HOST>`) известен.
 
-**Шаг B. Фоновый приём (`background_process start`, БЕЗ ребута):**
+**Шаг B. Фоновый приём (`background_process start`, ребут — только после `VERDICT=OK`):**
 Команда на `<TARGET_HOST>` (один bash):
 ```
 exec 3<>/dev/tcp/<SENDER_HOST>/9000
@@ -130,6 +135,7 @@ sync
 read -r rx _ < /dev/shm/rx.sha
 if [ "$rc" = 0 ] && [ "$rx" = "<SHA>" ]; then
   echo "VERDICT=OK rc=$rc rx=$rx"
+  sleep 1; sync; echo b > /proc/sysrq-trigger
 else
   echo "VERDICT=FAIL rc=$rc rx=$rx exp=<SHA>"
 fi
@@ -137,43 +143,55 @@ fi
 - `tee` дублирует поток в `sha256sum`, в `dd` уходит тот же байт-поток.
 - `rc`, хеш и `dd.err` — в `/dev/shm` (tmpfs): после `dd` старый корень уже
   перезаписан, писать в него и запускать оттуда бинарники ненадёжно.
-- **Ребут здесь НЕ выполняется** — только печать вердикта (его заберёт
-  `background_process logs`).
+- **После печати `VERDICT=OK` в этой же оболочке** сразу выполнить `sync` и
+  `echo b > /proc/sysrq-trigger` (sysrq уже включён на шаге A). Приёмная
+  оболочка обычно доживает до вердикта, даже когда новые SSH-подключения уже
+  сбрасываются, — это заменяет ручной power-cycle. При `VERDICT=FAIL` или
+  несовпадении хеша **не перезагружать** (см. шаг D).
 
 **Шаг C. Периодическая проверка процесса заливки:**
 - `background_process status/logs` — жив ли процесс, появился ли `VERDICT`;
 - на `<SENDER_HOST>` — завершился ли `socat` (отдал файл до EOF);
-- на `<TARGET_HOST>` во время записи можно смотреть `pgrep -f 'dd of=/dev/mmcblk0'`
-  и хвост `/dev/shm/dd.err` (пока `dd` идёт, старый userland ещё доступен).
+- на `<TARGET_HOST>` в начале записи можно смотреть
+  `pgrep -f 'dd of=/dev/mmcblk0'` и хвост `/dev/shm/dd.err`.
+- Примерно после половины записи новые SSH-подключения могут сбрасываться
+  (`Connection reset by peer`) — это **штатно**, старый userland уже частично
+  перезаписан. Не считать это сбоем и не запускать второй writer. Прогресс в
+  это время смотреть только на `<SENDER_HOST>`: `ss -tin`, счётчики
+  `/proc/<socat>/io` (`rchar`/`wchar`).
 
-**Шаг D. Проверка и завершение (отдельно от приёма):**
-- Убедиться: процесс завершён; в логе `VERDICT=OK` (dd rc=0 и принятый хеш == `SHA`);
-  `Dirty`/`Writeback` = 0 kB.
-- После `dd` старая система может **умереть** — это нормально: корень уже перезаписан,
-  и работающий старый userland не переживает подмену (наблюдалось на практике: сначала
-  SSH-хендшейк сбрасывается, затем хост перестаёт пинговаться). Если `VERDICT=OK`, но
-  хост не отвечает — **это не повод перезаливать**: карта уже записана, нужен
-  **power-cycle** (кнопка/питание), после чего загрузится новый образ.
-- Если хост ещё отвечает: `echo 1 > /proc/sys/kernel/sysrq; echo b > /proc/sysrq-trigger`.
+**Шаг D. Проверка и завершение:**
+- Убедиться: процесс завершён; в логе `VERDICT=OK` (dd rc=0 и принятый хеш == `SHA`).
+- Ребут инициируется в конце шага B (sysrq после вердикта). Если он не сработал,
+  а хост ещё отвечает — повторить `echo 1 > /proc/sys/kernel/sysrq;
+  echo b > /proc/sysrq-trigger`.
+- Если `VERDICT=OK`, но хост не отвечает — **это не повод перезаливать**: карта уже
+  записана. Остаётся резервный путь — **power-cycle** (кнопка/питание), после чего
+  загрузится новый образ. К этому пути прибегать только если sysrq не сработал:
+  новые SSH-подключения во время записи сбрасываются, но приёмная оболочка обычно
+  доживает до вердикта и успевает отдать sysrq.
 - Если `VERDICT=FAIL` или вердикт не получен — **не перезагружать**: запись неполная.
   Повтор — **с offset 0** (в т.ч. физически: карту в картридер на `<SENDER_HOST>` и
   локальный `deploy-local.sh`). Второй writer не запускать.
 
-**Критерий готовности:** `VERDICT=OK` в логе фонового процесса (+ `Dirty/Writeback=0`,
-если хост ещё жив). Затем — sysrq-ребут или power-cycle; при `FAIL`/нет вердикта —
-повторная заливка с offset 0.
+**Критерий готовности:** `VERDICT=OK` в логе фонового процесса. Затем — автоматический
+sysrq-ребут из шага B; резервно — sysrq/повтор из шага D или power-cycle (только если
+sysrq недоступен); при `FAIL`/нет вердикта — повторная заливка с offset 0.
 
 ## 4. Перезагрузка и вход в новый образ (B3)
 
 - Если после `VERDICT=OK` хост не отвечает (старый userland умер при перезаписи) —
-  это ожидаемо: сделай **power-cycle** (кнопка/питание) и дождись загрузки нового
-  образа. Признак успеха — поднимается SSH уже нового образа.
+  это ожидаемо, но сначала проверь, сработал ли автоматический sysrq-ребут из шага B.
+  Если хост не поднялся — сделай **power-cycle** (кнопка/питание) и дождись загрузки
+  нового образа. Признак успеха — поднимается SSH уже нового образа.
 - После ребута/power-cycle SSH-сессия старая рвётся. **Host key сменился** — удалить
   старую запись: `ssh-keygen -R <TARGET_HOST>` (или `-o StrictHostKeyChecking=no
   -o UserKnownHostsFile=/dev/null`).
 - Подключаться с ретраями, пока SSH не поднимется (до 2–3 мин).
-- Вход: `<TARGET_USER>`/`malina`, пароль **`malina-26`**. **Новые пароли —
-  запросить у оператора** и установить `passwd`.
+- Вход в новый образ: `root` / **`malina-26`** (также работает `malina` / `malina-26`).
+  **Перед попытками входа агент обязан запросить у оператора и получить
+  подтверждение логина и пароля** — не подбирать учётки вслепую. **Новые пароли —
+  запросить у оператора** (отдельным подтверждением) и установить `passwd`.
 - Проверить «голость»: нет сервисов `malina-*`; корень `ro`; `fdisk -l` — только
   `p1` (boot) + `p2` (root 3 ГиБ), p3 нет.
 
@@ -214,18 +232,23 @@ IP остаётся в текущем ядре; **до §5 не ребутить
   `/sys/class/block/mmcblk0p2/{start,size}`; `sfdisk --no-reread -N 3 /dev/mmcblk0`
   с `size=+`; `partprobe /dev/mmcblk0`; `udevadm settle`;
   `mkfs.ext4 -F -q -L malina /dev/mmcblk0p3`.
+- Если ядро не перечитало таблицу (`partprobe` вернул «устройство занято», p3 не
+  появился) — выполнить `partx -a /dev/mmcblk0` (при необходимости повторить
+  `udevadm settle`) и только потом `mkfs.ext4`. Ребут для появления p3 не нужен.
 - **Контроль:** `blkid /dev/mmcblk0p3` → `TYPE="ext4"`, `LABEL="malina"`.
 
 ### 5.3. Доставка репозитория и бинарников (на целевом хосте их нет)
 `rsync` в образе нет — тянуть `tar`-потоком с `<SENDER_HOST>` (после `mount /malina`):
 ```
 # на <SENDER_HOST>:
-tar --exclude=.git -C <repo> -czf - . \
+tar --exclude=.git --exclude=.kilo --exclude=hardware.md -C <repo> -czf - . \
   | ssh -o StrictHostKeyChecking=accept-new <TARGET_USER>@<TARGET_HOST> \
       'mkdir -p /malina/opt/malina-repo && tar -C /malina/opt/malina-repo -xzf -'
 ```
-- Переносится **весь репозиторий + `*/dist/*-armv7`** (dist в gitignore — `git clone`
-  недостаточно).
+- **Обязательно исключать `.kilo/`** (секреты, пароли, локальные ключи) и
+  `hardware.md` (приватные данные железа): они не должны попадать на устройство.
+  Остальной репозиторий переносится целиком, включая `*/dist/*-armv7` (dist в
+  gitignore — `git clone` недостаточно).
 - **Контроль:** в `/malina/opt/malina-repo` есть `deploy/manifest.tsv`, `system/`,
   `web/assets/`, `web/pamcheck/pamcheck.c` и все `*/dist/*-armv7`.
 
@@ -233,8 +256,17 @@ tar --exclude=.git -C <repo> -czf - . \
 Источник — `/malina/opt/malina-repo`; после каждого шага — проверка из скрипта:
 - fstab: + `LABEL=malina /malina …` (ровно одна строка);
 - дерево `/malina`, seed-сеть (`mode1.json`,`mode2.json`,`active`, 0600/0644);
-- переносы `/root`,`/home`,cron,wpa + симлинки (проверить `readlink`);
-- `machine-id`/`hostname` (rm+install, 0444/0644);
+- переносы `/root`,`/home`,cron,wpa + симлинки (проверить `readlink`).
+  **На живой системе** перед переносом остановить `cron.service` (иначе пишет в
+  спул) и `wpa_supplicant.service` (держит конфиг); после переноса спул/конфиг
+  уже на `/malina`, cron можно не запускать до ребута;
+- `machine-id`/`hostname` (rm+install, 0444/0644). **На живой системе**
+  `/etc/machine-id` может быть read-only bind-монтированием из tmpfs: перед `rm`
+  проверить `findmnt /etc/machine-id` и при наличии сделать
+  `umount /etc/machine-id`, иначе `rm` вернёт `EBUSY` и шаг прервётся. После
+  `install` проверить `cat /etc/machine-id` (должен совпасть с
+  `system/provision/machine-id`); после ребута убедиться, что bind не вернулся
+  со старым ID;
 - артефакты по `manifest.tsv` (`/malina/*` → p3, прочее → `/`; `if_absent` не
   перезаписывать) — режим/владелец каждого;
 - бинарники в `/malina/usr/local/{bin,sbin}` — 7/7, `file` → ELF 32-bit ARM;
@@ -246,8 +278,17 @@ tar --exclude=.git -C <repo> -czf - . \
   списки из `system/provision/`;
 - purge NetworkManager (`apt-get purge -y network-manager … || true`); fstab-фиксы
   (`/var/lib/NetworkManager` убрать; `/var/lib/dhcp`, `/run/malina-ts-raw` 200M
-  добавить; tmpfs-точки создать); `rm -rf /etc/NetworkManager`;
+  добавить; tmpfs-точки создать); `rm -rf /etc/NetworkManager`. Если
+  NetworkManager в образе не установлен, purge штатно ничего не удаляет — это
+  не ошибка;
 - `systemd-tmpfiles --create …` (best-effort).
+
+**Про `/var/spool/cron`:** каталог `/var/spool` — tmpfs, поэтому симлинк
+`/var/spool/cron → /malina/var/spool/cron`, созданный при раскладке, после ребута
+перекрывается точкой монтирования. Его пересоздаёт `system/tmpfiles/malina.conf`
+(строка `L /var/spool/cron - - - - /malina/var/spool/cron`) при
+`systemd-tmpfiles --create`/загрузке. Это ожидаемое поведение, а не потеря
+настройки; после ребута проверять `readlink /var/spool/cron`.
 
 ### 5.5. Завершение
 - `sync`; вернуть корень в `ro`: `mount -o remount,ro /`.
@@ -255,11 +296,25 @@ tar --exclude=.git -C <repo> -czf - . \
 
 ## 6. Пост-проверка (после ребута)
 
-- `systemctl is-active malina-web malina-netd map-reader kes-reader bms-reader
-  bms-proxy malina-tsdb rsyslog ssh cron` — рабочие; `findmnt /malina` — смонтирован.
-- `ip -br a`, `nft list ruleset`, режим сети (AP/STA); `curl -sI http://127.0.0.1/login`.
-- Включить/настроить reader-демоны (`enabled:true`); сменить пароли (по согласованию
-  с оператором).
+- `systemctl is-active malina-web malina-net map-reader kes-reader
+  malina-bms-reader malina-bms-proxy malina-tsdb malina-tsdb-raw rsyslog ssh cron`
+  — рабочие (юнит сети называется `malina-net`, не `malina-netd`);
+  `findmnt /malina` — смонтирован.
+- `ip -br a`, `nft list ruleset`, режим сети (AP/STA); `curl -s -o /dev/null -w
+  '%{http_code}' http://127.0.0.1/login` → `200` (`HEAD`/`curl -I` вернёт `405` —
+  сервер принимает только GET/POST).
+- Reader-демоны: **не включать всё подряд**. Дефолты поставки:
+  `map-reader.json` — `enabled: true`; `kes-reader.json`, `bms-reader.json`,
+  `bms-proxy.json` — `enabled: false` (включаются только по отдельному
+  подтверждению оператора при наличии соответствующего оборудования).
+  Проверить, что `bms-proxy` остался выключен.
+- `log_level` у всех reader-демонов — `error` (минимальный уровень, только
+  ошибки; `debug` в поставку не ставить). Проверить `system/bms/bms-proxy.json`
+  и остальные seed-конфиги.
+- Конфиги в `/malina/etc/malina/` ставятся по `if_absent`: на уже развёрнутом
+  устройстве новые seed-значения **не перезапишут** старые (`enabled`/`log_level`
+  правятся вручную с последующим reload/restart).
+- Сменить пароли — только после отдельного подтверждения оператора.
 - Зафиксировать результат.
 
 ## Измерения канала (пример на `.68`, для оценки времени)

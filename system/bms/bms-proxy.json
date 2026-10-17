@@ -1,6 +1,6 @@
 {
   "enabled": false,
   "baud": 19200,
-  "log_level": "debug",
+  "log_level": "error",
   "addr_mode": "1-16"
 }

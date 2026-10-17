@@ -1,3 +1,7 @@
+# СНИМОК состояния конкретной сборки (PARTUUID e12ef54e), НЕ источник истины.
+# deploy/local/deploy-local.sh и deploy/redeploy-plan.md этот файл не используют:
+# рабочий fstab получается из fstab образа + правок deploy-local.sh (LABEL=malina,
+# /var/lib/dhcp, /run/malina-ts-raw). PARTUUID здесь может не совпадать с образом.
 proc            /proc           proc    defaults          0       0
 PARTUUID=e12ef54e-01  /boot/firmware  vfat    ro,noatime                          0       2
 PARTUUID=e12ef54e-02  /               ext4    ro,noatime,nodelalloc,commit=60     0       1

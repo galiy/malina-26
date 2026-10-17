@@ -44,8 +44,11 @@
 - `system/udev/` — `60-usb-serial-latency.rules` (`latency_timer=1`, эхо-протокол
   МАП, см. `docs/map.md`).
 - `system/network/` — дефолты `mode1.json`, `mode2.json`, `active`.
-- `system/provision/` — снимок состояния: `fstab`, `cmdline.txt`, `config.txt`,
-  `packages.txt`, `masked.txt`, `disabled.txt`, `machine-id`, `hostname`.
+- `system/provision/` — **снимок состояния** (не источник истины): `fstab`,
+  `cmdline.txt`, `config.txt`, `packages.txt`, `masked.txt`, `disabled.txt`,
+  `machine-id`, `hostname`. `deploy-local.sh` использует только
+  `masked/disabled/machine-id/hostname`; `fstab`/`cmdline.txt`/`config.txt` —
+  справочные, их PARTUUID может не совпадать с текущим образом.
 - `daemons/tsdb/` — хранилище рядов телеметрии (`malina-tsdb`): append-only
   сегменты на `/malina/var/malina-ts`, двоичный API, без фоновых оптимизаций
   (`docs/telemetry-store.md`).
