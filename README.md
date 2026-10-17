@@ -24,8 +24,10 @@
 - `system/` — артефакты системы: systemd-юниты, конфиги, seed-конфиги сети,
   snapshot провижининга (`fstab`, `cmdline.txt`, `config.txt`, списки пакетов/масок).
 - `deploy/` — установка/провижининг: `manifest.tsv`, единый `deploy.sh`
-  (обновление / `--first-run` — первичное), локальный деплой `local/stage2.sh`
-  (+ `local-deploy.md`), восстановление `restore.md`.
+  (обновление / `--first-run` — первичное), локальный деплой
+  `local/deploy-local.sh` (перезаливка + p3 + раскладка + проверка, `--plan` —
+  пошаговый план), методика переноса ПАК по сети `redeploy-plan.md`
+  (Вариант B, инструкции для агента), `local-deploy.md`, `restore.md`.
   Устаревшие скрипты — в `archive/` (вне git).
 - `web/` — Go-сервисы (`cmd/malina-web`, `cmd/malina-netd`, `internal/*`),
   статика/шаблоны/i18n, PAM-хелпер.
@@ -73,8 +75,11 @@ MALINA_PASS=<пароль> deploy/deploy.sh --build <user@host>
 # ПЕРВИЧНОЕ развёртывание — только один раз, на голое устройство/образ:
 MALINA_PASS=<пароль> deploy/deploy.sh --build --first-run <user@host>
 
-# локальный деплой на SD (этап 2 после записи образа) — см. deploy/local-deploy.md
-deploy/local/stage2.sh /dev/sdX
+# локальный деплой на SD (перезаливка образа + p3 + раскладка + проверка):
+deploy/local/deploy-local.sh /dev/sdX
+# пошаговый план без выполнения (для переноса ПАК по сети):
+deploy/local/deploy-local.sh --plan /dev/sdX
+# перенос ПАК по сети (методика для агента, без скрипта) — deploy/redeploy-plan.md
 ```
 
 ## Доступы по умолчанию

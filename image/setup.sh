@@ -26,7 +26,9 @@ chmod +x "$PIGEN/stage-malina/prerun.sh" "$PIGEN/stage-malina/EXPORT_IMAGE"
 
 touch "$PIGEN/stage2/SKIP_IMAGES"
 
-sed -i 's|^ROOT_PART_SIZE=.*|ROOT_PART_SIZE=$((8 * 1024 * 1024 * 1024))|' \
+# root 3 ГиБ: занято ~1,4 ГиБ (ОС), остальное — запас; p3 /malina (статистике)
+# отдаётся остаток SD (карты 8-32 ГиБ). См. docs/telemetry-store.md.
+sed -i 's|^ROOT_PART_SIZE=.*|ROOT_PART_SIZE=$((3 * 1024 * 1024 * 1024))|' \
 	"$PIGEN/export-image/prerun.sh"
 
 cat > "$PIGEN/export-image/03-network/01-run.sh" <<'EOS'

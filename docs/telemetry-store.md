@@ -582,7 +582,7 @@ meta_reply :=                  # ответ (cmd совпадает с запр�
 
 Юнит `daemons/tsdb/tsdb.service` → `/etc/systemd/system/malina-tsdb.service`,
 бинарник `/malina/usr/local/sbin/malina-tsdb`, данные — `/malina/var/malina-ts`;
-ставится `deploy/deploy.sh` (обновление / `--first-run`) и `deploy/local/stage2.sh`.
+ставится `deploy/deploy.sh` (обновление / `--first-run`) и `deploy/local/deploy-local.sh`.
 
 **Продюсеров два** (§14): **пулеры** → raw (модуль сохранения `lib/stat`);
 **аккумулятор в `malina-web`** (raw → avg). Реализованы: модуль сохранения (`lib/stat`),

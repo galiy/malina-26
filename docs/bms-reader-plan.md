@@ -109,7 +109,7 @@
   `restart`, `is-active` (там же, где `map-reader`/`kes-reader`/`malina-tsdb`).
 - **`deploy/manifest.tsv`:** строки для бинаря, юнита и конфигов (`bms-reader.json`,
   `bms-ident.json`) — первичное развёртывание (`--first-run`).
-- **`deploy/local/stage2.sh` + `deploy/local-deploy.md` + `deploy/restore.md`:** офлайн-карта
+- **`deploy/local/deploy-local.sh` + `deploy/local-deploy.md` + `deploy/restore.md`:** офлайн-карта
   и восстановление (демон/юнит/конфиги/каталоги rw).
 - **Веб-ассеты:** страница/i18n `bms` уезжают в `web/assets` (`assets.tar`) — списки
   сервисов не меняют.

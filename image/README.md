@@ -9,10 +9,13 @@
 - Пользователь `malina` и `root` — пароль **`malina-26`**.
 - SSH: вход по паролю и по root разрешён.
 - Hostname `malina`; локаль `ru_RU.UTF-8`, клавиатура `ru`, TZ `Europe/Moscow`.
-- Разделы: boot 512 МБ (FAT, `/boot/firmware`), root 8 ГБ (ext4).
+- Разделы: boot 512 МБ (FAT, `/boot/firmware`), root 3 ГБ (ext4). Кастомный p3
+  `/malina` (rw, статистика/артефакты) создаётся на деплое из остатка SD
+  (карты 8–32 ГиБ: на 8 ГиБ p3 ≈ 3,9 ГБ, на 16 ≈ 11 ГБ, на 32 ≈ 25 ГБ — см.
+  `docs/telemetry-store.md`).
 - Корень **read-only**, логи/временные данные — в tmpfs (см. `stage-malina`).
 - Раздел `/malina` (rw) — создаётся при деплое артефактов (локально —
-  `deploy/local/stage2.sh`), туда переносятся `/root`, `/home`, cron,
+  `deploy/local/deploy-local.sh`), туда переносятся `/root`, `/home`, cron,
   `wpa_supplicant`.
 - Пароль по умолчанию (в образе) для `malina` и `root`, а также WPA-пароль точки
   доступа — **`malina-26`**.
@@ -46,7 +49,7 @@
   - `05-map-uart` — UART для МАП (`enable_uart=1`, `dtoverlay=miniuart-bt`,
     без serial-консоли; BT остаётся живым).
 - `setup.sh` — раскладывает конфиг и стейдж в pi-gen, патчит `export-image`
-  (root 8 ГБ, `resolv.conf` как симлинк в `/run`).
+  (root 3 ГБ, `resolv.conf` как симлинк в `/run`).
 - `build.sh` — `setup.sh` + сборка через `sudo`.
 
 ## Сборка
@@ -72,7 +75,7 @@ sudo rm -rf /opt/raspberry_tmp/pi-gen/work
 sudo dd if=deploy/2026-10-07-malina-lite.img of=/dev/sdX bs=4M conv=fsync status=progress
 ```
 
-Root-раздел уже 8 ГБ; авторасширение (`resize2fs_once`) отключено.
+Root-раздел 3 ГБ; авторасширение (`resize2fs_once`) отключено.
 
 ## Заметки
 

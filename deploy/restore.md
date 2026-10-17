@@ -1,8 +1,9 @@
 # Восстановление системы из репозитория
 
-> Актуальный порядок деплоя (Этап 1 — образ, Этап 2 — артефакты локально) —
-> `deploy/local-deploy.md`. Ниже — модель и SSH-путь восстановления через
-> `deploy/provision.sh`.
+> Актуальный порядок деплоя — `deploy/local-deploy.md` (единый локальный
+> `deploy/local/deploy-local.sh`). Перенос работающего ПАК по сети (без вынимания
+> карты) — методика `deploy/redeploy-plan.md` (Вариант B). Ниже — модель
+> восстановления.
 
 Правило проекта: **«голый стартовый образ + содержимое репозитория = полностью
 рабочая система»**. Всё, что меняется на устройстве, должно быть восстановимо из
@@ -43,14 +44,12 @@
   `packages.txt` (apt-mark showmanual), `masked.txt`, `disabled.txt`.
 - `image/stage-malina/05-map-uart/` — UART для МАП: `enable_uart=1` +
   `dtoverlay=miniuart-bt`, без serial-консоли (PL011 на GPIO14/15 — МАП, BT на
-  mini-UART). Ранее дублировалось шагом 1b в архивном `deploy/provision.sh`.
-  Описание — `docs/map.md`.
+  mini-UART). Описание — `docs/map.md`.
 - `web/` — исходники сервиса (web+netd) и `pamcheck.c`.
 - `deploy/manifest.tsv`, `deploy/deploy.sh`.
 
 ## Статус
-Реализовано в `deploy/local/stage2.sh` + `deploy/manifest.tsv` (исторически —
-`deploy/provision.sh`, ныне в `archive/`):
+Реализовано в `deploy/local/deploy-local.sh` + `deploy/manifest.tsv`:
 - **создание раздела `/malina` (p3)** и монтирование (форматирование — только для
   нового/пустого раздела, чтобы не затереть данные);
 - применение `system/*` по `deploy/manifest.tsv` (юниты, PAM, dhclient-хук, rsyslog/
@@ -65,21 +64,20 @@
 
 Пакеты проекта из репозиториев запекаются в образ (`image/stage-malina/00-packages`
 + `apt update/upgrade`); **кастомные артефакты (бинарники/юниты/ассеты) в образ не
-запекаются** — устанавливаются из репозитория (`deploy/local/stage2.sh` /
+запекаются** — устанавливаются из репозитория (`deploy/local/deploy-local.sh` /
 `deploy/deploy.sh --first-run`) после загрузки. Тиражирование образов — вне рамок текущей задачи.
 
 ### Прочее
 - `deploy/deploy.sh` требует `MALINA_PASS` (env) или `MALINA_PASS=…` в `.kilo/secrets`.
 
-## Порядок восстановления (локально) и SSH-путь
+## Порядок восстановления (локально)
 
-**Основной путь — локальный:** Этап 1 (запись образа) + Этап 2
-(`deploy/local/stage2.sh`) — см. `deploy/local-deploy.md`.
+**Основной путь — локальный:** `deploy/local/deploy-local.sh <dev|image>`
+(перезаливка образа + p3 + раскладка + проверка) — см. `deploy/local-deploy.md`.
 
-Ниже — **SSH-путь** (по желанию, для отладки) из гранулированных средств, не единым
-«мегаскриптом». Исторический провижининг-скрипт перенесён в
-`archive/…/deploy/provision.sh` (можно вернуть и запустить вручную либо
-подглядывать как справку).
+**Перенос работающего ПАК по сети** (без вынимания карты, на старом ПАК) — не
+скрипт, а методика для агента: `deploy/redeploy-plan.md` (Вариант B). Прежний
+провижининг-скрипт `deploy/provision.sh` удалён.
 
 **0. Предусловия.** Образ загружен (`image/build.sh`), SSH включён
 (`malina/malina-26`, root разрешён). Пароли на свежем образе — дефолтные.
@@ -106,16 +104,10 @@ ssh malina@<ip>
 sudo -i
 ```
 
-**4. Провижининг на устройстве (по желанию).** Ремоунтит `/` rw, создаёт раздел
-`/malina` (p3) и ФС, применяет `deploy/manifest.tsv`, ставит бинарники, веб-ассеты,
-PAM-хелпер, machine-id, симлинки, tmpfiles, включает юниты. Скрипт берётся из архива:
-```
-sudo mkdir -p /opt/malina-repo/deploy
-sudo cp /opt/malina-repo/archive/*/deploy/provision.sh /opt/malina-repo/deploy/provision.sh
-REPO=/opt/malina-repo /opt/malina-repo/deploy/provision.sh
-```
-(предпочтительно — вообще не использовать: артефакты ставить локально Этапом 2;
-пакеты уже в образе).
+**4. Раскладка на устройстве.** Раздел `/malina` (p3), `manifest.tsv`, бинарники,
+веб-ассеты, PAM-хелпер, machine-id, симлинки, tmpfiles, включение юнитов — по
+шагам, выведенным из `deploy/local/deploy-local.sh --plan` (источник — Вариант B,
+`deploy/redeploy-plan.md`). Готового скрипта для удалённой раскладки нет.
 
 > **Какие юниты включаются.** При первичном развёртывании (`deploy/deploy.sh
 > --first-run`) включаются только базовые: `dhclient-eth0`, `malina-web`,
