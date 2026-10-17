@@ -1496,5 +1496,14 @@
   "bms.kpi.type": "Type",
   "bms.kpi.cells": "cells",
   "bms.alarms_ok": "No active alarms",
-  "bms.protections": "Protections"
+  "bms.protections": "Protections",
+  "sys.power_section": "Power management",
+  "sys.power_hint": "Reboot or shut down the device",
+  "sys.reboot": "Reboot",
+  "sys.reboot_confirm": "Reboot the device?",
+  "sys.shutdown": "Shut down",
+  "sys.shutdown_confirm": "Shut down the device?",
+  "shutdown.page_title": "Shutting down",
+  "shutdown.waiting": "The device is shutting down…",
+  "shutdown.hint": "Power may be removed after it has fully stopped."
 }

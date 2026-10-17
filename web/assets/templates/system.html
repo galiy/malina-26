@@ -101,6 +101,18 @@
     </div>
   </form>
 </section>
+<section class="card" aria-labelledby="sec-power">
+  <h2 id="sec-power">{{index .T "sys.power_section"}}</h2>
+  <div class="power-actions">
+    <form method="post" action="system/reboot" id="rebootForm">
+      <button type="submit" class="btn-danger">{{index .T "sys.reboot"}}</button>
+    </form>
+    <form method="post" action="system/shutdown" id="shutdownForm">
+      <button type="submit" class="btn-danger">{{index .T "sys.shutdown"}}</button>
+    </form>
+    <span class="muted">{{index .T "sys.power_hint"}}</span>
+  </div>
+</section>
 </div>
 
 <script>
@@ -113,5 +125,17 @@
       i.type = (i.type === "password") ? "text" : "password";
     });
   });
+  var rbf = document.getElementById("rebootForm");
+  if (rbf) {
+    rbf.addEventListener("submit", function (ev) {
+      if (!window.confirm({{printf "%q" (index .T "sys.reboot_confirm")}})) { ev.preventDefault(); }
+    });
+  }
+  var sdf = document.getElementById("shutdownForm");
+  if (sdf) {
+    sdf.addEventListener("submit", function (ev) {
+      if (!window.confirm({{printf "%q" (index .T "sys.shutdown_confirm")}})) { ev.preventDefault(); }
+    });
+  }
 </script>
 {{end}}

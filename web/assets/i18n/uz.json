@@ -1496,5 +1496,14 @@
   "bms.kpi.type": "Turi",
   "bms.kpi.cells": "yacheyka",
   "bms.alarms_ok": "Faol signallar yo'q",
-  "bms.protections": "Himoyalar"
+  "bms.protections": "Himoyalar",
+  "sys.power_section": "Quvvat boshqaruvi",
+  "sys.power_hint": "Qurilmani qayta yuklash yoki o'chirish",
+  "sys.reboot": "Qayta yuklash",
+  "sys.reboot_confirm": "Qurilmani qayta yuklash?",
+  "sys.shutdown": "O'chirish",
+  "sys.shutdown_confirm": "Qurilmani o'chirish?",
+  "shutdown.page_title": "O'chirilmoqda",
+  "shutdown.waiting": "Qurilma o'chmoqda…",
+  "shutdown.hint": "To'liq to'xtagandan so'ng quvvatni o'chirish mumkin."
 }

@@ -1496,5 +1496,14 @@
   "bms.kpi.type": "类型",
   "bms.kpi.cells": "电芯",
   "bms.alarms_ok": "无活动报警",
-  "bms.protections": "保护"
+  "bms.protections": "保护",
+  "sys.power_section": "电源管理",
+  "sys.power_hint": "重启或关闭设备",
+  "sys.reboot": "重新启动",
+  "sys.reboot_confirm": "确定重新启动设备？",
+  "sys.shutdown": "关机",
+  "sys.shutdown_confirm": "确定关闭设备？",
+  "shutdown.page_title": "关机",
+  "shutdown.waiting": "设备正在关机…",
+  "shutdown.hint": "完全停止后可断电。"
 }

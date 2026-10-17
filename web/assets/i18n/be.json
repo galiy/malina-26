@@ -1496,5 +1496,14 @@
   "bms.kpi.type": "Тып",
   "bms.kpi.cells": "ячэек",
   "bms.alarms_ok": "Няма актыўных алармаў",
-  "bms.protections": "Абароны"
+  "bms.protections": "Абароны",
+  "sys.power_section": "Кіраванне сілкаваннем",
+  "sys.power_hint": "Перазагрузка або выключэнне прылады",
+  "sys.reboot": "Перазагрузіць",
+  "sys.reboot_confirm": "Перазагрузіць прыладу?",
+  "sys.shutdown": "Выключыць",
+  "sys.shutdown_confirm": "Выключыць прыладу?",
+  "shutdown.page_title": "Выключэнне",
+  "shutdown.waiting": "Прылада выключаецца…",
+  "shutdown.hint": "Сілкаванне можна адключыць пасля поўнай спынення."
 }

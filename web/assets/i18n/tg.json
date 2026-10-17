@@ -1496,5 +1496,14 @@
   "bms.kpi.type": "Навъ",
   "bms.kpi.cells": "ҳуҷайра",
   "bms.alarms_ok": "Огоҳии фаъол нест",
-  "bms.protections": "Ҳимоятҳо"
+  "bms.protections": "Ҳимоятҳо",
+  "sys.power_section": "Идоракунии барқ",
+  "sys.power_hint": "Аз нав оғоз ё хомӯш кардани таҷҳизот",
+  "sys.reboot": "Аз нав оғоз кардан",
+  "sys.reboot_confirm": "Таҷҳизотро аз нав оғоз кардан?",
+  "sys.shutdown": "Хомӯш кардан",
+  "sys.shutdown_confirm": "Таҷҳизотро хомӯш кардан?",
+  "shutdown.page_title": "Хомӯшкунӣ",
+  "shutdown.waiting": "Таҷҳизот хомӯш мешавад…",
+  "shutdown.hint": "Пас аз пурра боздоштан барқро хомӯш кардан мумкин."
 }

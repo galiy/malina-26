@@ -260,6 +260,7 @@ func New(o Options) (*Server, error) {
 		"map":             "map.html",
 		"kes":             "kes.html",
 		"reboot":          "reboot.html",
+		"shutdown":        "shutdown.html",
 		"master":          "master.html",
 		"master_settings": "master_settings.html",
 		"map_settings":    "map_settings.html",
@@ -404,6 +405,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/api/services", s.handleAPIServices)
 	mux.HandleFunc("/services/action", s.handleServiceAction)
 	mux.HandleFunc("/system/reboot", s.handleSystemReboot)
+	mux.HandleFunc("/system/shutdown", s.handleSystemShutdown)
 	mux.HandleFunc("/logs", s.handleLogs)
 	mux.HandleFunc("/api/scan", s.handleAPIScan)
 	mux.HandleFunc("/master", s.handleMaster)

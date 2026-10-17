@@ -1496,5 +1496,14 @@
   "bms.kpi.type": "Түрі",
   "bms.kpi.cells": "ұяшық",
   "bms.alarms_ok": "Белсенді дабыл жоқ",
-  "bms.protections": "Қорғаныстар"
+  "bms.protections": "Қорғаныстар",
+  "sys.power_section": "Қуат басқару",
+  "sys.power_hint": "Құрылғыны қайта жүктеу немесе өшіру",
+  "sys.reboot": "Қайта жүктеу",
+  "sys.reboot_confirm": "Құрылғыны қайта жүктеу?",
+  "sys.shutdown": "Өшіру",
+  "sys.shutdown_confirm": "Құрылғыны өшіру?",
+  "shutdown.page_title": "Өшіру",
+  "shutdown.waiting": "Құрылғы өшіп жатыр…",
+  "shutdown.hint": "Толық тоқтағаннан кейін қуатты ажыратуға болады."
 }

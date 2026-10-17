@@ -1496,5 +1496,14 @@
   "bms.kpi.type": "ტიპი",
   "bms.kpi.cells": "უჯრედი",
   "bms.alarms_ok": "აქტიური გაფრთხილებები არ არის",
-  "bms.protections": "დაცვები"
+  "bms.protections": "დაცვები",
+  "sys.power_section": "ელექტროენერგიის მართვა",
+  "sys.power_hint": "მოწყობილობის გადატვირთვა ან გამორთვა",
+  "sys.reboot": "გადატვირთვა",
+  "sys.reboot_confirm": "გადატვირთოთ მოწყობილობა?",
+  "sys.shutdown": "გამორთვა",
+  "sys.shutdown_confirm": "გამორთოთ მოწყობილობა?",
+  "shutdown.page_title": "გამორთვა",
+  "shutdown.waiting": "მოწყობილობა ითიშება…",
+  "shutdown.hint": "კვება შეგიძლიათ გათიშოთ სრული გაჩერების შემდეგ."
 }

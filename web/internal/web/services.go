@@ -99,3 +99,25 @@ func (s *Server) handleSystemReboot(w http.ResponseWriter, r *http.Request) {
 		_ = exec.Command("systemctl", "reboot").Run()
 	}()
 }
+
+// handleSystemShutdown инициирует корректное выключение устройства.
+func (s *Server) handleSystemShutdown(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAuth(w, r); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	// Сначала отдаём страницу ожидания выключения, затем через короткую паузу
+	// инициируем poweroff.
+	s.render(w, http.StatusOK, "shutdown", s.baseData(r))
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	s.audit.Event("shutdown", map[string]any{"ip": clientIP(r)})
+	go func() {
+		time.Sleep(1200 * time.Millisecond)
+		_ = exec.Command("systemctl", "poweroff").Run()
+	}()
+}
