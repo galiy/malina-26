@@ -182,43 +182,62 @@ func ParseWriteReply(raw []byte) error {
 }
 
 // Read выполняет чтение страницы по протоколу Микроарт с побайтовым эхо.
+//
+// Экономия ioctl: буфер НЕ сбрасывается перед каждым запросом (на исправной
+// линии устройство отвечает только по запросу и замолкает после '\n', лишнего
+// в буфере нет). Сброс (Flush) делается ТОЛЬКО на пути ошибки — чтобы
+// рассинхронизированная/загрязнённая линия не «залипала» к следующему запросу.
 func Read(p *transport.Port, addr uint16, page byte, echoTO, respTO time.Duration) ([]byte, error) {
-	p.Flush() // сбросить возможный мусор после сбоя — иначе линия «залипает»
 	req := BuildReadRequest(addr, page)
 	for _, b := range req {
 		if err := p.WriteAll([]byte{b}); err != nil {
+			p.Flush()
 			return nil, err
 		}
 		e, ok := p.ReadOne(time.Now().Add(echoTO))
 		if !ok || e != b {
+			p.Flush()
 			return nil, ErrNoDevice
 		}
 	}
 	raw, _ := p.ReadUntilNL(time.Now().Add(respTO), 600, true)
 	if len(raw) == 0 {
+		p.Flush()
 		return nil, ErrNoDevice
 	}
-	return ParseReply(raw, page)
+	data, err := ParseReply(raw, page)
+	if err != nil {
+		p.Flush()
+		return nil, err
+	}
+	return data, nil
 }
 
 // Write выполняет запись страницы по протоколу Микроарт с побайтовым эхо.
+// (О сбросе буфера — см. Read.)
 func Write(p *transport.Port, addr uint16, data []byte, echoTO, respTO time.Duration) error {
-	p.Flush()
 	req := BuildWriteRequest(addr, data)
 	for _, b := range req {
 		if err := p.WriteAll([]byte{b}); err != nil {
+			p.Flush()
 			return err
 		}
 		e, ok := p.ReadOne(time.Now().Add(echoTO))
 		if !ok || e != b {
+			p.Flush()
 			return ErrNoDevice
 		}
 	}
 	raw, _ := p.ReadUntilNL(time.Now().Add(respTO), 16, true)
 	if len(raw) == 0 {
+		p.Flush()
 		return ErrNoDevice
 	}
-	return ParseWriteReply(raw)
+	if err := ParseWriteReply(raw); err != nil {
+		p.Flush()
+		return err
+	}
+	return nil
 }
 
 // --- Сторона устройства (для эмулятора) ---

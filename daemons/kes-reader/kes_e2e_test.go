@@ -52,8 +52,9 @@ func openPTYPair(t *testing.T) (*os.File, string) {
 // fakeKes — виртуальный КЭС поверх образа с разделением EEPROM/RAM, как у kes-emu:
 // devAddr < 0x400 → EEPROM «как есть»; devAddr >= 0x400 → RAM (адрес devAddr-0x1F0).
 type fakeKes struct {
-	eep [0x400]byte  // EEPROM: индекс = адрес как есть
-	img [0x1080]byte // RAM: индекс = RAM-адрес
+	eep       [0x400]byte  // EEPROM: индекс = адрес как есть
+	img       [0x1080]byte // RAM: индекс = RAM-адрес
+	failFirst bool         // ответить кадром ошибки на первый запрос (эффект смены бода)
 }
 
 func (f *fakeKes) at(dev uint16) byte {
@@ -92,7 +93,10 @@ func (f *fakeKes) serve(master io.ReadWriteCloser, stop <-chan struct{}) {
 		req, perr := microart.ParseRequestFrame(frame)
 		frame = frame[:0]
 		var reply []byte
-		if perr != nil {
+		if f.failFirst {
+			f.failFirst = false
+			reply = microart.BuildErrorReply(0x04)
+		} else if perr != nil {
 			reply = microart.BuildErrorReply(0x01)
 		} else if req.Cmd == 'r' {
 			data := make([]byte, int(req.Page)+1)

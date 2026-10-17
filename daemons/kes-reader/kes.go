@@ -71,8 +71,17 @@ func le16(img map[uint16]byte, addr uint16) uint16 {
 
 // probeKes — проба: читаем 1 байт _Device (0x0000). 5 → КЭС; 3 → МАП (чужое).
 // Ошибка чтения оборачивается в errNoKes с сохранением причины (для -debug).
+//
+// Первый кадр после смены скорости на живой линии КЭС может быть отклонён кадром
+// ошибки (e04/e06) — устройство «дожевывает» мусор от пробы на чужом боде. При
+// кадре ошибки проба повторяется один раз на той же скорости (второй запрос
+// проходит; проверено на МАП, тот же кадровый слой).
 func probeKes(p *transport.Port, echoTO, respTO time.Duration) (*kesInfo, error) {
 	data, err := microart.Read(p, 0x0000, 0, echoTO, respTO) // страница 1 байт
+	var de *microart.DeviceError
+	if errors.As(err, &de) {
+		data, err = microart.Read(p, 0x0000, 0, echoTO, respTO)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%w (чтение _Device: %v)", errNoKes, err)
 	}

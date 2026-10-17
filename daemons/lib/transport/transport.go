@@ -78,15 +78,29 @@ type Port struct {
 	baud int
 }
 
+// ErrBusy — порт занят другим держателем (flock LOCK_EX не взяли).
+var ErrBusy = errors.New("порт занят")
+
 // Open открывает порт и переводит его на скорость по умолчанию (115200).
 //
 // O_RDWR, а не O_RDONLY: иначе tcsetattr не применяет скорость на части
 // USB-serial адаптеров. Открываем в блокирующем режиме; таймаут чтения
 // задаётся через VTIME.
+//
+// Взаимоисключение демонов на одной линии: при открытии берём `flock(LOCK_EX|LOCK_NB)`
+// (снимается при Close). Если порт уже занят другим держателем — возвращаем ErrBusy;
+// если flock не поддерживается (прочее), открытие продолжается как раньше.
 func Open(path string) (*Port, error) {
 	fd, err := syscall.Open(path, syscall.O_RDWR|syscall.O_NOCTTY, 0)
 	if err != nil {
 		return nil, err
+	}
+	if lerr := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); lerr != nil {
+		if lerr == syscall.EWOULDBLOCK || lerr == syscall.EAGAIN {
+			syscall.Close(fd)
+			return nil, ErrBusy
+		}
+		// прочее (неподдерживается) — работаем без lock
 	}
 	p := &Port{path: path, fd: fd}
 	if err := p.SetBaud(115200); err != nil {
@@ -253,7 +267,8 @@ func (p *Port) ReadOne(deadline time.Time) (byte, bool) {
 // Оптимизация обмена (протокол не изменён): чтение — ПАКЕТНОЕ (один syscall.Read
 // на доступную пачку до 64 байт), эхо — ОДНИМ WriteAll на пачку до '\n'
 // включительно. Устраняет syscall на каждый байт. Байты после '\n' в прочитанной
-// пачке игнорируются — их сбросит Flush() в начале следующего запроса.
+// пачке игнорируются (уже считаны из ядра, в буфере не остаются); на исправной
+// линии устройство после кадра замолкает, так что буфер не загрязняется.
 func (p *Port) ReadUntilNL(deadline time.Time, max int, echo bool) ([]byte, bool) {
 	if p.fd < 0 {
 		return nil, false
@@ -281,7 +296,12 @@ func (p *Port) ReadUntilNL(deadline time.Time, max int, echo bool) ([]byte, bool
 				}
 			}
 			if echo {
-				_ = p.WriteAll(buf[:end])
+				// Не смогли вернуть эхо — устройство осталось в рассогласовании по эху,
+				// такой ответ нельзя считать успешным: возвращаем nil, чтобы вызывающий
+				// сбросил линию (flush) и повторил обмен.
+				if err := p.WriteAll(buf[:end]); err != nil {
+					return nil, false
+				}
 			}
 			out = append(out, buf[:end]...)
 			if hasNL {

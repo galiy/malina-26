@@ -73,7 +73,9 @@
 не храним.
 
 - **Probe:** `_Device (0x0000) == 5` — штатное MicroArt-чтение 1 байта; провал → не КЭС
-  (`docs/legacy/kes-legacy-malina2.md` §1a).
+  (`docs/legacy/kes-legacy-malina2.md` §1a). При кадре ошибки (`e 04`/`e 06`, первый
+  запрос после пробы на чужом боде) проба повторяется один раз на той же скорости
+  (`docs/microart-protocol.md` §10).
 - **Контракт списка (`kes-list`):** отдельная **секция того же** сегмента
   `/dev/shm/malina-kes-state` (layout `[header][list][slots]`, `lib/shm/shm.go`), запись 72 Б
   (`id/gen/port/baud/serial/lastSeen` — по образцу `map-list`, поля `model`/`protocol`/`state`

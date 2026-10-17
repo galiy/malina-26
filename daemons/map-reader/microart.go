@@ -112,11 +112,47 @@ func parseWriteReply(raw []byte) error {
 	return translateMicroartErr(microart.ParseWriteReply(raw))
 }
 
-// probeMicroart — проба нативного протокола: читаем сигнатурную страницу.
+// probeMicroart — проба нативного протокола. Двухшаговая (полная сигнатура
+// читается только после подтверждения _Device; ср. упрощённую одношаговую
+// КЭС-пробу, см. kes.go probeKes):
+//  1. малое чтение 1 байта — _Device (0x0000): 3 → МАП; иное MicroArt-устройство
+//     (напр. КЭС _Device==5) → errForeignMicroArt (быстро отдать порт, Modbus не
+//     слать); ошибка/тишина → «не МАП» (продолжаем перебор скоростей).
+//  2. МАП — читаем полную сигнатуру (модель/серийник) и разбираем parseCells.
+//
+// Первый кадр после смены скорости на живой линии МАП может отклонить кадром
+// ошибки (e04/e06): устройство «дожевывает» мусор от пробы на чужом боде. Поэтому
+// при кадре ошибки проба повторяется один раз на той же скорости — второй запрос
+// уже проходит (проверено на железе: 1-й e4 → 2-й OK).
 func probeMicroart(p *Port, baud int, echoTO, respTO time.Duration) (*mapInfo, error) {
-	data, err := microartRead(p, 0x0000, sigPage, echoTO, respTO)
+	const attempts = 2
+	var info *mapInfo
+	var err error
+	for i := 0; i < attempts; i++ {
+		info, err = probeMicroartOnce(p, baud, echoTO, respTO)
+		var me *mapError
+		if err == nil || !errors.As(err, &me) {
+			return info, err
+		}
+	}
+	return info, err
+}
+
+// probeMicroartOnce — один проход двухшаговой пробы (см. probeMicroart).
+func probeMicroartOnce(p *Port, baud int, echoTO, respTO time.Duration) (*mapInfo, error) {
+	dev, err := microartRead(p, 0x0000, 0, echoTO, respTO)
 	if err != nil {
 		return nil, err
 	}
-	return parseCells(data, "microart", baud)
+	if len(dev) == 0 {
+		return nil, errNoMap
+	}
+	if dev[0] != device.TypeMap {
+		return nil, errForeignMicroArt
+	}
+	full, err := microartRead(p, 0x0000, sigPage, echoTO, respTO)
+	if err != nil {
+		return nil, err
+	}
+	return parseCells(full, "microart", baud)
 }

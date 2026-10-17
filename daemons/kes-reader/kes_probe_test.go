@@ -119,3 +119,31 @@ func TestSlotAlloc(t *testing.T) {
 	a.free(-1)
 	a.free(kesSlots)
 }
+
+// TestProbeKesRetryAfterDeviceError — первый кадр после смены бода КЭС отклоняет
+// ошибкой e04; проба должна повторить чтение _Device на той же скорости и найти
+// устройство (см. probeKes).
+func TestProbeKesRetryAfterDeviceError(t *testing.T) {
+	f := &fakeKes{failFirst: true}
+	f.eep[0x0000] = 5 // _Device = КЭС
+
+	master, slave := openPTYPair(t)
+	defer master.Close()
+	stop := make(chan struct{})
+	defer close(stop)
+	go f.serve(master, stop)
+
+	p, err := transport.Open(slave)
+	if err != nil {
+		t.Fatalf("open slave: %v", err)
+	}
+	defer p.Close()
+
+	info, baud, err := probeKesPort(p, 200*time.Millisecond, 200*time.Millisecond, 2*time.Second)
+	if err != nil {
+		t.Fatalf("probeKesPort после e04: %v", err)
+	}
+	if info == nil || info.Device != 5 || baud == 0 {
+		t.Fatalf("info=%+v baud=%d, ждали КЭС", info, baud)
+	}
+}

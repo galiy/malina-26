@@ -82,12 +82,32 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 				// После pollReopenAfter промахов переоткрываем порт (Close+Open сбрасывает
 				// буферы) — убирает «залипание»/мусор в очереди драйвера.
 				if miss[e] == pollReopenAfter {
-					if np, rerr := openPort(port); rerr == nil {
-						p.Close()
-						p = np
-						lx.Infof("poll %s unit=%d: переоткрыт порт после %d промахов (причина: %v)", port, e.unit, miss[e], firstErr)
+					// Сначала закрываем старый fd (освобождает flock), иначе повторное
+					// открытие того же порта тут же упрётся в ErrBusy (flock LOCK_EX).
+					p.Close()
+					np, rerr := openPort(port)
+					reopened := false
+					if rerr == nil {
+						// transport.Open ставит дефолт 115200 — возвращаем рабочую скорость
+						// (иначе МАП на 19200/57600/9600 и Modbus/RS485 ломается после реюзена).
+						if serr := np.SetBaud(baud); serr != nil {
+							np.Close()
+							lx.Warnf("poll %s unit=%d: установка скорости %d после переоткрытия не удалась: %v", port, e.unit, baud, serr)
+						} else {
+							p = np
+							reopened = true
+							lx.Infof("poll %s unit=%d: переоткрыт порт после %d промахов (причина: %v)", port, e.unit, miss[e], firstErr)
+						}
 					} else {
 						lx.Warnf("poll %s unit=%d: переоткрытие порта не удалось: %v", port, e.unit, rerr)
+					}
+					if !reopened {
+						// порт не удалось восстановить — убираем записи, чтобы сканер
+						// переобнаружил устройство заново (иначе останется стале в shm).
+						for _, x := range entries {
+							reg.Remove(x)
+						}
+						return
 					}
 				}
 				// Точная причина промаха (таймаут «не МАП» / «ошибочный ответ» / чужое
