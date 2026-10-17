@@ -1,98 +1,112 @@
 {{define "content"}}
-<h1>{{index .T "sys.title"}}</h1>
-
 {{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
 {{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
 
+<div class="page-head page-head-left">
+  <h1>{{index .T "sys.title"}}</h1>
+</div>
+
 <div class="sysforms">
-  <section class="card">
-    <h2>{{index .T "sys.host"}}</h2>
-    <form method="post" action="system/host">
-      <label for="hostname">{{index .T "sys.hostname"}}</label>
-      <input id="hostname" name="hostname" type="text" value="{{.Hostname}}" autocomplete="off">
-      <label for="timezone">{{index .T "sys.timezone"}}</label>
-      <select id="timezone" name="timezone">
-        {{$cur := .Timezone}}
-        {{range .Timezones}}<option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{.}}</option>{{end}}
-      </select>
-      <p class="muted">{{index .T "sys.host_hint"}}</p>
+<section class="card" aria-labelledby="sec-host">
+  <h2 id="sec-host">{{index .T "sys.host"}}</h2>
+  <form method="post" action="system/host">
+    <table class="nettable"><tbody>
+      <tr><td><label for="hostname">{{index .T "sys.hostname"}}</label></td><td><input id="hostname" name="hostname" type="text" value="{{.Hostname}}" autocomplete="off"></td></tr>
+      <tr><td><label for="timezone">{{index .T "sys.timezone"}}</label></td><td>
+        <select id="timezone" name="timezone">
+          {{$cur := .Timezone}}
+          {{range .Timezones}}<option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{.}}</option>{{end}}
+        </select></td></tr>
+      <tr><td colspan="2" class="muted">{{index .T "sys.host_hint"}}</td></tr>
+    </tbody></table>
+    <div class="head-actions end">
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
       <button type="submit">{{index .T "sys.save"}}</button>
-    </form>
-  </section>
+    </div>
+  </form>
+</section>
 
-  <section class="card">
-    <h2>{{index .T "sys.logging"}}</h2>
-    <form method="post" action="system/logging">
-      <label for="host">{{index .T "sys.logging_host"}}</label>
-      <input id="host" name="host" type="text" value="{{.RemoteSyslog}}" autocomplete="off" placeholder="syslog.example.lan">
-      <p class="muted">{{index .T "sys.logging_hint"}}</p>
+<section class="card" aria-labelledby="sec-logging">
+  <h2 id="sec-logging">{{index .T "sys.logging"}}</h2>
+  <form method="post" action="system/logging">
+    <table class="nettable"><tbody>
+      <tr><td><label for="host">{{index .T "sys.logging_host"}}</label></td><td><input id="host" name="host" type="text" value="{{.RemoteSyslog}}" autocomplete="off" placeholder="syslog.example.lan"></td></tr>
+      <tr><td colspan="2" class="muted">{{index .T "sys.logging_hint"}}</td></tr>
+    </tbody></table>
+    <div class="head-actions end">
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
       <button type="submit">{{index .T "sys.save"}}</button>
-    </form>
-  </section>
+    </div>
+  </form>
+</section>
 
-  <section class="card">
-    <h2>{{index .T "sys.maptime"}}</h2>
-    <form method="post" action="system/map-time-sync">
-      <label class="check">
-        <input type="checkbox" name="enabled" value="1"{{if .MapTimeSyncEnabled}} checked{{end}}>
-        {{index .T "sys.maptime_enable"}}
-      </label>
-      <p class="muted">{{index .T "sys.maptime_hint"}}</p>
+<section class="card" aria-labelledby="sec-maptime">
+  <h2 id="sec-maptime">{{index .T "sys.maptime"}}</h2>
+  <form method="post" action="system/map-time-sync">
+    <table class="nettable"><tbody>
+      <tr><td><label for="maptime_enabled">{{index .T "sys.maptime_enable"}}</label></td><td><input id="maptime_enabled" type="checkbox" name="enabled" value="1"{{if .MapTimeSyncEnabled}} checked{{end}}></td></tr>
+      <tr><td colspan="2" class="muted">{{index .T "sys.maptime_hint"}}</td></tr>
+    </tbody></table>
+    <div class="head-actions end">
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
       <button type="submit">{{index .T "sys.save"}}</button>
-    </form>
-  </section>
+    </div>
+  </form>
+</section>
 
-  <section class="card">
-    <h2>{{index .T "sys.acc"}}</h2>
-    <form method="post" action="system/accumulator">
-      <label class="check">
-        <input type="checkbox" name="enabled" value="1"{{if .AccEnabled}} checked{{end}}>
-        {{index .T "sys.acc_enable"}}
-      </label>
-      <label for="acc_period">{{index .T "sys.acc_period"}}</label>
-      <select id="acc_period" name="period">
-        {{range .AccPeriods}}<option value="{{.}}"{{if eq . $.AccPeriod}} selected{{end}}>{{.}}</option>{{end}}
-      </select>
-      <p class="muted">{{index .T "sys.acc_hint"}}</p>
+<section class="card" aria-labelledby="sec-acc">
+  <h2 id="sec-acc">{{index .T "sys.acc"}}</h2>
+  <form method="post" action="system/accumulator">
+    <table class="nettable"><tbody>
+      <tr><td><label for="acc_enabled">{{index .T "sys.acc_enable"}}</label></td><td><input id="acc_enabled" type="checkbox" name="enabled" value="1"{{if .AccEnabled}} checked{{end}}></td></tr>
+      <tr><td><label for="acc_period">{{index .T "sys.acc_period"}}</label></td><td>
+        <select id="acc_period" name="period">
+          {{range .AccPeriods}}<option value="{{.}}"{{if eq . $.AccPeriod}} selected{{end}}>{{.}}</option>{{end}}
+        </select></td></tr>
+      <tr><td colspan="2" class="muted">{{index .T "sys.acc_hint"}}</td></tr>
+    </tbody></table>
+    <div class="head-actions end">
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
       <button type="submit">{{index .T "sys.save"}}</button>
-    </form>
-  </section>
+    </div>
+  </form>
+</section>
 
-  <section class="card">
-    <h2>{{index .T "sys.monitoring"}}</h2>
-    <form method="post" action="system/monitoring">
-      <label class="check">
-        <input type="checkbox" name="enabled" value="1"{{if .Monitoring.Enabled}} checked{{end}}>
-        {{index .T "sys.monitoring_enable"}}
-      </label>
-      <label for="monitoring_ip">{{index .T "sys.monitoring_ip"}}</label>
-      <input id="monitoring_ip" name="ip" type="text" value="{{.Monitoring.IP}}" autocomplete="off" placeholder="192.168.1.10">
-      <label for="monitoring_interval">{{index .T "sys.monitoring_interval"}}</label>
-      <input id="monitoring_interval" name="interval" type="number" min="30" max="3600" step="1" value="{{if .Monitoring.Interval}}{{.Monitoring.Interval}}{{else}}300{{end}}" autocomplete="off">
-      <p class="muted">{{index .T "sys.monitoring_hint"}}</p>
+<section class="card" aria-labelledby="sec-monitoring">
+  <h2 id="sec-monitoring">{{index .T "sys.monitoring"}}</h2>
+  <form method="post" action="system/monitoring">
+    <table class="nettable"><tbody>
+      <tr><td><label for="monitoring_enabled">{{index .T "sys.monitoring_enable"}}</label></td><td><input id="monitoring_enabled" type="checkbox" name="enabled" value="1"{{if .Monitoring.Enabled}} checked{{end}}></td></tr>
+      <tr><td><label for="monitoring_ip">{{index .T "sys.monitoring_ip"}}</label></td><td><input id="monitoring_ip" name="ip" type="text" value="{{.Monitoring.IP}}" autocomplete="off" placeholder="192.168.1.10"></td></tr>
+      <tr><td><label for="monitoring_interval">{{index .T "sys.monitoring_interval"}}</label></td><td><input id="monitoring_interval" name="interval" type="number" min="30" max="3600" step="1" value="{{if .Monitoring.Interval}}{{.Monitoring.Interval}}{{else}}300{{end}}" autocomplete="off"></td></tr>
+      <tr><td colspan="2" class="muted">{{index .T "sys.monitoring_hint"}}</td></tr>
+    </tbody></table>
+    <div class="head-actions end">
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
       <button type="submit">{{index .T "sys.save"}}</button>
-    </form>
-  </section>
+    </div>
+  </form>
+</section>
 
-  <section class="card">
-    <h2>{{index .T "sys.password"}}</h2>
-    <form method="post" action="system/password">
-      <label for="password_new">{{index .T "sys.password_new"}}</label>
-      <span class="pw">
-        <input id="password_new" name="password_new" type="password" autocomplete="new-password">
-        <button type="button" class="eye" title="{{index .T "ui.show_password"}}" aria-label="{{index .T "ui.show_password"}}">👁</button>
-      </span>
-      <label for="password_confirm">{{index .T "sys.password_confirm"}}</label>
-      <span class="pw">
-        <input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password">
-        <button type="button" class="eye" title="{{index .T "ui.show_password"}}" aria-label="{{index .T "ui.show_password"}}">👁</button>
-      </span>
+<section class="card" aria-labelledby="sec-password">
+  <h2 id="sec-password">{{index .T "sys.password"}}</h2>
+  <form method="post" action="system/password">
+    <table class="nettable"><tbody>
+      <tr><td><label for="password_new">{{index .T "sys.password_new"}}</label></td><td><span class="pw"><input id="password_new" name="password_new" type="password" autocomplete="new-password"><button type="button" class="eye" title="{{index .T "ui.show_password"}}" aria-label="{{index .T "ui.show_password"}}">👁</button></span></td></tr>
+      <tr><td><label for="password_confirm">{{index .T "sys.password_confirm"}}</label></td><td><span class="pw"><input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password"><button type="button" class="eye" title="{{index .T "ui.show_password"}}" aria-label="{{index .T "ui.show_password"}}">👁</button></span></td></tr>
+    </tbody></table>
+    <div class="head-actions end">
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
       <button type="submit">{{index .T "sys.password_submit"}}</button>
-    </form>
-  </section>
+    </div>
+  </form>
+</section>
 </div>
 
 <script>
+  document.querySelectorAll(".cancelbtn").forEach(function (b) {
+    b.addEventListener("click", function () { if (b.form) b.form.reset(); });
+  });
   document.querySelectorAll(".pw .eye").forEach(function (b) {
     b.addEventListener("click", function () {
       var i = b.parentNode.querySelector("input");

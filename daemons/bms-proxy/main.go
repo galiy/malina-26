@@ -61,9 +61,9 @@ func main() {
 	sh := &shared{}
 	d := &daemon{cfg: cfg, stop: stop, reload: reload, sh: sh, sc: newPortScanner(stop), udp: &udpManager{}}
 
-	// Скрытый второй слушатель — UDP, только если задан в конфиге `udp_listen`
+	// Второй слушатель — UDP: включается настройкой `udp_enabled` + адрес `udp_listen`
 	// (по умолчанию выключен). Независим от COM/состояний (docs/bms-proxy.md §7а).
-	d.udp.sync(cfg.settings.UDPListen, d)
+	d.udp.sync(cfg.settings.udpListenAddr(), d)
 
 	d.run() // блокируется до stop
 
@@ -99,9 +99,9 @@ func (d *daemon) applySettings() settings {
 	d.cfg.settings = s
 	d.mu.Unlock()
 	applyLogLevel(s.LogLevel)
-	// Скрытый UDP-слушатель переключается по reload (udp_listen).
+	// UDP-слушатель переключается по reload (udp_enabled + udp_listen).
 	if d.udp != nil {
-		d.udp.sync(s.UDPListen, d)
+		d.udp.sync(s.udpListenAddr(), d)
 	}
 	return s
 }

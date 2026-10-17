@@ -209,6 +209,28 @@ func TestBuildSeplosInfoDefaults(t *testing.T) {
 	}
 }
 
+// TestUDPSettingsAddr — гейт UDP: адрес отдаётся только при enabled && непустом.
+func TestUDPSettingsAddr(t *testing.T) {
+	cases := []struct {
+		en   bool
+		addr string
+		want string
+	}{
+		{false, "0.0.0.0:502", ""},
+		{true, "", ""},
+		{true, "  ", ""},
+		{true, "0.0.0.0:502", "0.0.0.0:502"},
+		{true, "  0.0.0.0:502 ", "0.0.0.0:502"},
+		{false, "", ""},
+	}
+	for _, c := range cases {
+		got := settings{UDPEnabled: c.en, UDPListen: c.addr}.udpListenAddr()
+		if got != c.want {
+			t.Errorf("enabled=%v addr=%q → %q, ожидалось %q", c.en, c.addr, got, c.want)
+		}
+	}
+}
+
 // TestParseRequestChk — невалидный CHK помечается OK=false, а не отбрасывается.
 func TestParseRequestChk(t *testing.T) {
 	tok := "20014642E00201" // верный префикс

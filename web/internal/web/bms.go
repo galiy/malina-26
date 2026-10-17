@@ -283,9 +283,9 @@ type bmsProxyCfg struct {
 	Baud     int    `json:"baud"`
 	LogLevel string `json:"log_level"`
 	AddrMode string `json:"addr_mode"`
-	// UDPListen — скрытая опция (в UI не показывается). Читается из конфига и
-	// СОХРАНЯЕТСЯ как есть, чтобы сохранение формы прокси её не стирало.
-	UDPListen string `json:"udp_listen,omitempty"`
+	// UDP-слушатель: явный переключатель UDPEnabled + адрес UDPListen.
+	UDPEnabled bool   `json:"udp_enabled"`
+	UDPListen  string `json:"udp_listen,omitempty"`
 }
 
 // bmsProxyBauds — допустимые скорости порта bms-proxy.
@@ -399,8 +399,9 @@ func baudFromForm(v string) int {
 	return b
 }
 
-// handleBmsSettings — страница настройки шлюзов (GET) и сохранение (POST).
-// Обрабатывает две формы: шлюзы BMS и настройки БМС-Прокси (по полю proxy_baud).
+// handleBmsSettings — страница настроек BMS-Reader (GET) и сохранение (POST).
+// Одна форма сохраняет вместе: шлюзы + настройки BMS-Reader (bms-reader.json) и
+// настройки БМС-Прокси (bms-proxy.json), затем reload обоих демонов.
 func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
@@ -421,6 +422,7 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 	data["ProxyBaud"] = pc.Baud
 	data["ProxyLevel"] = pc.LogLevel
 	data["ProxyAddrMode"] = pc.AddrMode
+	data["ProxyUDPEnabled"] = pc.UDPEnabled
 	data["ProxyUDPListen"] = pc.UDPListen
 	// Список шлюзов всегда в данных: при ошибке сохранения любой из форм
 	// страница рендерится повторно и не должна терять таблицу шлюзов.
@@ -437,94 +439,76 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		_ = r.ParseForm()
-		if r.Form.Get("proxy_baud") != "" {
-			// форма настроек БМС-Прокси
-			np := bmsProxyCfg{
-				Enabled:   r.Form.Get("proxy_enabled") == "on",
-				Baud:      baudFromForm(r.Form.Get("proxy_baud")),
-				LogLevel:  r.Form.Get("proxy_log_level"),
-				AddrMode:  r.Form.Get("proxy_addr_mode"),
-				UDPListen: strings.TrimSpace(r.Form.Get("udp_listen")),
-			}
-			lv, lvOK := normalizeBmsProxyLevel(np.LogLevel)
-			am, amOK := normalizeBmsProxyAddrMode(np.AddrMode)
-			switch {
-			case !bmsProxyBaudOK(np.Baud):
-				data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_baud")
-			case !lvOK:
-				data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_level")
-			case !amOK:
-				data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_addr_mode")
-			default:
-				np.LogLevel = lv
-				np.AddrMode = am
+		// Единая форма: шлюзы + BMS-Reader + БМС-Прокси сохраняются вместе.
+		gws, verr := parseBmsForm(r)
+		bmsrEn := r.Form.Get("bmsr_enabled") == "on"
+		bmsrLv, bmsrOK := normalizeBmsProxyLevel(r.Form.Get("bmsr_log_level"))
+
+		np := bmsProxyCfg{
+			Enabled:    r.Form.Get("proxy_enabled") == "on",
+			Baud:       baudFromForm(r.Form.Get("proxy_baud")),
+			LogLevel:   r.Form.Get("proxy_log_level"),
+			AddrMode:   r.Form.Get("proxy_addr_mode"),
+			UDPEnabled: r.Form.Get("udp_enabled") == "on",
+			UDPListen:  strings.TrimSpace(r.Form.Get("udp_listen")),
+		}
+		lv, lvOK := normalizeBmsProxyLevel(np.LogLevel)
+		am, amOK := normalizeBmsProxyAddrMode(np.AddrMode)
+
+		switch {
+		case verr != "":
+			data["Err"] = verr
+		case !bmsrOK:
+			data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_level")
+		case !bmsProxyBaudOK(np.Baud):
+			data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_baud")
+		case !lvOK:
+			data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_level")
+		case !amOK:
+			data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_addr_mode")
+		default:
+			np.LogLevel = lv
+			np.AddrMode = am
+			cfg.Gateways = gws
+			cfg.Enabled = bmsrEn
+			cfg.LogLevel = bmsrLv
+			// Сохраняем и перезагружаем каждый демон сразу после записи его файла,
+			// чтобы сбой второй записи не оставлял первый файл без reload.
+			if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
+				data["Err"] = err.Error()
+			} else {
+				_, _ = controlCall(s.bmsSock(), []byte(`{"cmd":"reload"}`))
 				if err := saveBmsProxyCfg(s.bmsProxyCfgPath(), np); err != nil {
 					data["Err"] = err.Error()
 				} else {
-					// reload демона прокси (не критично, если он сейчас не запущен)
 					_, _ = controlCall(s.bmsProxySock(), []byte(`{"cmd":"reload"}`))
 					http.Redirect(w, r, "/bms/settings?ok=1", http.StatusSeeOther)
 					return
 				}
 			}
-			data["ProxyEnabled"] = np.Enabled
-			data["ProxyBaud"] = np.Baud
-			if lvOK {
-				data["ProxyLevel"] = lv
-			} else {
-				data["ProxyLevel"] = pc.LogLevel
-			}
-			if amOK {
-				data["ProxyAddrMode"] = am
-			} else {
-				data["ProxyAddrMode"] = pc.AddrMode
-			}
-			data["ProxyUDPListen"] = np.UDPListen
-		} else if r.Form.Get("bmsr_log_level") != "" {
-			// форма BMS-Reader (bms-reader: включено + уровень логирования)
-			en := r.Form.Get("bmsr_enabled") == "on"
-			lv, ok := normalizeBmsProxyLevel(r.Form.Get("bmsr_log_level"))
-			if !ok {
-				data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_level")
-				data["BmsrEnabled"] = en
-				cur := cfg.LogLevel
-				if c, ok := normalizeBmsProxyLevel(cur); ok {
-					cur = c
-				} else {
-					cur = "info"
-				}
-				data["BmsrLevel"] = cur
-			} else {
-				cfg.Enabled = en
-				cfg.LogLevel = lv
-				if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
-					data["Err"] = err.Error()
-				} else {
-					_, _ = controlCall(s.bmsSock(), []byte(`{"cmd":"reload"}`))
-					http.Redirect(w, r, "/bms/settings?ok=1", http.StatusSeeOther)
-					return
-				}
-				data["BmsrEnabled"] = en
-				data["BmsrLevel"] = lv
-			}
-		} else {
-			// форма шлюзов BMS
-			gws, verr := parseBmsForm(r)
-			if verr != "" {
-				data["Err"] = verr
-				data["Gateways"] = gws
-			} else {
-				cfg.Gateways = gws
-				if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
-					data["Err"] = err.Error()
-					data["Gateways"] = gws
-				} else {
-					_, _ = controlCall(s.bmsSock(), []byte(`{"cmd":"reload"}`))
-					http.Redirect(w, r, "/bms/settings?ok=1", http.StatusSeeOther)
-					return
-				}
-			}
 		}
+		// повторный рендер при ошибке — показать то, что ввёл пользователь
+		data["Gateways"] = gws
+		data["BmsrEnabled"] = bmsrEn
+		if bmsrOK {
+			data["BmsrLevel"] = bmsrLv
+		} else {
+			data["BmsrLevel"] = bmsrLvl
+		}
+		data["ProxyEnabled"] = np.Enabled
+		data["ProxyBaud"] = np.Baud
+		if lvOK {
+			data["ProxyLevel"] = lv
+		} else {
+			data["ProxyLevel"] = pc.LogLevel
+		}
+		if amOK {
+			data["ProxyAddrMode"] = am
+		} else {
+			data["ProxyAddrMode"] = pc.AddrMode
+		}
+		data["ProxyUDPEnabled"] = np.UDPEnabled
+		data["ProxyUDPListen"] = np.UDPListen
 	} else if r.URL.Query().Get("ok") != "" {
 		data["Ok"] = s.tr(s.lang(r), "bms.saved")
 	}

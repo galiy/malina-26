@@ -1364,3 +1364,89 @@ tr.ctl-changed { background: #fff8e1; }
 .alarm-group ul { margin: 4px 0 0 18px; }
 .ok { color: #37b24d; }
 .bms-charts-title { margin: 22px 0 10px; }
+
+/* Знак «?» — подсказка к параметру (раскрывается по клику). */
+.hint-q {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 17px; height: 17px; margin-left: 6px; padding: 0;
+  border-radius: 50%; border: 1px solid var(--accent);
+  background: var(--accent); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 1;
+  cursor: pointer; vertical-align: middle;
+}
+.hint-q:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+.hint-pop {
+  margin: 6px 0 2px; padding: 8px 10px; max-width: 560px;
+  background: #f5f8f5; border: 1px solid var(--border); border-radius: 4px;
+  font-size: 13px; line-height: 1.4; color: #333; white-space: normal;
+}
+.nettable td .hint-pop { display: block; }
+
+/* Страницы настроек: кнопка «Отменить» — вторичная (как в «Настройке сети»). */
+.head-actions button.cancelbtn {
+  background: #fff; color: var(--accent); border-color: var(--accent);
+}
+.head-actions button.cancelbtn:hover { background: #f2f6f2; color: var(--accent-dark); border-color: var(--accent-dark); }
+
+/* Скругление/иконка «+» для добавления строки шлюза (рядом с «✕»). */
+/* Круглый «+» добавления строки — как «✕» удаления (белый кружок, зелёный знак),
+   заскоуплен в .nettable, чтобы не перебивался .card form button внутри карточки. */
+.nettable .mn-add {
+  width: 26px; height: 26px; padding: 0; border-radius: 50%; margin: 0;
+  border: 1px solid #0d5637; background: #fff; color: #0d5637;
+  font-size: 16px; line-height: 1; cursor: pointer; vertical-align: middle;
+}
+.nettable .mn-add:hover { background: #eef4ee; }
+.nettable .mn-add, .nettable .mn-del { margin: 0; }
+/* Круглый «✕» удаления — в таблицах настроек (шлюзы BMS, узлы мастер-узла). */
+.nettable .mn-del {
+  width: 26px; height: 26px; padding: 0; border-radius: 50%;
+  border: 1px solid #d9534f; background: #fff; color: #d9534f;
+  font-size: 13px; line-height: 1; cursor: pointer; vertical-align: middle;
+}
+.nettable .mn-del:hover { background: #fde8e8; }
+.nettable tr input[name="port"] { width: 100px; }
+
+/* `hidden` не должен перекрываться мобильным `display:block` у nettable. */
+.nettable tr[hidden] { display: none; }
+
+.page-head h2 { margin: 0; }
+
+/* Видимый фокус для значка «?». */
+.hint-q:focus-visible { outline: 2px solid var(--accent-dark); outline-offset: 2px; }
+
+.nettable tr input[name="name"] { width: 180px; }
+
+/* Ссылка-кнопка в шапке настроек (выровнена с кнопками Сохранить/Отменить). */
+.head-actions a.btn {
+  display: inline-flex; align-items: center; box-shadow: none; text-decoration: none;
+  padding: 8px 14px; border: 1px solid var(--accent); border-radius: 4px;
+  background: var(--accent); color: #fff;
+}
+.head-actions a.btn:hover { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+
+/* Действия формы внутри карточки блока (кнопки внизу справа — принадлежность ясна). */
+.head-actions.end { justify-content: flex-end; margin-top: 10px; }
+/* Кнопки в карточке — только скругление как у остальных настроек (регистр/шрифт
+   остаются общетемовыми UPPERCASE Condensed, как на network/bms/map/kes). */
+.card form .head-actions button { border-radius: 4px; }
+/* Изоляция «вертикальных» правил карточки внутри nettable (табличные настройки). */
+.card .nettable { border: 0; overflow-x: auto; }
+.card .nettable input:not([type="checkbox"]), .card .nettable select { width: 280px; padding: 6px 8px; }
+/* Узкие поля name/port сохраняются и внутри карточки (не перебиваются 280px). */
+.card .nettable tr input[name="name"] { width: 180px; }
+.card .nettable tr input[name="port"] { width: 100px; }
+.card .nettable label { display: inline; margin: 0; }
+.head-actions.end button { margin-top: 0; }
+
+/* Мобильное растяжение полей в карточках-настройках (как на остальных страницах). */
+@media (max-width: 820px) {
+  .card .nettable input:not([type="checkbox"]), .card .nettable select { width: 100%; max-width: 100%; }
+}
+
+/* E-mail: заголовок списка исходящих + изоляция карточных правил в форме. */
+.nettable thead th { background: #0d5637; color: #fff; padding: 6px 12px; text-align: left; font-weight: 600; }
+.email-form .form-row label { margin: 0; }
+.card .email-form .form-row input, .card .email-form .form-row select { width: auto; }
+
+.nettable input.udp-off { opacity: .5; }

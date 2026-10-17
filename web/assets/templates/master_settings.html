@@ -1,36 +1,52 @@
 {{define "content"}}
-<div class="map-head">
-  <h1 class="map-title">Мастер-Узел — настройка</h1>
-  <div class="map-headctl">
-    <a class="btn" href="/master">Отобразить</a>
-  </div>
-</div>
 {{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
 {{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
-<form method="post" action="/master/settings">
-  <table class="mn-tbl">
-    <thead>
-      <tr><th>Имя</th><th>Схема</th><th>Хост / IP</th><th>Порт</th><th></th></tr>
-    </thead>
-    <tbody id="mnRows">
-    {{range .Nodes}}
-      <tr>
-        <td><input name="name" value="{{.Name}}" maxlength="32"></td>
-        <td><select name="scheme">
-          <option value="http" {{if eq .Scheme "http"}}selected{{end}}>http</option>
-          <option value="https" {{if eq .Scheme "https"}}selected{{end}}>https</option>
-        </select></td>
-        <td><input name="host" value="{{.Host}}"></td>
-        <td><input name="port" type="number" min="1" max="65535" value="{{.Port}}"></td>
-        <td><input type="hidden" name="id" value="{{.ID}}"><button type="button" class="mn-del" title="Удалить">✕</button></td>
+
+<div class="page-head page-head-left">
+  <h1>{{index .T "master.settings_title"}}</h1>
+</div>
+
+<section class="card">
+  <form method="post" action="/master/settings" id="mnForm">
+    <table class="nettable"><tbody id="mnRows">
+      <tr class="group">
+        <td>{{index .T "master.name"}}</td>
+        <td>{{index .T "master.scheme"}}</td>
+        <td>{{index .T "master.host"}}</td>
+        <td>{{index .T "master.port"}}</td>
+        <td><button type="button" id="mnAdd" class="mn-add" title="{{index .T "master.add"}}" aria-label="{{index .T "master.add"}}">+</button></td>
       </tr>
-    {{end}}
-    </tbody>
-  </table>
-  <div class="mn-actions">
-    <button type="button" id="mnAdd">Добавить узел</button>
-    <button type="submit">Сохранить</button>
-  </div>
-</form>
+      {{range .Nodes}}
+        <tr>
+          <td><input name="name" value="{{.Name}}" maxlength="32"></td>
+          <td><select name="scheme">
+            <option value="http" {{if eq .Scheme "http"}}selected{{end}}>http</option>
+            <option value="https" {{if eq .Scheme "https"}}selected{{end}}>https</option>
+          </select></td>
+          <td><input name="host" value="{{.Host}}"></td>
+          <td><input name="port" type="number" min="1" max="65535" value="{{.Port}}"></td>
+          <td><input type="hidden" name="id" value="{{.ID}}"><button type="button" class="mn-del" title="{{index $.T "master.del"}}" aria-label="{{index $.T "master.del"}}">✕</button></td>
+        </tr>
+      {{end}}
+    </tbody></table>
+    <div class="head-actions end">
+      <a class="btn" href="/master">{{index .T "master.show"}}</a>
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
+      <button type="submit">{{index .T "sys.save"}}</button>
+    </div>
+  </form>
+</section>
+
+<script>window.I18N = {{json .T}};</script>
 <script src="{{asset "master_settings.js"}}"></script>
+<script>
+  (function () {
+    var rows = document.getElementById("mnRows");
+    var initialRows = rows ? rows.innerHTML : "";
+    document.querySelector(".cancelbtn").addEventListener("click", function () {
+      if (rows) rows.innerHTML = initialRows;
+      this.form.reset();
+    });
+  })();
+</script>
 {{end}}

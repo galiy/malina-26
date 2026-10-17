@@ -1,41 +1,46 @@
 {{define "content"}}
-<div class="map-head">
-  <h1 class="map-title">{{index .T "email.title"}}</h1>
+<div class="page-head page-head-left">
+  <h1>{{index .T "email.title"}}</h1>
 </div>
 {{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
 {{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
 
-<form method="post" action="/system/email/save" class="email-form">
-  <div class="form-row">
-    <label>{{index .T "email.provider"}}</label>
-    <select name="provider" id="emailProvider">
-      {{range .Providers}}<option value="{{.Key}}" {{if eq .Key $.Cfg.Provider}}selected{{end}}>{{index $.T (printf "email.prov_%s" .Key)}}</option>{{end}}
-    </select>
-  </div>
-  <div class="form-row"><label>{{index .T "email.from"}}</label><input name="from" value="{{.Cfg.From}}" autocomplete="off"></div>
-  <div class="form-row" id="emailUserRow" {{if ne .Cfg.Provider "custom"}}hidden{{end}}><label>{{index .T "email.username"}}</label><input name="username" value="{{.Cfg.Username}}" autocomplete="off"></div>
-  <div class="form-row"><label>{{index .T "email.secret"}}</label><span class="pw"><input type="password" name="secret" value="" placeholder="{{if .SecretSet}}{{index .T "email.secret_keep"}}{{end}}" autocomplete="new-password"><button type="button" class="eye" title="{{index .T "ui.show_password"}}" aria-label="{{index .T "ui.show_password"}}">👁</button></span></div>
-  <div class="form-row"><label>{{index .T "email.recipient"}}</label><input name="recipient" value="{{.Cfg.Recipient}}" autocomplete="off"></div>
-
-  <div id="emailCustom" {{if not .Cfg.IsCustom}}hidden{{end}}>
-    <div class="form-row"><label>{{index .T "email.host"}}</label><input name="host" value="{{.Cfg.Host}}" autocomplete="off"></div>
-    <div class="form-row"><label>{{index .T "email.port"}}</label><input name="port" type="number" min="1" max="65535" value="{{if .Cfg.Port}}{{.Cfg.Port}}{{end}}"></div>
-    <div class="form-row"><label>{{index .T "email.security"}}</label>
-      <select name="security">
-        <option value="ssl" {{if eq .Cfg.Security "ssl"}}selected{{end}}>{{index .T "email.sec_ssl"}}</option>
-        <option value="starttls" {{if eq .Cfg.Security "starttls"}}selected{{end}}>{{index .T "email.sec_starttls"}}</option>
-        <option value="none" {{if eq .Cfg.Security "none"}}selected{{end}}>{{index .T "email.sec_none"}}</option>
+<section class="card">
+  <form method="post" action="/system/email/save" class="email-form">
+    <div class="form-row">
+      <label>{{index .T "email.provider"}}</label>
+      <select name="provider" id="emailProvider">
+        {{range .Providers}}<option value="{{.Key}}" {{if eq .Key $.Cfg.Provider}}selected{{end}}>{{index $.T (printf "email.prov_%s" .Key)}}</option>{{end}}
       </select>
     </div>
-  </div>
+    <div class="form-row"><label>{{index .T "email.from"}}</label><input name="from" value="{{.Cfg.From}}" autocomplete="off"></div>
+    <div class="form-row" id="emailUserRow" {{if ne .Cfg.Provider "custom"}}hidden{{end}}><label>{{index .T "email.username"}}</label><input name="username" value="{{.Cfg.Username}}" autocomplete="off"></div>
+    <div class="form-row"><label>{{index .T "email.secret"}}</label><span class="pw"><input type="password" name="secret" value="" placeholder="{{if .SecretSet}}{{index .T "email.secret_keep"}}{{end}}" autocomplete="new-password"><button type="button" class="eye" title="{{index .T "ui.show_password"}}" aria-label="{{index .T "ui.show_password"}}">👁</button></span></div>
+    <div class="form-row"><label>{{index .T "email.recipient"}}</label><input name="recipient" value="{{.Cfg.Recipient}}" autocomplete="off"></div>
 
-  <div class="mn-actions">
-    <button type="submit">{{index .T "email.save"}}</button>
-  </div>
-</form>
+    <div id="emailCustom" {{if not .Cfg.IsCustom}}hidden{{end}}>
+      <div class="form-row"><label>{{index .T "email.host"}}</label><input name="host" value="{{.Cfg.Host}}" autocomplete="off"></div>
+      <div class="form-row"><label>{{index .T "email.port"}}</label><input name="port" type="number" min="1" max="65535" value="{{if .Cfg.Port}}{{.Cfg.Port}}{{end}}"></div>
+      <div class="form-row"><label>{{index .T "email.security"}}</label>
+        <select name="security">
+          <option value="ssl" {{if eq .Cfg.Security "ssl"}}selected{{end}}>{{index .T "email.sec_ssl"}}</option>
+          <option value="starttls" {{if eq .Cfg.Security "starttls"}}selected{{end}}>{{index .T "email.sec_starttls"}}</option>
+          <option value="none" {{if eq .Cfg.Security "none"}}selected{{end}}>{{index .T "email.sec_none"}}</option>
+        </select>
+      </div>
+    </div>
 
-<form method="post" action="/system/email/test" class="email-test">
-  <button type="submit">{{index .T "email.test"}}</button>
+    <div class="head-actions end">
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
+      <button type="submit">{{index .T "email.save"}}</button>
+    </div>
+  </form>
+</section>
+
+<form method="post" action="/system/email/test">
+  <div class="head-actions end">
+    <button type="submit">{{index .T "email.test"}}</button>
+  </div>
 </form>
 
 <div class="email-instr">
@@ -45,44 +50,51 @@
   {{end}}
 </div>
 
-<h3>{{index .T "email.outbox"}}</h3>
-{{if .Outbox}}
-<form method="post" action="/system/email/outbox" class="mn-actions">
-  <button name="action" value="clear">{{index .T "email.clear"}}</button>
-</form>
-<table class="mn-tbl">
-  <thead>
-    <tr>
-      <th>{{index .T "email.col_created"}}</th>
-      <th>{{index .T "email.col_subject"}}</th>
-      <th>{{index .T "email.col_recipient"}}</th>
-      <th>{{index .T "email.col_attempts"}}</th>
-      <th>{{index .T "email.col_error"}}</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {{range .Outbox}}
-    <tr>
-      <td>{{.Created.Format "2006-01-02 15:04"}}</td>
-      <td>{{.Subject}}</td>
-      <td>{{.Recipient}}</td>
-      <td>{{.Attempts}}</td>
-      <td class="email-err">{{.LastError}}</td>
-      <td>
-        <form method="post" action="/system/email/outbox">
-          <input type="hidden" name="action" value="delete">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit">{{index $.T "email.delete"}}</button>
-        </form>
-      </td>
-    </tr>
-    {{end}}
-  </tbody>
-</table>
-{{else}}
-<p class="text-muted">{{index .T "email.empty"}}</p>
-{{end}}
+<section class="card">
+  <h3>{{index .T "email.outbox"}}</h3>
+  {{if .Outbox}}
+  <form method="post" action="/system/email/outbox" class="head-actions end">
+    <button name="action" value="clear" class="btn-danger">{{index .T "email.clear"}}</button>
+  </form>
+  <table class="nettable">
+    <thead>
+      <tr>
+        <th>{{index .T "email.col_created"}}</th>
+        <th>{{index .T "email.col_subject"}}</th>
+        <th>{{index .T "email.col_recipient"}}</th>
+        <th>{{index .T "email.col_attempts"}}</th>
+        <th>{{index .T "email.col_error"}}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Outbox}}
+      <tr>
+        <td>{{.Created.Format "2006-01-02 15:04"}}</td>
+        <td>{{.Subject}}</td>
+        <td>{{.Recipient}}</td>
+        <td>{{.Attempts}}</td>
+        <td class="email-err">{{.LastError}}</td>
+        <td>
+          <form method="post" action="/system/email/outbox">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button type="submit" class="btn-danger">{{index $.T "email.delete"}}</button>
+          </form>
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="text-muted">{{index .T "email.empty"}}</p>
+  {{end}}
+</section>
 
 <script src="{{asset "email.js"}}"></script>
+<script>
+  document.querySelectorAll(".cancelbtn").forEach(function (b) {
+    b.addEventListener("click", function () { if (b.form) b.form.reset(); });
+  });
+</script>
 {{end}}

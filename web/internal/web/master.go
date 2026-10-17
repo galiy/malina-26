@@ -117,7 +117,7 @@ func (s *Server) handleMasterSettings(w http.ResponseWriter, r *http.Request) {
 	} else {
 		data["Nodes"] = nodesOrDefaults(cfg.Nodes)
 		if r.URL.Query().Get("ok") != "" {
-			data["Ok"] = "Сохранено"
+			data["Ok"] = s.tr(s.lang(r), "bms.saved")
 		}
 	}
 	s.render(w, http.StatusOK, "master_settings", data)

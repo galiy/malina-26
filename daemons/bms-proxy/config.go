@@ -43,10 +43,19 @@ type settings struct {
 	LogLevel string `json:"log_level"`
 	AddrMode string `json:"addr_mode"`
 
-	// UDPListen — СКРЫТАЯ опция (нет в веб-UI): адрес второго UDP-слушателя,
-	// например "0.0.0.0:502". Пусто (по умолчанию) — UDP-слушатель НЕ запускается
-	// (docs/bms-proxy.md §7а).
-	UDPListen string `json:"udp_listen"`
+	// UDPEnabled — явный переключатель UDP-слушателя; UDPListen — адрес прослушивания
+	// (например "0.0.0.0:502"). Слушатель запускается только при UDPEnabled=true и
+	// непустом адресе (docs/bms-proxy.md §7а).
+	UDPEnabled bool   `json:"udp_enabled"`
+	UDPListen  string `json:"udp_listen"`
+}
+
+// udpListenAddr — адрес для UDP-слушателя: пусто, если выключен или адрес не задан.
+func (s settings) udpListenAddr() string {
+	if !s.UDPEnabled {
+		return ""
+	}
+	return strings.TrimSpace(s.UDPListen)
 }
 
 // defaultSettings — значения по умолчанию: выключен, 19200, INFO, адресация 1..16,
@@ -130,6 +139,6 @@ func newConfig() *config {
 }
 
 func (c *config) String() string {
-	return fmt.Sprintf("enabled=%v baud=%d log=%s addr=%s cfg=%s sock=%s",
-		c.Enabled, c.Baud, c.LogLevel, c.AddrMode, c.cfgPath, c.sockPath)
+	return fmt.Sprintf("enabled=%v baud=%d log=%s addr=%s udp=%v(%s) cfg=%s sock=%s",
+		c.Enabled, c.Baud, c.LogLevel, c.AddrMode, c.UDPEnabled, c.UDPListen, c.cfgPath, c.sockPath)
 }

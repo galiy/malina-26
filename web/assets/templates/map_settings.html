@@ -1,17 +1,22 @@
 {{define "content"}}
-<div class="map-head">
-  <h1 class="map-title">{{index .T "menu.map_settings"}}</h1>
-</div>
 {{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
 {{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
 <form method="post" action="/map/settings">
-  <table class="mn-tbl">
+  <div class="page-head page-head-left">
+    <h1>{{index .T "map.settings_title"}}</h1>
+    <div class="head-actions">
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
+      <button type="submit">{{index .T "sys.save"}}</button>
+    </div>
+  </div>
+  <table class="nettable"><tbody>
+    <tr class="group"><td colspan="2">{{index .T "menu.map"}}</td></tr>
     <tr>
-      <th>{{index .T "bms.proxy_enabled"}}</th>
+      <td>{{index .T "bms.proxy_enabled"}}</td>
       <td><label><input type="checkbox" name="map_enabled" {{if .Enabled}}checked{{end}}>&nbsp;{{index .T "reader.enabled_hint"}}</label></td>
     </tr>
     <tr>
-      <th>{{index .T "bms.proxy_log_level"}}</th>
+      <td>{{index .T "bms.proxy_log_level"}}</td>
       <td>
         <select name="map_log_level">
           {{range .Levels}}
@@ -20,9 +25,9 @@
         </select>
       </td>
     </tr>
-  </table>
-  <div class="mn-actions">
-    <button type="submit">{{index .T "bms.save"}}</button>
-  </div>
+  </tbody></table>
 </form>
+<script>
+  document.querySelector(".cancelbtn").addEventListener("click", function () { this.form.reset(); });
+</script>
 {{end}}

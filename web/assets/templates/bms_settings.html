@@ -1,15 +1,23 @@
 {{define "content"}}
-<div class="map-head">
-  <h1 class="map-title">{{index .T "bms.title"}}</h1>
-</div>
 {{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
 {{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
-<form method="post" action="/bms/settings">
-  <table class="mn-tbl">
-    <thead>
-      <tr><th>{{index .T "bms.host"}}</th><th>{{index .T "bms.port"}}</th><th>{{index .T "bms.mode"}}</th><th></th></tr>
-    </thead>
-    <tbody id="bmsRows">
+
+<form method="post" action="/bms/settings" id="bmsForm">
+  <div class="page-head page-head-left">
+    <h1>{{index .T "bms.settings_title"}}</h1>
+    <div class="head-actions">
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
+      <button type="submit">{{index .T "sys.save"}}</button>
+    </div>
+  </div>
+
+  <table class="nettable"><tbody id="bmsRows">
+    <tr class="group">
+      <td>{{index .T "bms.host"}}</td>
+      <td>{{index .T "bms.port"}}</td>
+      <td>{{index .T "bms.mode"}}</td>
+      <td><button type="button" id="bmsAdd" class="mn-add" title="{{index .T "bms.add"}}" aria-label="{{index .T "bms.add"}}">+</button></td>
+    </tr>
     {{range .Gateways}}
       <tr>
         <td><input name="host" value="{{.Host}}"></td>
@@ -18,27 +26,20 @@
           <option value="modbus" {{if eq .Mode "modbus"}}selected{{end}}>{{index $.T "bms.mode_modbus"}}</option>
           <option value="none" {{if eq .Mode "none"}}selected{{end}}>{{index $.T "bms.mode_none"}}</option>
         </select></td>
-        <td><button type="button" class="mn-del" title="{{index $.T "bms.del"}}">✕</button></td>
+        <td><button type="button" class="mn-del" title="{{index $.T "bms.del"}}" aria-label="{{index $.T "bms.del"}}">✕</button></td>
       </tr>
     {{end}}
     </tbody>
   </table>
-  <div class="mn-actions">
-    <button type="button" id="bmsAdd">{{index .T "bms.add"}}</button>
-    <button type="submit">{{index .T "bms.save"}}</button>
-  </div>
-</form>
-<script src="{{asset "bms_settings.js"}}"></script>
 
-<h2 class="map-title">{{index .T "bms.reader_title"}}</h2>
-<form method="post" action="/bms/settings" id="bmsReaderForm">
-  <table class="mn-tbl">
+  <table class="nettable"><tbody>
+    <tr class="group"><td colspan="2">{{index .T "bms.reader_title"}}</td></tr>
     <tr>
-      <th>{{index .T "bms.proxy_enabled"}}</th>
+      <td>{{index .T "bms.proxy_enabled"}}</td>
       <td><label><input type="checkbox" name="bmsr_enabled" {{if .BmsrEnabled}}checked{{end}}>&nbsp;{{index .T "reader.enabled_hint"}}</label></td>
     </tr>
     <tr>
-      <th>{{index .T "bms.proxy_log_level"}}</th>
+      <td>{{index .T "bms.proxy_log_level"}}</td>
       <td>
         <select name="bmsr_log_level">
           {{range .Levels}}
@@ -47,21 +48,16 @@
         </select>
       </td>
     </tr>
-  </table>
-  <div class="mn-actions">
-    <button type="submit">{{index .T "bms.save"}}</button>
-  </div>
-</form>
+  </tbody></table>
 
-<h2 class="map-title">{{index .T "bms.proxy_title"}}</h2>
-<form method="post" action="/bms/settings" id="bmsProxyForm">
-  <table class="mn-tbl">
+  <table class="nettable"><tbody>
+    <tr class="group"><td colspan="2">{{index .T "bms.proxy_title"}}</td></tr>
     <tr>
-      <th>{{index .T "bms.proxy_enabled"}}</th>
+      <td>{{index .T "bms.proxy_enabled"}}</td>
       <td><label><input type="checkbox" name="proxy_enabled" {{if .ProxyEnabled}}checked{{end}}>&nbsp;{{index .T "bms.proxy_enabled_hint"}}</label></td>
     </tr>
     <tr>
-      <th>{{index .T "bms.proxy_baud"}}</th>
+      <td>{{index .T "bms.proxy_baud"}}</td>
       <td>
         <select name="proxy_baud">
           {{range .Bauds}}
@@ -71,7 +67,7 @@
       </td>
     </tr>
     <tr>
-      <th>{{index .T "bms.proxy_log_level"}}</th>
+      <td>{{index .T "bms.proxy_log_level"}}</td>
       <td>
         <select name="proxy_log_level">
           {{range .Levels}}
@@ -81,7 +77,7 @@
       </td>
     </tr>
     <tr>
-      <th>{{index .T "bms.proxy_addr_mode"}}</th>
+      <td>{{index .T "bms.proxy_addr_mode"}}</td>
       <td>
         <select name="proxy_addr_mode">
           {{range .AddrModes}}
@@ -91,13 +87,54 @@
       </td>
     </tr>
     <tr>
-      <th>{{index .T "bms.proxy_udp_label"}}</th>
-      <td><input name="udp_listen" value="{{.ProxyUDPListen}}" placeholder="0.0.0.0:502" size="24"></td>
+      <td>{{index .T "bms.proxy_enabled"}}</td>
+      <td><label><input type="checkbox" name="udp_enabled" {{if .ProxyUDPEnabled}}checked{{end}}>&nbsp;{{index .T "bms.proxy_udp_enable_hint"}}</label></td>
     </tr>
-  </table>
-  <p class="mn-hint">{{index .T "bms.proxy_udp_desc"}}</p>
-  <div class="mn-actions">
-    <button type="submit">{{index .T "bms.save"}}</button>
-  </div>
+    <tr>
+      <td>{{index .T "bms.proxy_udp_label"}}<button type="button" class="hint-q" data-hint="udp"
+          aria-controls="hint-udp" aria-expanded="false"
+          aria-label="{{index .T "sys.hint"}}: {{index .T "bms.proxy_udp_label"}}">?</button></td>
+      <td><input name="udp_listen" value="{{.ProxyUDPListen}}" placeholder="0.0.0.0:502"></td>
+    </tr>
+    <tr id="hint-udp" data-hint-for="udp" hidden><td colspan="2"><div class="hint-pop">{{index .T "bms.proxy_udp_desc"}}</div></td></tr>
+  </tbody></table>
 </form>
+
+<script>window.I18N = {{json .T}};</script>
+<script src="{{asset "bms_settings.js"}}"></script>
+<script>
+  (function () {
+    var rows = document.getElementById("bmsRows");
+    var initialRows = rows ? rows.innerHTML : "";
+    document.querySelector(".cancelbtn").addEventListener("click", function () {
+      if (rows) rows.innerHTML = initialRows; // вернуть исходный набор строк шлюзов
+      this.form.reset();                       // вернуть значения полей
+      // свернуть подсказку UDP
+      var hr = document.getElementById("hint-udp");
+      if (hr) hr.hidden = true;
+      document.querySelectorAll(".hint-q").forEach(function (q) { q.setAttribute("aria-expanded", "false"); });
+    });
+    document.querySelectorAll(".hint-q").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var row = document.getElementById(b.getAttribute("aria-controls"));
+        if (!row) return;
+        var open = row.hidden;
+        row.hidden = !open;
+        b.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+    });
+    // Поле адреса UDP активно только при включённом флажке.
+    var udpChk = document.querySelector('input[name="udp_enabled"]');
+    var udpAddr = document.querySelector('input[name="udp_listen"]');
+    if (udpChk && udpAddr) {
+      var sync = function () {
+        // не disabled (иначе адрес не отправится и потеряется) — только визуально глушим
+        udpAddr.classList.toggle("udp-off", !udpChk.checked);
+        udpAddr.setAttribute("aria-disabled", udpChk.checked ? "false" : "true");
+      };
+      udpChk.addEventListener("change", sync);
+      sync();
+    }
+  })();
+</script>
 {{end}}
