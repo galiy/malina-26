@@ -66,3 +66,29 @@ func TestBmsGatewaysPreserveFields(t *testing.T) {
 		t.Fatalf("log_level не нормализован: %q", got.LogLevel)
 	}
 }
+
+// TestSaveBmsSettings — единое сохранение BMS-Reader + BMS-Proxy пишет оба файла
+// без потери полей (шлюзы, enabled/log_level, UDP enabled/addr).
+func TestSaveBmsSettings(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{opts: Options{
+		BmsConfigPath:      filepath.Join(dir, "bms-reader.json"),
+		BmsProxyConfigPath: filepath.Join(dir, "bms-proxy.json"),
+	}}
+	cfg := bmsGatewaysFile{Enabled: true, LogLevel: "debug", Gateways: []bmsGateway{{Host: "192.0.2.1", Port: 502, Mode: "modbus"}}}
+	np := bmsProxyCfg{Enabled: true, Baud: 19200, LogLevel: "warn", AddrMode: "1-16", UDPEnabled: true, UDPListen: "0.0.0.0:502"}
+	if be, pe := s.saveBmsSettings(cfg, np); be != nil || pe != nil {
+		t.Fatalf("save errors: bms=%v proxy=%v", be, pe)
+	}
+	g, err := loadBmsGateways(s.bmsCfgPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !g.Enabled || g.LogLevel != "debug" || len(g.Gateways) != 1 || g.Gateways[0].Host != "192.0.2.1" {
+		t.Fatalf("bms-reader потерял поля: %+v", g)
+	}
+	p := loadBmsProxyCfg(s.bmsProxyCfgPath())
+	if !p.Enabled || p.Baud != 19200 || p.LogLevel != "warn" || p.AddrMode != "1-16" || !p.UDPEnabled || p.UDPListen != "0.0.0.0:502" {
+		t.Fatalf("bms-proxy потерял поля: %+v", p)
+	}
+}

@@ -249,6 +249,15 @@ func loadBmsGateways(path string) (bmsGatewaysFile, error) {
 	return f, nil
 }
 
+// saveBmsSettings пишет оба конфига (BMS-Reader и BMS-Proxy). Возвращает
+// раздельные ошибки, чтобы вызывающий сделал reload по каждому успешному файлу.
+func (s *Server) saveBmsSettings(cfg bmsGatewaysFile, np bmsProxyCfg) (error, error) {
+	if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
+		return err, nil
+	}
+	return nil, saveBmsProxyCfg(s.bmsProxyCfgPath(), np)
+}
+
 // saveBmsGateways — атомарная запись (temp + rename), как у остальных конфигов.
 func saveBmsGateways(path string, f bmsGatewaysFile) error {
 	b, err := json.MarshalIndent(f, "", "  ")
@@ -472,14 +481,14 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 			cfg.Gateways = gws
 			cfg.Enabled = bmsrEn
 			cfg.LogLevel = bmsrLv
-			// Сохраняем и перезагружаем каждый демон сразу после записи его файла,
-			// чтобы сбой второй записи не оставлял первый файл без reload.
-			if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
-				data["Err"] = err.Error()
+			// Сохраняем оба файла; reload — по каждому успешно записанному.
+			bmsErr, proxyErr := s.saveBmsSettings(cfg, np)
+			if bmsErr != nil {
+				data["Err"] = bmsErr.Error()
 			} else {
 				_, _ = controlCall(s.bmsSock(), []byte(`{"cmd":"reload"}`))
-				if err := saveBmsProxyCfg(s.bmsProxyCfgPath(), np); err != nil {
-					data["Err"] = err.Error()
+				if proxyErr != nil {
+					data["Err"] = proxyErr.Error()
 				} else {
 					_, _ = controlCall(s.bmsProxySock(), []byte(`{"cmd":"reload"}`))
 					http.Redirect(w, r, "/bms/settings?ok=1", http.StatusSeeOther)
