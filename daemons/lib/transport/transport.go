@@ -255,8 +255,11 @@ func (p *Port) ReadOne(deadline time.Time) (byte, bool) {
 		if err != nil && err != syscall.EINTR && err != syscall.EAGAIN && err != syscall.EWOULDBLOCK {
 			return 0, false
 		}
-		// n==0 (таймаут VTIME) или EINTR/EAGAIN — короткая пауза и повтор
-		time.Sleep(2 * time.Millisecond)
+		// n==0 — истёк VTIME (100 мс): read уже блокировался, повторный Sleep не нужен.
+		// Короткая пауза — только для неблокирующего режима (EAGAIN), чтобы не крутить busy-loop.
+		if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
+			time.Sleep(time.Millisecond)
+		}
 	}
 	return 0, false
 }
@@ -312,7 +315,11 @@ func (p *Port) ReadUntilNL(deadline time.Time, max int, echo bool) ([]byte, bool
 		if err != nil && err != syscall.EINTR && err != syscall.EAGAIN && err != syscall.EWOULDBLOCK {
 			return out, false
 		}
-		time.Sleep(time.Millisecond)
+		// n==0 — истёк VTIME (100 мс), ждать дополнительно не нужно.
+		// Пауза — только для неблокирующего режима (EAGAIN).
+		if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
+			time.Sleep(time.Millisecond)
+		}
 	}
 	return out, false
 }

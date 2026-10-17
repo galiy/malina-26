@@ -62,9 +62,9 @@ func readAntFrame(t Transport) ([]byte, error) {
 	t.SetReadTimeout(500 * time.Millisecond)
 	deadline := time.Now().Add(500 * time.Millisecond)
 	var acc []byte
+	var tmp [256]byte // переиспользуемый буфер (без аллокации на итерацию)
 	for time.Now().Before(deadline) {
-		tmp := make([]byte, 256)
-		n, err := t.Read(tmp)
+		n, err := t.Read(tmp[:])
 		if n > 0 {
 			acc = append(acc, tmp[:n]...)
 			if f := extractAntFrame(acc); f != nil {

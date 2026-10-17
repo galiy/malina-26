@@ -362,6 +362,12 @@ func (o *orchestrator) snapshot(st *srcState) []*device {
 // sourcePoller — ОДИН поток на источник: последовательно опрашивает слоты,
 // спит до конца секунды; публикует телеметрию (shm+raw) и шлёт heartbeat.
 func (o *orchestrator) sourcePoller(st *srcState) {
+	// Переиспользуемый таймер вместо time.After каждую секунду (меньше аллокаций).
+	timer := time.NewTimer(time.Hour)
+	if !timer.Stop() {
+		<-timer.C
+	}
+	defer timer.Stop()
 	for {
 		select {
 		case <-o.stop:
@@ -401,10 +407,17 @@ func (o *orchestrator) sourcePoller(st *srcState) {
 		// спим до конца секунды
 		next := t0.Add(time.Second)
 		if wait := time.Until(next); wait > 0 {
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(wait)
 			select {
 			case <-o.stop:
 				return
-			case <-time.After(wait):
+			case <-timer.C:
 			}
 		}
 	}

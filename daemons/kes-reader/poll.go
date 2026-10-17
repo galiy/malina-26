@@ -31,7 +31,7 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *transport.Port,
 		}
 
 		var (
-			img      map[uint16]byte
+			img      kesImg
 			err      error
 			firstErr error
 		)

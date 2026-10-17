@@ -56,7 +56,7 @@ func TestWindowsCover(t *testing.T) {
 }
 
 func TestParseKesAndData(t *testing.T) {
-	img := map[uint16]byte{}
+	img := make(kesImg, kesRAMHigh+2)
 	put16 := func(a, v uint16) { img[a] = byte(v); img[a+1] = byte(v >> 8) }
 
 	// ID-окно.

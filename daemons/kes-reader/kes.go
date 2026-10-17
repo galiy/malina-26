@@ -36,13 +36,12 @@ type kesWindow struct {
 // а не серийник). Читаем его отдельным окном по devAddr 0x2C9 (Адрес «как есть», EEPROM)
 // и раскладываем по резервному ключу вне RAM-диапазона — kesSerialImgKey.
 var kesWindows = []kesWindow{
-	{devAddr: 0x0000, length: 156, ramBase: 0x0000},       // ID/паспорт (EEPROM 0x000..0x09B, read as-is)
-	{devAddr: 0x0400, length: 185, ramBase: 0x0210},       // настройки + Mode(0x2C2) (RAM 0x210..0x2C8)
-	{devAddr: 0x04B9, length: 240, ramBase: 0x02C9},       // измерения (RAM 0x2C9..0x3B8)
-	{devAddr: 0x05A9, length: 85, ramBase: 0x03B9},        // реле/знаки/измерения (RAM 0x3B9..0x40D)
-	{devAddr: 0x0F4A, length: 240, ramBase: 0x0D5A},       // I2C_Err(0xD5A), Uakb/Takb/QCell/ErrCells (RAM 0xD5A..0xE49)
-	{devAddr: 0x103A, length: 54, ramBase: 0x0E4A},        // BMS/параллельные MPPT хвост (RAM 0xE4A..0xE7F)
-	{devAddr: 0x2C9, length: 2, ramBase: kesSerialImgKey}, // серийник (EEPROM 0x2C9, read as-is)
+	{devAddr: 0x0000, length: 156, ramBase: 0x0000},
+	{devAddr: 0x02C9, length: 2, ramBase: kesSerialImgKey},
+	{devAddr: 0x0400, length: 241, ramBase: 0x0210},
+	{devAddr: 0x050D, length: 241, ramBase: 0x031D},
+	{devAddr: 0x0F4A, length: 1, ramBase: 0x0D5A},
+	{devAddr: 0x0F70, length: 256, ramBase: 0x0D80},
 }
 
 // kesInfo — идентификация КЭС (из ID-окна).
@@ -65,7 +64,7 @@ func trMicroart(err error) error {
 }
 
 // le16 читает 16-битное LE из образа по RAM-адресу.
-func le16(img map[uint16]byte, addr uint16) uint16 {
+func le16(img kesImg, addr uint16) uint16 {
 	return uint16(img[addr]) | uint16(img[addr+1])<<8
 }
 
@@ -99,8 +98,10 @@ func probeKes(p *transport.Port, echoTO, respTO time.Duration) (*kesInfo, error)
 }
 
 // readAllWindows читает все окна КЭС в плоский образ (ключ — RAM-адрес).
-func readAllWindows(p *transport.Port, echoTO, respTO time.Duration) (map[uint16]byte, error) {
-	img := make(map[uint16]byte, kesRAMHigh)
+func readAllWindows(p *transport.Port, echoTO, respTO time.Duration) (kesImg, error) {
+	// Плоский образ в RAM-адресах: []byte вместо map — без mapassign в горячем пути.
+	// +2 — под резервные ключи серийника (kesSerialImgKey, kesSerialImgKey+1).
+	img := make(kesImg, kesRAMHigh+2)
 	for _, w := range kesWindows {
 		data, err := microart.Read(p, w.devAddr, byte(w.length-1), echoTO, respTO)
 		if err != nil {
@@ -117,7 +118,7 @@ func readAllWindows(p *transport.Port, echoTO, respTO time.Duration) (map[uint16
 }
 
 // parseKes разбирает образ в идентификацию (Serial/FW).
-func parseKes(img map[uint16]byte) *kesInfo {
+func parseKes(img kesImg) *kesInfo {
 	return &kesInfo{
 		Device: img[0x0000],
 		FW:     img[0x0002],
@@ -212,7 +213,7 @@ func init() {
 }
 
 // parseData заполняет измерения из образа (ключ — RAM-адрес).
-func parseData(img map[uint16]byte) KesData {
+func parseData(img kesImg) KesData {
 	d := KesData{Device: img[0x0000],
 		Pow:       img[0x0001],
 		FW:        img[0x0002],
@@ -280,6 +281,9 @@ const (
 	memberKesrSize = 512 // RAM-контракт (телеметрия + BMS/MPPT): занято ~324 Б + резерв
 	memberKessSize = 512 // настройки (KESS): занято 85 Б + резерв
 )
+
+// kesImg — плоский образ RAM КЭС по адресам (быстрее map в горячем цикле).
+type kesImg []byte
 
 // Константы смещений контракта слота (см. docs/kes-reader.md §4/§7.7) и образа чтения.
 // Введены, чтобы код и тесты не расходились с документом (защита от дрейфа, «H2» ревью).
