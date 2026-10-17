@@ -1,7 +1,8 @@
 # map-reader: спецификация
 
 Демон опроса МАП (Микроарт). Дополняет `docs/map.md` и `docs/map-memory.md`.
-**См. также:** `docs/map-contract.md` (бинарный контракт shm), `docs/daemons-shared.md`
+**См. также:** `docs/microart-protocol.md` (общий протокол MicroArt),
+`docs/map-contract.md` (бинарный контракт shm), `docs/daemons-shared.md`
 (общая библиотека), `docs/map-write*.md` (запись в МАП).
 
 ## Общее

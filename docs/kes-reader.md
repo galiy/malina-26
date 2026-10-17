@@ -2,7 +2,8 @@
 
 Статус: **реализован и задеплоен** (см. `daemons/kes-reader/`, `deploy/`); `web`-модуль
 отдаёт часть ручек через legacy-совместимость (`docs/legacy/legacy-api.md` §7).
-**См. также:** `docs/kes-memory.md` (карта памяти), `docs/kes-contract.md` (бинарный
+**См. также:** `docs/microart-protocol.md` (общий протокол MicroArt),
+`docs/kes-memory.md` (карта памяти), `docs/kes-contract.md` (бинарный
 контракт shm), `docs/legacy/kes-legacy-malina2.md` и `docs/kes-memory-not-accepted.md`.
 Связано: `docs/kes-memory.md` (карта измерений и **настроек** КЭС, модели),
 `docs/kes-contract.md` (бинарный контракт shm/слота),
