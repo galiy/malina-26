@@ -69,6 +69,21 @@ MicroArt) на голый образ (Raspberry Pi OS bookworm) и развер�
 - Loop-проверка (ro): `p1` boot + `p2` root **3 ГиБ**, p3 отсутствует; `SIZE`
   меньше объёма карты `<TARGET_HOST>` и ≈ 3,5 ГиБ. При несоответствии — стоп.
 
+### 2.1. Копия образа с bootstrap cron-hook (вариант B)
+
+Скопируй образ (`cp --reflink=auto <IMG> <OUT>`), loop-смонтируй p2 копии rw и
+положи **ровно один** файл `/etc/cron.d/vb-bootstrap` (`root:root 0644`):
+
+```
+# ВРЕМЕННЫЙ bootstrap — удалить после входа!
+@reboot root /bin/sh -c '/usr/sbin/ip link set eth0 up; /usr/sbin/ip addr add <TARGET_IP>/24 dev eth0 2>/dev/null || true'
+```
+
+- `<TARGET_IP>` — IP хоста до перезаливки (из §1).
+- `cron.service` включён, `/etc/cron.d` лежит на rootfs; `/var/spool/cron` в этом
+  образе tmpfs, поэтому файл кладём сюда.
+- Оригинал `<IMG>` не менять; заливать копию `$OUT`, SHA — с копии.
+
 ## 3. Заливка образа — raw TCP в `/dev/mmcblk0` (B2)
 
 Данные идут **не через ssh**, а отдельным raw-потоком; образ на целевом хосте не
@@ -161,6 +176,18 @@ fi
   запросить у оператора** и установить `passwd`.
 - Проверить «голость»: нет сервисов `malina-*`; корень `ro`; `fdisk -l` — только
   `p1` (boot) + `p2` (root 3 ГиБ), p3 нет.
+
+### 4.1. Удаление bootstrap cron-hook (сразу после входа)
+
+Root в образе `ro` (`malina-rw` нет):
+
+```
+mount -o remount,rw /
+rm -f /etc/cron.d/vb-bootstrap
+mount -o remount,ro /
+```
+
+IP остаётся в текущем ядре; **до §5 не ребутиться**. После §5 сеть поднимает `netd`.
 
 ## 5. Создание p3 и раскладка (B4) — агент читает скрипт и ведёт шаги с контролем
 
