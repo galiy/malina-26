@@ -1,9 +1,10 @@
 # Методика переноса ПАК на новую систему (Вариант B) — инструкции для агента
 
 > Это **инструкции для агента**, а не готовый скрипт. Отдельного исполняемого
-> скрипта нет: агент выполняет шаги вручную, формируя команды по контексту.
-> Единый источник правды по раскладке — `deploy/local/deploy-local.sh --plan` и
-> `deploy/manifest.tsv`.
+> скрипта нет: агент читает шаги `deploy/local/deploy-local.sh` и данные
+> `deploy/manifest.tsv` и воспроизводит их на устройстве вручную
+> (с контролем каждого шага). Отдельного генератора плана (`--plan`) нет —
+> единственный источник истины это сам скрипт раскладки.
 >
 > **Целевой ПАК — `.68`** (старый тест-стенд). Хост `.60` в этой методике
 > **не трогаем**. Перед выполнением разрушительных шагов (заливка) — явное
@@ -80,12 +81,24 @@
 Ключевые моменты:
 - Данные принимаются через bash `/dev/tcp` (не файл): `exec 3<>/dev/tcp/192.168.13.9/9000`.
 - Поток подаётся на `dd of=/dev/mmcblk0` **блоками 4 МиБ** с `iflag=fullblock`
-  (обязательно: пайп/сокет даёт короткие чтения) и `conv=fsync`; `status=progress`.
+  (обязательно: пайп/сокет даёт короткие чтения) и `conv=fsync`.
+  **`status=progress` использовать НЕЛЬЗЯ:** на `.68` (jessie, coreutils 8.23)
+  такого флага нет (появился в coreutils 8.24) — `dd` падает с
+  «invalid status flag». Итоговый размер `dd` печатает сам по завершении.
 - **Целостность — на лету:** `tee` дублирует поток в `sha256sum`, основной поток
   уходит в `dd` без изменений. Любой обрыв/недосыл → хеш не совпадёт.
 - **Перед dd:** `umount /settings && sync` — единственный rw-раздел, гасим
   writeback журнала ext4 (`commit=60`), иначе он может записать «хвост» поверх
-  свежего образа.
+  свежего образа. `umount` сначала сам сбрасывает грязные страницы раздела
+  (до `dd`), затем ФС отмонтирована — писать некому.
+  **Предпроверка «тишины» (обязательно):**
+  - `grep -E '^(Dirty|Writeback):' /proc/meminfo` → оба **0 kB**;
+  - `mount | grep mmcblk0` → на устройстве **только `ro`** (root/boot), rw нет;
+  - при желании `sync; echo 3 > /proc/sys/vm/drop_caches` — выкинуть чистый кэш.
+  Важно: `buffers/cached` в `free` — в основном **чистые** страницы; ядро их не
+  пишет на диск (только вытесняет). Опасны лишь грязные, а их устраняют
+  `sync`+`umount /settings` и `ro` на root/boot. tmpfs (`/tmp`,`/var/log`,`/db`,
+  `/dev/shm`,`/run`) не имеют backing store — на SD не пишутся.
 - **После dd:** старый корень уже перезаписан — нельзя запускать не заранее
   подгруженные бинарники. Поэтому: утилиты (`dd`, `tee`, `sha256sum`, `sleep`,
   `sync`) прогреть в page cache ДО заливки; сравнение хеша — builtin/bash
@@ -97,7 +110,7 @@
 # umount /settings; sync
 exec 3<>/dev/tcp/192.168.13.9/9000
 tee >(sha256sum > /tmp/rx.sha) <&3 \
-  | dd of=/dev/mmcblk0 bs=4M iflag=fullblock conv=fsync status=progress
+  | dd of=/dev/mmcblk0 bs=4M iflag=fullblock conv=fsync
 rc=${PIPESTATUS[1]}          # код dd
 sync; sleep 2
 read -r rx _ < /tmp/rx.sha   # bash builtin
@@ -114,6 +127,14 @@ fi
 100 Мбит (~11,8 МБ/с), поэтому 8–16 МиБ выигрыша не дают. `oflag=direct` не
 используется (на SD медленнее, требует жёсткого выравнивания).
 
+**Канал проверен (`.68`, тот же механизм `socat → /dev/tcp → tee >(sha256sum) → dd`):**
+- 128 МиБ в `/dev/null`: **11,8 МБ/с** (предел 100 Мбит), SHA256 совпал;
+- 1 ГиБ в файл на `/settings` (ext4 на SD, потом удалён): **8,8 МБ/с** (122,6 с),
+  `dd_rc=0`, SHA256 совпал, после `sync` `Dirty/Writeback=0`.
+
+Значит сырая запись в `/dev/mmcblk0` (без журнала ext4) ожидаемо между 8,8 и
+11,8 МБ/с → образ ~3,5 ГиБ за **~5–7 мин**.
+
 **Критерий готовности:** `VERIFY_OK` (dd rc=0 И принятый хеш == `SHA`), после
 чего выполняется sysrq-ребут. При `VERIFY_FAIL` — **не перезагружать**, сообщить
 оператору (повторить заливку, перезапустив `socat`).
@@ -129,34 +150,35 @@ fi
 - Проверить: `systemctl is-active` — нет сервисов `malina-*`; `mount` — корень
   `ro`; `fdisk -l` — только `p1` (boot) + `p2` (root 3 ГиБ).
 
-## 5. Создание p3 и раскладка (B4) — вручную, источник шагов динамический
+## 5. Создание p3 и раскладка (B4) — агент читает скрипт и ведёт шаги с контролем
 
-- Получить актуальную последовательность: `deploy/local/deploy-local.sh --plan <target>`
-  (печатает шаги: разметка p3, дерево `/malina`, бинарники, ассеты, симлинки,
-  `manifest.tsv`, юниты, pamcheck, purge NM, проверка) и свериться с
-  `deploy/manifest.tsv`.
-- Воспроизвести эти шаги **на `.68`** (через SSH), адаптируя пути под устройство
-  (карта внутри `.68`, а не в картридере). Порядок — как в `--plan`:
-  1. p3: начало от конца p2, `size=+` (весь остаток) → `mkfs.ext4 -L malina`.
-  2. Точка `/malina` в rootfs; fstab `LABEL=malina`.
-  3. Дерево `/malina` + seed-конфиги сети (`mode1.json`,`mode2.json`,`active`).
-  4. Симлинки `/root`,`/home`,`/etc/wpa_supplicant` → `/malina/*`;
-     `/etc/resolv.conf`; dbus machine-id.
-  5. `machine-id`,`hostname` (свежие inode: rm+install).
-  6. Артефакты по `deploy/manifest.tsv` (`always`/`if_absent`; `/malina/*` на p3).
-  7. Бинарники (armhf) в `/malina/usr/local/{bin,sbin}`.
-  8. Веб-ассеты → `/malina/usr/local/share/malina/web`.
-  9. `malina-pamcheck` (chroot+qemu, gcc из образа).
-  10. Владельцы/режимы (числовые uid/gid из образа; НЕ `chown -R` по `/etc`).
-  11. `systemctl --root` enable базовых юнитов + mask/disable по
-      `system/provision/{masked,disabled}.txt`.
-  12. Purge NetworkManager; фиксы fstab (`/var/lib/dhcp`, `/run/malina-ts-raw`
-      200M, убрать NM-tmpfs); tmpfs-точки; `rm -rf /etc/NetworkManager`.
-  13. tmpfiles; `sync`; offline-проверка (как в `deploy-local.sh`).
+**Никакого `--plan`/ранбука нет** (отдельный генератор плана только плодит
+рассинхрон с реальным скриптом). Единственный источник истины по раскладке:
+1. **сам скрипт** `deploy/local/deploy-local.sh` — его шаги 1..15 (что именно он
+   делает при локальной раскладке: p3, fstab, дерево, симлинки, manifest,
+   бинарники, ассеты, pamcheck, владельцы, юниты, purge NM, tmpfiles, проверка);
+2. **`deploy/manifest.tsv`** — данные артефактов (`src → dst`, режим,
+   `always|if_absent`) — скрипт ставит их по строкам этого файла;
+3. `system/provision/{masked,disabled}.txt`, `system/provision/{machine-id,hostname}`
+   — данные для соответствующих шагов.
 
-**Критерий готовности:** `systemctl is-active malina-web malina-netd map-reader
-kes-reader bms-reader bms-proxy malina-tsdb rsyslog ssh cron` — рабочие;
-`/malina` смонтирован; веб отвечает; корень `ro`.
+Процедура:
+1. Прочитать `deploy/local/deploy-local.sh` и `deploy/manifest.tsv`; уяснить
+   последовательность и команды каждого шага.
+2. **Сформировать план под устройство**, адаптируя локальные механизмы к `.68`:
+   нет loop/`dd` (карта внутри устройства), `ROOT=/`, `MAL=/malina`
+   (mount `/dev/mmcblk0p3 /malina`), прочее — как в скрипте; `pamcheck`
+   собирается **нативно** (`gcc`, arm→arm, без qemu).
+3. Выполнять шаги **по порядку на `.68`**.
+4. **Контроль каждого шага:** после каждой команды проверить результат по тем же
+   критериям, что заложены в скрипте (наличие/режим файлов, симлинки,
+   владельцы, `findmnt`, `grep` fstab, `systemctl` symlinks и т.д.). При
+   расхождении — **остановиться** и разобраться, не идти дальше.
+5. Не добавлять шагов «от себя» — только то, что делает скрипт (воспроизводимость).
+
+**Критерий готовности (финальный контроль):** `systemctl is-active malina-web
+malina-netd map-reader kes-reader bms-reader bms-proxy malina-tsdb rsyslog ssh
+cron` — рабочие; `/malina` смонтирован; веб отвечает; корень `ro`.
 
 ## 6. Пост-проверка
 
