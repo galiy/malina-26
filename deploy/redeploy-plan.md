@@ -329,9 +329,9 @@ tar --exclude=.git --exclude=.kilo --exclude=hardware.md -C <repo> -czf - . \
   `bms-proxy.json` — `enabled: false` (включаются только по отдельному
   подтверждению оператора при наличии соответствующего оборудования).
   Проверить, что `bms-proxy` остался выключен.
-- `log_level` у всех reader-демонов — `error` (минимальный уровень, только
-  ошибки; `debug` в поставку не ставить). Проверить `system/bms/bms-proxy.json`
-  и остальные seed-конфиги.
+- `log_level` у всех reader-демонов — `info` (дефолт поставки; `debug` в
+  поставку не ставить). Проверить `system/bms/bms-proxy.json` и остальные
+  seed-конфиги.
 - Конфиги в `/malina/etc/malina/` ставятся по `if_absent`: на уже развёрнутом
   устройстве новые seed-значения **не перезапишут** старые (`enabled`/`log_level`
   правятся вручную с последующим reload/restart).
