@@ -228,7 +228,7 @@ a.brand { display: flex; align-items: center; gap: 8px; font-weight: 500; color:
 .flash.err { background: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
 .sysforms {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: 16px;
   align-items: start;
 }
@@ -1450,3 +1450,18 @@ tr.ctl-changed { background: #fff8e1; }
 .card .email-form .form-row input, .card .email-form .form-row select { width: auto; }
 
 .nettable input.udp-off { opacity: .5; }
+
+/* «Параметры системы»: карточки не должны обрезать поля форм.
+   Колонки таблицы фиксированные, поля тянутся по ширине ячейки, длинные
+   подписи переносятся — значения остаются видимыми. На мобильной ширине
+   действует отдельная стековая раскладка (media 820px). */
+@media (min-width: 821px) {
+  .sysforms > .card { min-width: 0; }
+  .sysforms .nettable { width: 100%; table-layout: fixed; }
+  .sysforms .nettable td:first-child { white-space: normal; }
+  .sysforms .nettable tr:first-child td:first-child { width: 46%; }
+  .sysforms .nettable tr:first-child td:last-child { width: 54%; }
+  .sysforms .nettable td { overflow-wrap: anywhere; }
+  .sysforms .nettable input:not([type="checkbox"]),
+  .sysforms .nettable select { width: 100%; max-width: 100%; }
+}
