@@ -1,181 +1,108 @@
-# Восстановление системы из репозитория
+# Восстановление системы из репозитория — модель, состояние и конвенции
 
-> Актуальный порядок деплоя — `deploy/local-deploy.md` (единый локальный
-> `deploy/local/deploy-local.sh`). Перенос работающего ПАК по сети (без вынимания
-> карты) — методика `deploy/redeploy-plan.md` (Вариант B). Ниже — модель
-> восстановления.
+> Это **справочник** (модель восстановимости и правила состояния), а не процедура.
+> Порядок действий:
+> - локальная перезаливка + раскладка — `deploy/local-deploy.md`
+>   (`deploy/local/deploy-local.sh`);
+> - перенос работающего ПАК по сети — `deploy/redeploy-plan.md` (Вариант B);
+> - обновление/перезапуск сервисов на развёрнутом ПАК — `deploy/deploy.sh`.
 
 Правило проекта: **«голый стартовый образ + содержимое репозитория = полностью
 рабочая система»**. Всё, что меняется на устройстве, должно быть восстановимо из
-репо (без ручных «на память» шагов).
+репо — без ручных «на память» шагов.
 
 ## Модель (двухслойная)
 
-1. **Образ (`image/`)** — сборка pi-gen (Lite armhf + `stage-malina`).
-   В образ должны «запекаться» артефакты из `system/`:
+1. **Образ (`image/`)** — сборка pi-gen (Lite armhf + `stage-malina`). В образ
+   «запекаются» системные артефакты и конфиги:
    - юнит-файлы, PAM-сервис, dhclient-хук, helper-скрипты;
    - rsyslog/logrotate/tmpfiles/journald/timesyncd drop-in'ы;
-   - fstab (ro-корень, tmpfs, `/boot/firmware`), `cmdline.txt` (ro),
-     `config.txt`;
-   - маскирование и отключение лишних юнитов/таймеров;
-   - фиксированный `/etc/machine-id`, симлинки (`/root`,`/home` на `/malina`,
-     `/etc/wpa_supplicant`, `/etc/resolv.conf`), пакеты;
-   - пакеты: `rsyslog`, `iw`, `rfkill`, `hostapd`, `dnsmasq`, `nftables`,
-     `isc-dhcp-client`, `gcc` (для сборки pamcheck) и т.п.
+   - fstab (ro-корень, tmpfs, `/boot/firmware`), `cmdline.txt` (ro), `config.txt`;
+   - маскирование/отключение лишних юнитов и таймеров;
+   - фиксированный `/etc/machine-id`, симлинки (`/root`,`/home`→`/malina`,
+     `/etc/wpa_supplicant`, `/etc/resolv.conf`);
+   - пакеты из репозиториев: `rsyslog`, `iw`, `rfkill`, `hostapd`, `dnsmasq`,
+     `nftables`, `isc-dhcp-client`, `gcc` (сборка pamcheck) и т.п.;
+   - разделы: `p1` boot + `p2` root 3 ГиБ; `p3` `/malina` в образ **не входит**.
 2. **Доводка на устройстве (`deploy/`)** — после прошивки:
    - создание раздела `/malina` (p3) и его ФС/монтирование;
-   - установка артефактов по `deploy/manifest.tsv` (`deploy/deploy.sh --first-run`);
-   - бинарники `malina-web`, `malina-netd`, `malina-pamcheck`;
-   - сетевые конфиги режимов, стартовый `active=mode1`.
+   - установка артефактов по `deploy/manifest.tsv`;
+   - бинарники `malina-web`, `malina-netd`, `map/kes/bms-reader`, `bms-proxy`,
+     `malina-tsdb`, `malina-pamcheck`;
+   - веб-ассеты, seed-конфиги сети, симлинки, включение юнитов.
+   Кастомные артефакты (бинарники/юниты/ассеты) **в образ не запекаются** —
+   ставятся из репо (`deploy/local/deploy-local.sh` / `deploy/deploy.sh --first-run`).
 
-## Что уже в репозитории
-- `system/systemd/*` — юниты (web, dhclient, logrotate, net, hostapd, dnsmasq).
+## Что где лежит (репо → устройство)
+
+- `system/systemd/*` — юниты (web, dhclient, logrotate, net, hostapd, dnsmasq,
+  tsdb/tsdb-raw, readers).
 - `system/pam/malina-web`, `system/dhcp/99-malina-syslog`.
 - `system/rsyslog/`, `system/logrotate/`, `system/tmpfiles/`, `system/journald/`,
   `system/timesyncd/` — конфиги.
 - `system/bin/` — `malina-rw`, `malina-remote-syslog`.
-- `system/udev/` — udev-правила (`60-usb-serial-latency.rules`: `latency_timer=1`
-  для USB-serial — эхо-протокол МАП, см. `docs/map.md`).
+- `system/udev/` — `60-usb-serial-latency.rules` (`latency_timer=1`, эхо-протокол
+  МАП, см. `docs/map.md`).
 - `system/network/` — дефолты `mode1.json`, `mode2.json`, `active`.
-- `daemons/tsdb/` — сервис хранилища рядов телеметрии (`malina-tsdb`):
-  append-only сегменты на `/malina/var/malina-ts`, двоичный API, без фоновых
-  оптимизаций; юнит `tsdb.service` → `malina-tsdb.service` (`docs/telemetry-store.md`).
 - `system/provision/` — снимок состояния: `fstab`, `cmdline.txt`, `config.txt`,
-  `packages.txt` (apt-mark showmanual), `masked.txt`, `disabled.txt`.
-- `image/stage-malina/05-map-uart/` — UART для МАП: `enable_uart=1` +
-  `dtoverlay=miniuart-bt`, без serial-консоли (PL011 на GPIO14/15 — МАП, BT на
-  mini-UART). Описание — `docs/map.md`.
+  `packages.txt`, `masked.txt`, `disabled.txt`, `machine-id`, `hostname`.
+- `daemons/tsdb/` — хранилище рядов телеметрии (`malina-tsdb`): append-only
+  сегменты на `/malina/var/malina-ts`, двоичный API, без фоновых оптимизаций
+  (`docs/telemetry-store.md`).
+- `image/stage-malina/05-map-uart/` — UART для МАП (`enable_uart=1` +
+  `dtoverlay=miniuart-bt`, PL011 на GPIO14/15, BT на mini-UART); см. `docs/map.md`.
 - `web/` — исходники сервиса (web+netd) и `pamcheck.c`.
-- `deploy/manifest.tsv`, `deploy/deploy.sh`.
+- `deploy/manifest.tsv` — манифест установки артефактов; `deploy/deploy.sh`.
 
-## Статус
-Реализовано в `deploy/local/deploy-local.sh` + `deploy/manifest.tsv`:
-- **создание раздела `/malina` (p3)** и монтирование (форматирование — только для
-  нового/пустого раздела, чтобы не затереть данные);
-- применение `system/*` по `deploy/manifest.tsv` (юниты, PAM, dhclient-хук, rsyslog/
-  logrotate/tmpfiles/journald/timesyncd, helpers, watchdog.conf);
-- симлинки `/root`,`/home`→`/malina`, `/etc/wpa_supplicant`→`/malina`,
-  `/etc/resolv.conf`→`/run/malina`;
-- удаление `NetworkManager` и остатков; установка пакетов (`nftables`, `hostapd`,
-  `dnsmasq`, `isc-dhcp-client`, `rsyslog`, `gcc` и др.);
-- фиксированный `machine-id`, seed-конфиги сети, установка бинарников
-  `malina-web`/`malina-netd`/`malina-pamcheck` и **веб-ассетов**
-  (`web/assets` → `/malina/usr/local/share/malina/web`).
+## Какие юниты включаются при первичном развёртывании
 
-Пакеты проекта из репозиториев запекаются в образ (`image/stage-malina/00-packages`
-+ `apt update/upgrade`); **кастомные артефакты (бинарники/юниты/ассеты) в образ не
-запекаются** — устанавливаются из репозитория (`deploy/local/deploy-local.sh` /
-`deploy/deploy.sh --first-run`) после загрузки. Тиражирование образов — вне рамок текущей задачи.
+`deploy/deploy.sh --first-run` включает только базовые: `dhclient-eth0`,
+`malina-web`, `malina-net`, `malina-net-fallback.timer`, `malina-logrotate.timer`,
+`map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`,
+`malina-tsdb-raw`.
 
-### Прочее
-- `deploy/deploy.sh` требует `MALINA_PASS` (env) или `MALINA_PASS=…` в `.kilo/secrets`.
+Юниты режимов/сети (`malina-hostapd`, `malina-dnsmasq`, `malina-wpa`,
+`malina-net-wifi`, `malina-dhclient-wlan0`, `malina-net-monitor`,
+`malina-net-scan`, `malina-net-fallback.service`, `malina-logrotate.service`)
+включаются/выключаются **по режиму сети** (`malina-netd`) и здесь намеренно
+не трогаются.
 
-## Порядок восстановления (локально)
+## Проверка после восстановления
 
-**Основной путь — локальный:** `deploy/local/deploy-local.sh <dev|image>`
-(перезаливка образа + p3 + раскладка + проверка) — см. `deploy/local-deploy.md`.
-
-**Перенос работающего ПАК по сети** (без вынимания карты, на старом ПАК) — не
-скрипт, а методика для агента: `deploy/redeploy-plan.md` (Вариант B). Прежний
-провижининг-скрипт `deploy/provision.sh` удалён.
-
-**0. Предусловия.** Образ загружен (`image/build.sh`), SSH включён
-(`malina/malina-26`, root разрешён). Пароли на свежем образе — дефолтные.
-
-**1. На ноутбуке — собрать артефакты под armhf** (бинарники в репо не коммитятся,
-каталоги `*/dist/` в `.gitignore`):
 ```
-make -C web arm                 # web/dist/malina-web-armv7, malina-netd-armv7
-make -C daemons/map-reader arm  # daemons/map-reader/dist/map-reader-armv7
-make -C daemons/kes-reader arm  # daemons/kes-reader/dist/kes-reader-armv7
-make -C daemons/bms-reader arm  # daemons/bms-reader/dist/bms-reader-armv7
-make -C daemons/bms-proxy arm  # daemons/bms-proxy/dist/bms-proxy-armv7
+systemctl is-active malina-web malina-netd map-reader kes-reader bms-reader bms-proxy malina-tsdb rsyslog ssh cron
+ip -br a                                   # режим AP/STA
+curl -sI http://127.0.0.1/login | head -1  # web :80
+ls -l /dev/shm/malina-map-state            # shm map-reader
+ls -l /dev/shm/malina-kes-state            # shm kes-reader
+ls -l /dev/shm/malina-bms-state            # shm bms-reader (список + телеметрия); источник bms-proxy
+findmnt /malina                            # rw-раздел
 ```
 
-**2. Скопировать репозиторий (вместе с `dist/`) на устройство** в `/opt/malina-repo`:
-```
-rsync -a --delete --exclude .git ./ malina@<ip>:/opt/malina-repo/
-```
-(альтернатива — `git clone`, но тогда `dist/` нужно собрать/скопировать отдельно).
-
-**3. SSH на устройство**, далее команды от root (например `sudo -i`):
-```
-ssh malina@<ip>
-sudo -i
-```
-
-**4. Раскладка на устройстве.** Раздел `/malina` (p3), `manifest.tsv`, бинарники,
-веб-ассеты, PAM-хелпер, machine-id, симлинки, tmpfiles, включение юнитов — по
-шагам, выведенным из `deploy/local/deploy-local.sh --plan` (источник — Вариант B,
-`deploy/redeploy-plan.md`). Готового скрипта для удалённой раскладки нет.
-
-> **Какие юниты включаются.** При первичном развёртывании (`deploy/deploy.sh
-> --first-run`) включаются только базовые: `dhclient-eth0`, `malina-web`,
-> `malina-net`, `malina-net-fallback.timer`, `malina-logrotate.timer`, `map-reader`,
-> `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`, `malina-tsdb-raw`. Юниты режимов/сети
-> (`malina-hostapd`, `malina-dnsmasq`, `malina-wpa`, `malina-net-wifi`,
-> `malina-dhclient-wlan0`, `malina-net-monitor`, `malina-net-scan`,
-> `malina-net-fallback.service`, `malina-logrotate.service`) включаются/выключаются
-> **по режиму сети** (`malina-netd`) и здесь намеренно не трогаются.
-
-**5. Пароли.** Сменить дефолтные на рабочие (как принято на устройстве):
-```
-passwd root ; passwd malina        # или задать согласованный пароль
-```
-(пароль SSH для `deploy/deploy.sh` — `MALINA_PASS` / `.kilo/secrets`, не коммитится).
-
-**6. Идентификация роли: имя хоста и часовой пояс.** Хранятся в `/etc`
-(`/etc/hostname`, `/etc/timezone`, симлинк `/etc/localtime`). Стартовые значения
-кладёт провижининг (`system/provision/hostname`); далее правятся в UI —
-«Система → Хост» (применяется через короткое rw-окно `malina-rw`).
-
-**7. Перезагрузка.** Система поднимается в режиме 1 (AP+portal), поднимаются
-`malina-web`, `map-reader`, `kes-reader`, сеть (`malina-netd`).
-
-**8. Проверка после восстановления:**
-```
-systemctl is-active malina-web malina-netd map-reader kes-reader bms-reader bms-proxy rsyslog ssh cron
-ip -br a                                  # режим AP/STA
-curl -sI http://127.0.0.1/login | head -1 # web :80
-ls -l /dev/shm/malina-map-state           # shm map-reader
-ls -l /dev/shm/malina-kes-state           # shm kes-reader
-ls -l /dev/shm/malina-bms-state           # shm bms-reader (список + телеметрия 107 Б); источник bms-proxy
-findmnt /malina                           # rw-раздел
-```
-При необходимости — **первичная установка** артефактов из репо с ноутбука:
-`deploy/deploy.sh --first-run <user@host>` (ставит бинарники/ассеты/manifest и
-перезапускает сервисы); `--build` пересобирает arm-бинарники перед выкладкой.
-**`--first-run` — только для первичного развёртывания**; на уже развёрнутом
-устройстве обновления делают точечно (`deploy/deploy.sh` без флага; см.
-`deploy/local-deploy.md`, «Обновления на развёрнутом устройстве»).
-
-**9. Пакеты.** Набор из репозиториев, который нужен проекту, уже запечён в образ
-(`image/stage-malina/00-packages`): `mc`, `rsyslog`, `iw`, `rfkill`, `hostapd`,
-`dnsmasq`, `nftables`, `isc-dhcp-client`, `gcc`. Провижининг их не переустанавливает
-(только при отсутствии).
+Обновления на уже развёрнутом ПАК — только точечно (`deploy/deploy.sh`;
+см. «Обновления на развёрнутом устройстве» в `deploy/local-deploy.md`).
 
 ## Логи
-- Зеркалирование логов в `/malina/var/log` **отключено** (ОС стабильна, флэшку не
-  изнашиваем; логи смотрим на `.253`). Ранее зеркало включалось на период отладки;
-  конфиг `system/rsyslog/20-malina-copy.conf` и строка `/malina/var/log` в
-  `system/tmpfiles/malina-rsyslog.conf` удалены, запись из `deploy/manifest.tsv`
-  убрана.
+
+Зеркалирование логов в `/malina/var/log` **отключено** (ОС стабильна, флэшку не
+изнашиваем; логи смотрим на `.253`). Ранее зеркало включалось на период отладки;
+конфиг `system/rsyslog/20-malina-copy.conf` и строка `/malina/var/log` в
+`system/tmpfiles/malina-rsyslog.conf` удалены, запись в `deploy/manifest.tsv`
+убрана.
 
 ## Состояние и хранилище (конвенция)
 
 - **Runtime/transient — всегда `/run/malina-net/` (tmpfs, теряется при ребуте):**
-  `mode` (override фолбэка), `hostapd.conf`, `dnsmasq.conf`,
-  `wpa_supplicant.conf`, `ruleset.nft`, `dnsmasq.leases`, `serving` (маркер
-  «мы раздаём DHCP»), `scan.json`, `monitor.state` (состояние монитора:
-  ts/foreign/serving/clean_count).
+  `mode` (override фолбэка), `hostapd.conf`, `dnsmasq.conf`, `wpa_supplicant.conf`,
+  `ruleset.nft`, `dnsmasq.leases`, `serving` (маркер «мы раздаём DHCP»),
+  `scan.json`, `monitor.state` (ts/foreign/serving/clean_count).
   Прочее transient: `/run/dhcp-option7`, `/run/dhcp-option7-applied`,
   `/run/rsyslog-remote/remote.conf`, `/run/malina/resolv.conf`,
   `/run/logrotate.status`.
 - **Persistent — на rw `/malina`:** `/malina/etc/malina/network/{active,mode1.json,mode2.json}`,
-  `/malina/etc/malina/remote-syslog`, `/malina/etc/malina/snmp-monitoring.json`
-  (настройка периодической отправки SNMP-трапов «Мониторинг»).
-  Имя хоста и часовой пояс хранятся **в `/etc`** (`/etc/hostname`, `/etc/timezone`,
-  симлинк `/etc/localtime`), а не на `/malina`: применяются из UI через короткое
+  `/malina/etc/malina/remote-syslog`, `/malina/etc/malina/snmp-monitoring.json`.
+  Имя хоста и часовой пояс — **в `/etc`** (`/etc/hostname`, `/etc/timezone`,
+  симлинк `/etc/localtime`), не на `/malina`: применяются из UI через короткое
   rw-окно (`malina-rw run`: запись `/etc` → remount ro). В устойчивом состоянии
   записи в ro-корень нет.
 - **Правило:** таймстампы/флаги/счётчики — в `/run` (переживать ребут не должны);
