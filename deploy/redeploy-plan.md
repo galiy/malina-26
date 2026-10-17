@@ -81,48 +81,80 @@ socat -u FILE:<IMG> TCP-LISTEN:9000,reuseaddr  # в фоне, отдаёт до 
 ```
 Для повтора — перезапустить `socat`.
 
-### 3.2. На `<TARGET_HOST>` (receiver) — один **bash**-сеанс
-Порядок обязателен:
-1. **Включить sysrq** (иначе жёсткий ребут в конце не сработает):
-   `echo 1 > /proc/sys/kernel/sysrq`.
-2. **Погасить запись:** `umount /settings && sync` (единственный rw-раздел; путь
-   сверять с инвентарём).
+### 3.2. Приём — фоновым процессом, без ребута (B2)
+
+Заливка идёт ~5–7 мин (медленная карта — дольше). Инструмент агента по умолчанию
+обрывает вызов через **2 мин**, поэтому нельзя держать приём в одном коротком
+вызове: обрыв убьёт управляющий SSH/оболочку. Приём запускается **фоновым
+процессом** (`background_process start`), который не ограничен этим таймаутом;
+прогресс и результат — через `status`/`logs`.
+
+Данные идут `socat → /dev/tcp` напрямую, но процессы `tee`/`dd` — дети
+управляющей SSH-сессии, поэтому «независимыми» от неё они не являются: при
+обрыве сессии могут получить SIGHUP. При обрыве — **не запускать второй writer**,
+дождаться/убить `dd`/`tee`, убедиться, что запись остановлена, и повторять
+**с offset 0** (карта частично перезаписана).
+
+**Шаг A. Подготовка (короткий SSH-вызов, до фонового приёма):**
+1. `echo 1 > /proc/sys/kernel/sysrq` — иначе ребут на шаге D не сработает.
+2. `umount /settings && sync` (единственный rw-раздел; путь сверять с инвентарём).
    Предпроверка: `grep -E '^(Dirty|Writeback):' /proc/meminfo` → оба **0 kB**;
    `mount | grep mmcblk0` → только `ro`.
-3. **Прогреть утилиты в page cache** (после перезаписи корня они должны уже быть
-   в RAM):
-   ```
-   for b in /usr/bin/dd /usr/bin/tee /usr/bin/sha256sum /bin/sync /bin/sleep; do
-     cat "$b" >/dev/null
-     ldd "$b" 2>/dev/null | awk '/=>/{print $3}' | while read -r l; do [ -f "$l" ] && cat "$l" >/dev/null; done
-   done
-   ```
-4. **Подставить `SHA` литералом** (получен на `<SENDER_HOST>`).
-5. Приём и запись (блоки **4 МиБ**; `status=progress` нельзя — старый `dd` его не знает):
-   ```
-   exec 3<>/dev/tcp/<SENDER_HOST>/9000
-   tee >(sha256sum > /tmp/rx.sha) <&3 \
-     | dd of=/dev/mmcblk0 bs=4M iflag=fullblock conv=fsync
-   rc=${PIPESTATUS[1]}
-   sync; sleep 2
-   read -r rx _ < /tmp/rx.sha
-   if [ "$rc" = 0 ] && [ "$rx" = "$SHA" ]; then
-     echo VERIFY_OK
-     echo b > /proc/sysrq-trigger
-   else
-     echo "VERIFY_FAIL rx=$rx exp=$SHA rc=$rc — НЕ перезагружаем"
-   fi
-   ```
-`tee` дублирует поток в `sha256sum`, в `dd` уходит тот же байт-поток; обрыв/недосыл
-→ хеш не совпадёт → ребута не будет.
+3. Прогреть в page cache `dd tee sha256sum sync sleep bash` (+ их библиотеки) —
+   после перезаписи корня они должны уже быть в RAM.
+4. Убедиться, что `SHA` (с `<SENDER_HOST>`) известен.
 
-**Критерий готовности:** `VERIFY_OK` (dd rc=0 И хеш == `SHA`) → sysrq-ребут.
-При `VERIFY_FAIL` — не перезагружать, сообщить оператору, повторить.
+**Шаг B. Фоновый приём (`background_process start`, БЕЗ ребута):**
+Команда на `<TARGET_HOST>` (один bash):
+```
+exec 3<>/dev/tcp/<SENDER_HOST>/9000
+tee >(sha256sum > /dev/shm/rx.sha) <&3 \
+  | dd of=/dev/mmcblk0 bs=4M iflag=fullblock conv=fsync 2> /dev/shm/dd.err
+rc=${PIPESTATUS[1]}
+sync
+read -r rx _ < /dev/shm/rx.sha
+if [ "$rc" = 0 ] && [ "$rx" = "<SHA>" ]; then
+  echo "VERDICT=OK rc=$rc rx=$rx"
+else
+  echo "VERDICT=FAIL rc=$rc rx=$rx exp=<SHA>"
+fi
+```
+- `tee` дублирует поток в `sha256sum`, в `dd` уходит тот же байт-поток.
+- `rc`, хеш и `dd.err` — в `/dev/shm` (tmpfs): после `dd` старый корень уже
+  перезаписан, писать в него и запускать оттуда бинарники ненадёжно.
+- **Ребут здесь НЕ выполняется** — только печать вердикта (его заберёт
+  `background_process logs`).
+
+**Шаг C. Периодическая проверка процесса заливки:**
+- `background_process status/logs` — жив ли процесс, появился ли `VERDICT`;
+- на `<SENDER_HOST>` — завершился ли `socat` (отдал файл до EOF);
+- на `<TARGET_HOST>` во время записи можно смотреть `pgrep -f 'dd of=/dev/mmcblk0'`
+  и хвост `/dev/shm/dd.err` (пока `dd` идёт, старый userland ещё доступен).
+
+**Шаг D. Проверка и завершение (отдельно от приёма):**
+- Убедиться: процесс завершён; в логе `VERDICT=OK` (dd rc=0 и принятый хеш == `SHA`);
+  `Dirty`/`Writeback` = 0 kB.
+- После `dd` старая система может **умереть** — это нормально: корень уже перезаписан,
+  и работающий старый userland не переживает подмену (наблюдалось на практике: сначала
+  SSH-хендшейк сбрасывается, затем хост перестаёт пинговаться). Если `VERDICT=OK`, но
+  хост не отвечает — **это не повод перезаливать**: карта уже записана, нужен
+  **power-cycle** (кнопка/питание), после чего загрузится новый образ.
+- Если хост ещё отвечает: `echo 1 > /proc/sys/kernel/sysrq; echo b > /proc/sysrq-trigger`.
+- Если `VERDICT=FAIL` или вердикт не получен — **не перезагружать**: запись неполная.
+  Повтор — **с offset 0** (в т.ч. физически: карту в картридер на `<SENDER_HOST>` и
+  локальный `deploy-local.sh`). Второй writer не запускать.
+
+**Критерий готовности:** `VERDICT=OK` в логе фонового процесса (+ `Dirty/Writeback=0`,
+если хост ещё жив). Затем — sysrq-ребут или power-cycle; при `FAIL`/нет вердикта —
+повторная заливка с offset 0.
 
 ## 4. Перезагрузка и вход в новый образ (B3)
 
-- После sysrq-ребута SSH-сессия рвётся. **Host key сменился** — удалить старую
-  запись: `ssh-keygen -R <TARGET_HOST>` (или `-o StrictHostKeyChecking=no
+- Если после `VERDICT=OK` хост не отвечает (старый userland умер при перезаписи) —
+  это ожидаемо: сделай **power-cycle** (кнопка/питание) и дождись загрузки нового
+  образа. Признак успеха — поднимается SSH уже нового образа.
+- После ребута/power-cycle SSH-сессия старая рвётся. **Host key сменился** — удалить
+  старую запись: `ssh-keygen -R <TARGET_HOST>` (или `-o StrictHostKeyChecking=no
   -o UserKnownHostsFile=/dev/null`).
 - Подключаться с ретраями, пока SSH не поднимется (до 2–3 мин).
 - Вход: `<TARGET_USER>`/`malina`, пароль **`malina-26`**. **Новые пароли —
