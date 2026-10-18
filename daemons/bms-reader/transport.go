@@ -19,6 +19,8 @@ const (
 var errTimeout = errors.New("bms: таймаут чтения")
 
 // Transport — источник с байтовым вводом/выводом и таймаутом чтения.
+// Read возвращает доступную пачку (0 < n <= len(p)); заполнение всего буфера
+// не гарантируется — вызывающий обязан накапливать (readAntFrame/readPace).
 // Не знает, serial это или TCP (arch §2/§5).
 type Transport interface {
 	Read(p []byte) (int, error)
@@ -29,8 +31,15 @@ type Transport interface {
 
 // --- serial ---
 
+// serialPort — минимальный интерфейс Port для тестов (реальный — *transport.Port).
+type serialPort interface {
+	Read([]byte, time.Time) (int, error)
+	WriteAll([]byte) error
+	Close()
+}
+
 type serialTransport struct {
-	p  *transport.Port
+	p  serialPort
 	to time.Duration
 }
 
@@ -49,26 +58,21 @@ func openSerial(path string, baud int) (Transport, error) {
 
 func (t *serialTransport) SetReadTimeout(d time.Duration) { t.to = d }
 
-// Read собирает байты до заполнения буфера или таймаута (побайтово,
-// через терминал с VMIN/VTIME в lib/transport).
+// Read читает доступную пачку байт одним syscall.Read (Port.Read).
+// Дедлайн сохраняется; VMIN/VTIME и select — в lib/transport.
 func (t *serialTransport) Read(p []byte) (int, error) {
 	deadline := time.Now().Add(t.to)
-	n := 0
-	for n < len(p) {
-		if !time.Now().Before(deadline) {
-			break
-		}
-		b, ok := t.p.ReadOne(deadline)
-		if !ok {
-			break
-		}
-		p[n] = b
-		n++
+	n, err := t.p.Read(p, deadline)
+	if n > 0 {
+		return n, nil
 	}
-	if n == 0 {
-		return 0, errTimeout
+	if err != nil {
+		if errors.Is(err, transport.ErrTimeout) {
+			return 0, errTimeout
+		}
+		return 0, err
 	}
-	return n, nil
+	return 0, errTimeout
 }
 
 func (t *serialTransport) Write(p []byte) error { return t.p.WriteAll(p) }

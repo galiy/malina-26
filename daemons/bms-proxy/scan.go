@@ -25,8 +25,8 @@ func scanPatterns() []string {
 func pasvProbe(p *transport.Port, deadline time.Time) (int, bool) {
 	var buf []byte
 	for time.Now().Before(deadline) {
-		c, ok := p.ReadOne(deadline)
-		if !ok {
+		c, err := p.ReadOneErr(deadline)
+		if err != nil {
 			return 0, false
 		}
 		buf = append(buf, c)

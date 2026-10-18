@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,9 +16,9 @@ func TestWriteRoundtripNative(t *testing.T) {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("нет python3")
 	}
-	link := "/tmp/kilo/fakemap"
-	os.Remove(link)
+	link := filepath.Join(t.TempDir(), "fakemap")
 	cmd := exec.Command("python3", "test/fakemap.py")
+	cmd.Env = append(os.Environ(), "FAKEMAP_LINK="+link)
 	if err := cmd.Start(); err != nil {
 		t.Skipf("fakemap не стартовал: %v", err)
 	}
@@ -199,9 +200,9 @@ func startFakeMap(t *testing.T) *Port {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("нет python3")
 	}
-	link := "/tmp/kilo/fakemap"
-	os.Remove(link)
+	link := filepath.Join(t.TempDir(), "fakemap")
 	cmd := exec.Command("python3", "test/fakemap.py")
+	cmd.Env = append(os.Environ(), "FAKEMAP_LINK="+link)
 	if err := cmd.Start(); err != nil {
 		t.Skipf("fakemap не стартовал: %v", err)
 	}

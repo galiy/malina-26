@@ -50,21 +50,39 @@ func modbusReadRegisters(p *Port, unit int, addr, count uint16, respTO time.Dura
 	}
 	deadline := time.Now().Add(respTO)
 	resp := make([]byte, 0, 4+int(count)*2+2)
+	var tmp [260]byte
+	need := 0 // полная длина кадра, как только известен заголовок
 	for len(resp) < 260 && time.Now().Before(deadline) {
-		b, ok := p.ReadOne(deadline)
-		if !ok {
-			break
-		}
-		resp = append(resp, b)
-		if len(resp) >= 3 {
-			if resp[1]&0x80 != 0 {
-				if len(resp) >= 5 {
-					break
-				}
-			} else if len(resp) >= 3+int(resp[2])+2 {
+		readN := len(tmp)
+		if need > 0 {
+			if r := need - len(resp); r < readN {
+				readN = r
+			}
+			if readN <= 0 {
 				break
 			}
 		}
+		n, err := p.Read(tmp[:readN], deadline)
+		if n > 0 {
+			resp = append(resp, tmp[:n]...)
+			if need == 0 && len(resp) >= 3 {
+				if resp[1]&0x80 != 0 {
+					need = 5 // кадр исключения
+				} else {
+					need = 3 + int(resp[2]) + 2
+				}
+			}
+			if need > 0 && len(resp) >= need {
+				resp = resp[:need] // отсечь возможный хвост за кадром
+				break
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	if need > 0 && len(resp) > need {
+		resp = resp[:need]
 	}
 	if len(resp) < 5 || resp[0] != byte(unit) {
 		return nil, errNoMap
@@ -104,18 +122,29 @@ func modbusWriteExchange(p *Port, req []byte, want int, respTO time.Duration) er
 	unit := req[0]
 	deadline := time.Now().Add(respTO)
 	buf := make([]byte, 0, 16)
-	for len(buf) < 260 && time.Now().Before(deadline) {
-		b, ok := p.ReadOne(deadline)
-		if !ok {
+	var tmp [260]byte
+	for len(buf) < want && time.Now().Before(deadline) {
+		readN := len(tmp)
+		if r := want - len(buf); r < readN {
+			readN = r
+		}
+		n, err := p.Read(tmp[:readN], deadline)
+		if n > 0 {
+			buf = append(buf, tmp[:n]...)
+			if len(buf) >= 2 && buf[1]&0x80 != 0 && len(buf) >= 5 {
+				break // кадр исключения — 5 байт
+			}
+			if len(buf) >= want {
+				break
+			}
+		}
+		if err != nil {
 			break
 		}
-		buf = append(buf, b)
-		if len(buf) >= 2 && buf[1]&0x80 != 0 && len(buf) >= 5 {
-			break // кадр исключения — 5 байт
-		}
-		if len(buf) >= want {
-			break
-		}
+	}
+	// Кадр исключения — ровно 5 байт; хвост за ним не должен попадать в CRC.
+	if len(buf) >= 5 && buf[1]&0x80 != 0 {
+		buf = buf[:5]
 	}
 	if len(buf) < 5 || buf[0] != unit {
 		return errNoMap

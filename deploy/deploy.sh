@@ -170,6 +170,11 @@ else
   has bmsp && { cp "$ROOT/daemons/bms-proxy/bms-proxy.service"       "$STAGE/malina-bms-proxy.service"; UNITS+=( "$STAGE/malina-bms-proxy.service" ); }
   has tsdb && { cp "$ROOT/daemons/tsdb/tsdb.service"                 "$STAGE/malina-tsdb.service";       UNITS+=( "$STAGE/malina-tsdb.service" ); }
   has tsdb && { cp "$ROOT/system/systemd/malina-tsdb-raw.service"    "$STAGE/malina-tsdb-raw.service";   UNITS+=( "$STAGE/malina-tsdb-raw.service" ); }
+  # udev latency_timer — при обновлении любого serial-демона
+  if has map || has kes || has bmsr || has bmsp; then
+    cp "$ROOT/system/udev/60-usb-serial-latency.rules" "$STAGE/60-usb-serial-latency.rules"
+    FILES+=( "$STAGE/60-usb-serial-latency.rules" )
+  fi
   echo "==> обновление на $HOST: $ONLY"
   # стейдж на /malina (rw, много места); /tmp на устройстве — tmpfs 64 МБ
   "${SSH[@]}" "$HOST" 'sudo mkdir -p /malina/.deploy/tmp && sudo chown -R malina:malina /malina/.deploy/tmp && sudo rm -rf /malina/.deploy/tmp/*'
@@ -256,7 +261,7 @@ if [ "${FIRST:-0}" = 1 ]; then
 	done
 else
 	# --- точечное обновление: unit-файлы выбранных сервисов (rw-окно под /etc) ---
-	if [ -f malina-tsdb.service ] || [ -f malina-tsdb-raw.service ] || [ -f map-reader.service ] || [ -f kes-reader.service ] || [ -f malina-bms-reader.service ] || [ -f malina-bms-proxy.service ]; then
+	if [ -f malina-tsdb.service ] || [ -f malina-tsdb-raw.service ] || [ -f map-reader.service ] || [ -f kes-reader.service ] || [ -f malina-bms-reader.service ] || [ -f malina-bms-proxy.service ] || [ -f 60-usb-serial-latency.rules ]; then
 		sudo mount -o remount,rw /
 		[ -f malina-tsdb.service ]       && sudo install -m0644 malina-tsdb.service       /etc/systemd/system/malina-tsdb.service
 		[ -f malina-tsdb-raw.service ]   && sudo install -m0644 malina-tsdb-raw.service   /etc/systemd/system/malina-tsdb-raw.service
@@ -264,9 +269,26 @@ else
 		[ -f kes-reader.service ]        && sudo install -m0644 kes-reader.service        /etc/systemd/system/kes-reader.service
 		[ -f malina-bms-reader.service ] && sudo install -m0644 malina-bms-reader.service /etc/systemd/system/malina-bms-reader.service
 		[ -f malina-bms-proxy.service ]  && sudo install -m0644 malina-bms-proxy.service  /etc/systemd/system/malina-bms-proxy.service
+		[ -f 60-usb-serial-latency.rules ] && sudo install -m0644 60-usb-serial-latency.rules /etc/udev/rules.d/60-usb-serial-latency.rules
 		sudo systemctl daemon-reload
 		sync
 		sudo mount -o remount,ro / || true
+	fi
+	if [ -f 60-usb-serial-latency.rules ]; then
+		# Политика: latency_timer всегда 1 (docs/map.md). Значение — из rule-файла,
+		# но иное значение считается ошибкой конфигурации.
+		LT=$(sed -n 's/.*ATTR{latency_timer}="\([0-9][0-9]*\)".*/\1/p' 60-usb-serial-latency.rules | head -1)
+		[ -n "$LT" ] || LT=1
+		if [ "$LT" != 1 ]; then
+			echo "ОШИБКА: latency_timer=$LT, политика — всегда 1 (docs/map.md)" >&2
+			exit 1
+		fi
+		sudo udevadm control --reload-rules 2>/dev/null || true
+		for d in /sys/bus/usb-serial/devices/ttyUSB*; do
+			[ -e "$d/latency_timer" ] || continue
+			sudo sh -c "echo $LT > $d/latency_timer" >/dev/null 2>&1 || true
+		done
+		echo "latency_timer=$LT applied"
 	fi
 fi
 

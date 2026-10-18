@@ -195,7 +195,7 @@ func (d *daemon) stateServe() {
 	d.refresh()
 
 	// childStop позволяет остановить слушателя и дождаться его выхода ДО
-	// закрытия порта (иначе ReadOne спиннится на закрытом fd).
+	// закрытия порта (иначе ReadOneErr может залипнуть/крутиться на закрытом fd).
 	childStop := make(chan struct{})
 	done := listener(p, s.Baud, d.cfg.shmPath, s.AddrMode, d.sh, childStop)
 	shutdown := func() {
@@ -231,7 +231,7 @@ func (d *daemon) stateServe() {
 			}
 			infof("reload: enabled=%v baud=%d log=%s addr=%s", ns.Enabled, ns.Baud, ns.LogLevel, ns.AddrMode)
 		case <-done:
-			infof("состояние B: слушатель завершился (%s без запросов) → поиск порта", idleListener)
+			infof("состояние B: слушатель завершился (idle/EOF/ошибка) → поиск порта")
 			p.Close()
 			return
 		}

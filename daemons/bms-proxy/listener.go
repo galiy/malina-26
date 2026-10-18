@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -52,8 +53,12 @@ func listener(p *transport.Port, baud int, shmPath, addrMode string, sh *shared,
 				return
 			default:
 			}
-			c, ok := p.ReadOne(time.Now().Add(readTick))
-			if !ok {
+			c, err := p.ReadOneErr(time.Now().Add(readTick))
+			if err != nil {
+				if !errors.Is(err, transport.ErrTimeout) {
+					infof("слушатель %s: чтение остановлено: %v", p.Path(), err)
+					return
+				}
 				if time.Since(last) >= idleListener {
 					infof("слушатель %s: %s без запросов — завершаюсь", p.Path(), idleListener)
 					return

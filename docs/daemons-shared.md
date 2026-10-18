@@ -13,7 +13,7 @@
 daemons/
 ├─ go.mod                      # module .../daemons (go 1.22, без внешних зависимостей)
 ├─ lib/
-│  ├─ transport/               # ✅ serial: Port, Open, SetBaud, ReadOne, ReadUntilNL, WriteAll, Flush, RS485
+│  ├─ transport/               # ✅ serial: Port, Open, SetBaud, ReadOne, Read, ReadUntilNL, WriteAll, Flush, RS485
 │  ├─ microart/                # ✅ кадры Микроарт: Escape, Build{Read,Write}Request, Parse{Reply,WriteReply}, Read, Write
 │  ├─ shm/                     # ✅ механика POSIX-shm: Segment (header+seqlock), Slot, Item (формат полей — у демона)
 │  ├─ control/                 # ✅ каркас unix-сокет управления (Serve + JSON-фрейминг); диспетчер — у демона
@@ -41,13 +41,17 @@ daemons/
 
 | Пакет | Откуда | Символы |
 |---|---|---|
-| `lib/transport` | `map-reader/serial.go` | `Port`, `Open`, `Close`, `SetBaud` (+`setBaudOther`), `Flush`, `WriteAll`, `ReadOne`, `ReadUntilNL`, `ErrClosed` (RS485-режим — внутренний, выключен константой) |
+| `lib/transport` | `map-reader/serial.go` | `Port`, `Open`, `Close`, `SetBaud` (+`setBaudOther`), `Flush`, `WriteAll`, `Read`, `ReadOne`, `ReadOneErr`, `ReadUntilNL`, `ErrClosed`, `ErrTimeout` (RS485-режим — внутренний, выключен константой) |
 | `lib/microart` | `map-reader/microart.go` (кадры) | `Escape`, `BuildReadRequest`, `BuildWriteRequest`, `ParseReply`, `ParseWriteReply`, `Read`, `Write`, `ErrNoDevice`, `ErrBadReply`, `DeviceError` |
 | `lib/shm` | `map-reader/shm.go` | `Segment` (`Open/Close/Slot/Item/Data/Slots`), `Slot` (`PrepareGen/Release/Publish`), `Item` (`Clear/Release/Publish`); раскладку/поля задаёт демон через `Layout` |
 | `lib/control` | `map-reader/control.go` | `Serve(sock, stop, handler)`, `WriteJSON`; лимиты соединений/дедлайны внутри |
 | `lib/ports` | `map-reader/{scan.go}` | `ListPorts`, `RdevOf`, `BusyRdevs` (glob, дедуп по rdev, занятость через `/proc`) |
 | `lib/device` | — | коды `_Device` (`TypeMap=3`, `TypeKes=5`, `TypeCharger=7/9`), `Name(code)` |
 | `lib/tscontract` | `daemons/tsdb/contract.go` | контракты телеметрии: `FieldType`/`Field`/`Value`, `Contract`, `Registry` (`Get`/`Register`/`Project`), `AppendValue`/`DecodeValue`, `NewDefaultRegistry()` (`map`/`kes`/`mbms`) |
+
+Потребители: `bms-reader` serial и Modbus в `map-reader` — пакетный `Port.Read`;
+MicroArt-эхо (`map-reader`, `kes-reader`) — `ReadOne`; `bms-proxy` (PACE) —
+`ReadOneErr` (select на каждый байт).
 
 > **Не общее (остаётся в демоне):** Modbus (`modbus.go`), оркестрация пробы и порядок
 > скоростей (`detect.go`), MAP-контракт/payload (`cells.go`, `mapdata.go`, `contract.go`,

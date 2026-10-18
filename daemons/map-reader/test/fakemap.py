@@ -6,7 +6,7 @@
 """
 import os, select, sys, time, errno
 
-LINK = "/tmp/kilo/fakemap"
+LINK = os.environ.get("FAKEMAP_LINK", "/tmp/kilo/fakemap")
 
 
 def build_mem():

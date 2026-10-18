@@ -397,7 +397,12 @@ runtime-маска снимается, но reader остаётся disabled; п
 Полный деплой выкладывает бинарники (`malina-web`,
 `malina-netd`, `map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`) + веб-ассеты и обновляет
 **unit-файлы сервисов** — `malina-tsdb`, `malina-tsdb-raw`, `map-reader`,
-`kes-reader`, `malina-bms-reader`, `malina-bms-proxy` (коротким rw-окном под `/etc`). Локальные **drop-in**'ы
+`kes-reader`, `malina-bms-reader`, `malina-bms-proxy` (коротким rw-окном под `/etc`).
+При `--only map,kes,bmsr,bmsp` также устанавливается
+`system/udev/60-usb-serial-latency.rules` и его значение применяется к существующим
+`/sys/bus/usb-serial/devices/ttyUSB*/latency_timer` (если атрибут есть).
+Политика проекта — **всегда 1 мс**; deploy завершится ошибкой, если в правиле иное
+значение. Локальные **drop-in**'ы
 (`*.service.d/*.conf`, напр. `map-reader.service.d/sim.conf`) — отдельный каталог,
 этим не затрагиваются. `malina-netd` не перезапускается (сетевой стек).
 

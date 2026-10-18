@@ -2,12 +2,15 @@
 // ПАК «Малина» (map-reader, kes-reader, kes-emu).
 //
 // Инкапсулирует открытие порта, настройку скорости (стандартные termios и
-// нестандартные RS485 через termios2/BOTHER), побайтовое чтение с дедлайном,
-// чтение до '\n' (с опциональным эхо — для протокола Микроарт) и запись.
+// нестандартные RS485 через termios2/BOTHER), пакетное чтение с дедлайном
+// (Port.Read), побайтовое ReadOne для эхо-протоколов, чтение до '\n'
+// (с опциональным эхо — для протокола Микроарт) и запись.
 package transport
 
 import (
 	"errors"
+	"io"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -71,6 +74,15 @@ const (
 // ErrClosed возвращается при операциях с закрытым портом.
 var ErrClosed = errors.New("порт закрыт")
 
+// ErrTimeout — дедлайн чтения истёк.
+var ErrTimeout = errors.New("таймаут чтения")
+
+// eagainRetries — диагностика для hwtest: сколько раз WriteAll получил EAGAIN.
+var eagainRetries atomic.Uint64
+
+// EAGAINRetries возвращает число EAGAIN-повторов WriteAll с момента старта.
+func EAGAINRetries() uint64 { return eagainRetries.Load() }
+
 // Port — открытый последовательный порт (raw, 8N1, non-blocking).
 type Port struct {
 	path string
@@ -99,8 +111,8 @@ var ErrBusy = errors.New("порт занят")
 // Open открывает порт и переводит его на скорость по умолчанию (115200).
 //
 // O_RDWR, а не O_RDONLY: иначе tcsetattr не применяет скорость на части
-// USB-serial адаптеров. Открываем в блокирующем режиме; таймаут чтения
-// задаётся через VTIME.
+// USB-serial адаптеров. Открываем в неблокирующем режиме; ожидание/дедлайн —
+// через select в Port.Read/ReadOne.
 //
 // Взаимоисключение демонов на одной линии: при открытии берём `flock(LOCK_EX|LOCK_NB)`
 // (снимается при Close). Если порт уже занят другим держателем — возвращаем ErrBusy;
@@ -116,6 +128,10 @@ func Open(path string) (*Port, error) {
 			return nil, ErrBusy
 		}
 		// прочее (неподдерживается) — работаем без lock
+	}
+	if err := syscall.SetNonblock(fd, true); err != nil {
+		syscall.Close(fd)
+		return nil, err
 	}
 	p := &Port{path: path, fd: fd}
 	if err := p.SetBaud(115200); err != nil {
@@ -182,8 +198,10 @@ func (p *Port) SetBaud(baud int) error {
 	t.Oflag = 0
 	t.Lflag = 0
 	t.Cflag = syscall.CLOCAL | syscall.CREAD | syscall.CS8 | bc
-	t.Cc[syscall.VMIN] = 0
-	t.Cc[syscall.VTIME] = 1 // таймаут чтения 100 мс (десятые доли секунды)
+	// raw-режим: VMIN/VTIME выставляем для совместимости, но fd открыт
+	// O_NONBLOCK — ожидание и дедлайн обеспечивает select в Port.Read/ReadOne.
+	t.Cc[syscall.VMIN] = 1
+	t.Cc[syscall.VTIME] = 0
 	if err := ioctl(p.fd, syscall.TCSETS, uintptr(unsafe.Pointer(&t))); err != nil {
 		return err
 	}
@@ -208,8 +226,9 @@ func (p *Port) setBaudOther(baud int) error {
 	t.Cflag = (t.Cflag &^ cbaudMask) | bother | syscall.CLOCAL | syscall.CREAD | syscall.CS8
 	t.Ispeed = uint32(baud)
 	t.Ospeed = uint32(baud)
-	t.Cc[syscall.VMIN] = 0
-	t.Cc[syscall.VTIME] = 1 // таймаут чтения 100 мс, иначе блокировка без дедлайна
+	// raw-режим: VMIN/VTIME выставлены, ожидание — через select (O_NONBLOCK).
+	t.Cc[syscall.VMIN] = 1
+	t.Cc[syscall.VTIME] = 0
 	if err := ioctl(p.fd, tcsets2, uintptr(unsafe.Pointer(&t))); err != nil {
 		return err
 	}
@@ -240,6 +259,9 @@ func (p *Port) WriteAll(b []byte) error {
 			continue
 		}
 		if err != nil && (err == syscall.EAGAIN || err == syscall.EINTR || err == syscall.EWOULDBLOCK) {
+			if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
+				eagainRetries.Add(1)
+			}
 			if time.Now().After(deadline) {
 				return errors.New("write timeout")
 			}
@@ -254,29 +276,94 @@ func (p *Port) WriteAll(b []byte) error {
 	return nil
 }
 
-// ReadOne читает один байт до дедлайна. Блокирующее чтение с таймаутом VTIME:
-// ядро возвращает байт сразу по приходу (без polling-пауз) — это важно для
-// побайтового эхо-обмена (меньше вероятность ErrRS_eco у МАП).
-func (p *Port) ReadOne(deadline time.Time) (byte, bool) {
+// fdSet выставляет бит fd в FdSet. FdSet — 1024-битная маска (128 байт)
+// на всех Linux-архитектурах; пишем через байтовое представление, чтобы не
+// зависеть от размера машинного слова (arm32/amd64).
+func fdSet(fd int, set *syscall.FdSet) {
+	if fd < 0 || fd >= 1024 {
+		return
+	}
+	b := (*[128]byte)(unsafe.Pointer(set))
+	b[fd/8] |= 1 << (uint(fd) % 8)
+}
+
+// waitReadable ждёт готовности fd к чтению до дедлайна.
+func (p *Port) waitReadable(deadline time.Time) error {
 	if p.fd < 0 {
-		return 0, false
+		return ErrClosed
 	}
+	if p.fd >= 1024 {
+		return errors.New("fd вне FdSet (>=1024)")
+	}
+	for {
+		rem := time.Until(deadline)
+		if rem <= 0 {
+			return ErrTimeout
+		}
+		var rfds syscall.FdSet
+		fdSet(p.fd, &rfds)
+		tv := syscall.NsecToTimeval(rem.Nanoseconds())
+		n, err := syscall.Select(p.fd+1, &rfds, nil, nil, &tv)
+		if err == syscall.EINTR {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			return nil
+		}
+		return ErrTimeout
+	}
+}
+
+// Read читает доступную пачку байт (до len(buf)) одним syscall.Read.
+// fd неблокирующий: select ждёт готовность до дедлайна, read может вернуть
+// EAGAIN — это обрабатывается повтором.
+func (p *Port) Read(buf []byte, deadline time.Time) (int, error) {
+	if p.fd < 0 {
+		return 0, ErrClosed
+	}
+	if len(buf) == 0 {
+		return 0, nil
+	}
+	for {
+		if err := p.waitReadable(deadline); err != nil {
+			return 0, err
+		}
+		n, err := syscall.Read(p.fd, buf)
+		if n > 0 {
+			return n, nil
+		}
+		if err == syscall.EINTR || err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		// n==0, err==nil — EOF/hangup (USB отключён): select остаётся
+		// readable, поэтому нельзя крутить цикл до дедлайна.
+		return 0, io.EOF
+	}
+}
+
+// ReadOneErr читает один байт до дедлайна и возвращает ошибку (ErrTimeout,
+// io.EOF и т.п.). Нужен вызывающим, которые должны отличить таймаут от
+// отключения устройства.
+func (p *Port) ReadOneErr(deadline time.Time) (byte, error) {
 	var buf [1]byte
-	for time.Now().Before(deadline) {
-		n, err := syscall.Read(p.fd, buf[:])
-		if n == 1 {
-			return buf[0], true
-		}
-		if err != nil && err != syscall.EINTR && err != syscall.EAGAIN && err != syscall.EWOULDBLOCK {
-			return 0, false
-		}
-		// n==0 — истёк VTIME (100 мс): read уже блокировался, повторный Sleep не нужен.
-		// Короткая пауза — только для неблокирующего режима (EAGAIN), чтобы не крутить busy-loop.
-		if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
-			time.Sleep(time.Millisecond)
-		}
+	n, err := p.Read(buf[:], deadline)
+	if n == 1 {
+		return buf[0], nil
 	}
-	return 0, false
+	return 0, err
+}
+
+// ReadOne — совместимый wrapper: байт и признак успеха.
+// Используется там, где протокол действительно побайтовый (эхо MicroArt, SEPLOS).
+func (p *Port) ReadOne(deadline time.Time) (byte, bool) {
+	b, err := p.ReadOneErr(deadline)
+	return b, err == nil
 }
 
 // ReadUntilNL читает байты до первого '\n' (включительно) или дедлайна.
@@ -303,7 +390,7 @@ func (p *Port) ReadUntilNL(deadline time.Time, max int, echo bool) ([]byte, bool
 		if r := max - len(out); r < want {
 			want = r
 		}
-		n, err := syscall.Read(p.fd, buf[:want])
+		n, err := p.Read(buf[:want], deadline)
 		if n > 0 {
 			// эхо — одним write на всю принятую пачку до '\n' включительно
 			end, hasNL := n, false
@@ -327,13 +414,8 @@ func (p *Port) ReadUntilNL(deadline time.Time, max int, echo bool) ([]byte, bool
 			}
 			continue
 		}
-		if err != nil && err != syscall.EINTR && err != syscall.EAGAIN && err != syscall.EWOULDBLOCK {
+		if err != nil {
 			return out, false
-		}
-		// n==0 — истёк VTIME (100 мс), ждать дополнительно не нужно.
-		// Пауза — только для неблокирующего режима (EAGAIN).
-		if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
-			time.Sleep(time.Millisecond)
 		}
 	}
 	return out, false

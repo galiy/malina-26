@@ -41,8 +41,8 @@
 - `system/rsyslog/`, `system/logrotate/`, `system/tmpfiles/`, `system/journald/`,
   `system/timesyncd/` — конфиги.
 - `system/bin/` — `malina-rw`, `malina-remote-syslog`.
-- `system/udev/` — `60-usb-serial-latency.rules` (`latency_timer=1`, эхо-протокол
-  МАП, см. `docs/map.md`).
+- `system/udev/` — `60-usb-serial-latency.rules` (`latency_timer=1` — политика,
+  не менять; эхо-протокол МАП, см. `docs/map.md`).
 - `system/network/` — дефолты `mode1.json`, `mode2.json`, `active`.
 - `system/provision/` — **снимок состояния** (не источник истины): `fstab`,
   `cmdline.txt`, `config.txt`, `packages.txt`, `masked.txt`, `disabled.txt`,
