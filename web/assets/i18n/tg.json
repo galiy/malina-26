@@ -1767,5 +1767,6 @@
   "settings.status.proto_microart": "MicroArt",
   "settings.status.proto_modbus": "Modbus",
   "grid.alm.sofar.alert": "Рамзи огоҳии Sofar",
-  "settings.status.error": "Ҳолатро ба даст оварда натавонист"
+  "settings.status.error": "Ҳолатро ба даст оварда натавонист",
+  "help.title": "Помощь"
 }

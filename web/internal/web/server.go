@@ -30,6 +30,7 @@ import (
 type Options struct {
 	Addr                string
 	AssetsDir           string
+	HelpDir             string // каталог пользовательской документации (manuals)
 	Auth                auth.Authenticator
 	User                string
 	Langs               []string
@@ -73,6 +74,7 @@ type Options struct {
 // Server — HTTP-сервер.
 type Server struct {
 	opts    Options
+	helpDir string
 	auth    auth.Authenticator
 	basic   *auth.BasicCache
 	store   *authstore.Store
@@ -173,6 +175,9 @@ func New(o Options) (*Server, error) {
 	}
 	if o.AssetsDir == "" {
 		o.AssetsDir = "/malina/usr/local/share/malina/web"
+	}
+	if o.HelpDir == "" {
+		o.HelpDir = "/malina/usr/local/share/malina/manuals"
 	}
 	if o.MasterConfigPath == "" {
 		o.MasterConfigPath = masternode.DefaultPath
@@ -332,6 +337,7 @@ func New(o Options) (*Server, error) {
 
 	return &Server{
 		opts:    o,
+		helpDir: o.HelpDir,
 		auth:    o.Auth,
 		basic:   auth.NewBasicCache(o.Auth, o.User, o.BasicCacheTTL, 32),
 		store:   store,
@@ -396,6 +402,8 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/logout", s.handleLogout)
 	mux.HandleFunc("/lang", s.handleLang)
+	mux.HandleFunc("/help", s.handleHelp)
+	mux.HandleFunc("/help-asset", s.handleHelpAsset)
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/static/img/malina_small.gif", http.StatusFound)
 	})

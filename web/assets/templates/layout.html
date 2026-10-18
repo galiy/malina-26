@@ -86,12 +86,14 @@
           {{end}}
         </select>
       </form>
+      {{if .HelpDoc}}<button type="button" class="help-btn" id="helpBtn" data-doc="{{.HelpDoc}}" title="{{index .T "help.title"}}" aria-label="{{index .T "help.title"}}">?</button>{{end}}
     </div>
   </header>
   <main class="content">
     {{template "content" .}}
   </main>
   <script src="{{asset "nav.js"}}" defer></script>
+  <script src="{{asset "help.js"}}" defer></script>
 </body>
 </html>
 {{end}}

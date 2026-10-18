@@ -1767,5 +1767,6 @@
   "settings.status.proto_microart": "MicroArt",
   "settings.status.proto_modbus": "Modbus",
   "grid.alm.sofar.alert": "ჯერჯერობით გაფრთხილების კოდი",
-  "settings.status.error": "სტატუსის მიღება ვერ მოხერხდა"
+  "settings.status.error": "სტატუსის მიღება ვერ მოხერხდა",
+  "help.title": "Помощь"
 }

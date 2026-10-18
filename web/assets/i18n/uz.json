@@ -1767,5 +1767,6 @@
   "settings.status.proto_microart": "MicroArt",
   "settings.status.proto_modbus": "Modbus",
   "grid.alm.sofar.alert": "Sofar ogohlantirish kodi",
-  "settings.status.error": "Maqom olinmadi"
+  "settings.status.error": "Maqom olinmadi",
+  "help.title": "Помощь"
 }

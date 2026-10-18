@@ -30,6 +30,7 @@ func main() {
 	user := flag.String("user", envOr("MALINA_WEB_USER", "malina"), "web/linux user")
 	pamHelper := flag.String("pam-helper", envOr("MALINA_WEB_PAM_HELPER", "/malina/usr/local/libexec/malina-pamcheck"), "PAM helper path")
 	assets := flag.String("assets", envOr("MALINA_WEB_ASSETS", "/malina/usr/local/share/malina/web"), "assets directory (templates/static/i18n)")
+	helpDir := flag.String("help-dir", envOr("MALINA_WEB_HELP_DIR", "/malina/usr/local/share/malina/manuals"), "user documentation directory")
 	authShm := flag.String("auth-shm", envOr("MALINA_WEB_AUTH_SHM", "/dev/shm/malina-auth"), "auth store (shm) path")
 	sessionIdle := flag.Duration("session-idle", time.Hour, "session/token idle TTL (sliding)")
 	controlSock := flag.String("control-sock", envOr("MALINA_WEB_CONTROL_SOCK", "/run/malina-map/control.sock"), "map-reader control socket")
@@ -62,6 +63,7 @@ func main() {
 	srv, err := web.New(web.Options{
 		Addr:          *listen,
 		AssetsDir:     *assets,
+		HelpDir:       *helpDir,
 		Auth:          a,
 		User:          *user,
 		SessionIdle:   *sessionIdle,

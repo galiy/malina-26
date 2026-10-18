@@ -1767,5 +1767,6 @@
   "settings.status.proto_microart": "MicroArt",
   "settings.status.proto_modbus": "Modbus",
   "grid.alm.sofar.alert": "Sofar alert code",
-  "settings.status.error": "Failed to get status"
+  "settings.status.error": "Failed to get status",
+  "help.title": "Help"
 }

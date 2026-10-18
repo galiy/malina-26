@@ -1767,5 +1767,6 @@
   "settings.status.proto_microart": "MicroArt",
   "settings.status.proto_modbus": "Modbus",
   "grid.alm.sofar.alert": "Код абвесткі Sofar",
-  "settings.status.error": "Не ўдалося атрымаць статус"
+  "settings.status.error": "Не ўдалося атрымаць статус",
+  "help.title": "Помощь"
 }

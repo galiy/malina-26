@@ -70,6 +70,7 @@ func (s *Server) baseData(r *http.Request) map[string]any {
 		"Langs":     s.opts.Langs,
 		"LangNames": langNames,
 		"Path":      r.URL.Path,
+		"HelpDoc":   helpDocFor(r.URL.Path),
 		"Maps":      loadMapList().Maps,
 		"Kes":       loadKesList().Kes, // для меню «КЭС» (как у «МАП»)
 		"Bms":       loadBmsList().Bms, // для меню «БМС»

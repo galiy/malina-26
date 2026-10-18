@@ -161,7 +161,7 @@ has grid && FILES+=( "$STAGE/grid-reader" )
 if [ "$FIRST" = 1 ]; then
   # --- первичное развёртывание (полное) ---
   mapfile -t DAEMON_FILES < <(awk -F'\t' '$1 ~ /^daemons\// {print $1}' "$ROOT/deploy/manifest.tsv")
-  tar -C "$ROOT" -cf "$STAGE/pkg.tar" system deploy/manifest.tsv web/assets "${DAEMON_FILES[@]}"
+  tar -C "$ROOT" -cf "$STAGE/pkg.tar" system deploy/manifest.tsv web/assets manuals "${DAEMON_FILES[@]}"
   cp "$ROOT/web/pamcheck/pamcheck.c" "$STAGE/pamcheck.c"
   echo "==> первичное развёртывание на $HOST"
   "${SSH[@]}" "$HOST" 'rm -rf /tmp/malina-install && mkdir -p /tmp/malina-install'
@@ -170,7 +170,8 @@ else
   # --- точечное обновление выбранных сервисов ---
   if has web; then
     tar -C "$ROOT/web/assets" -cf "$STAGE/assets.tar" templates static i18n
-    FILES+=( "$STAGE/assets.tar" )
+    tar -C "$ROOT/manuals" -cf "$STAGE/manuals.tar" .
+    FILES+=( "$STAGE/assets.tar" "$STAGE/manuals.tar" )
   fi
   if has grid && [ -n "$GRIDCONFIG" ]; then
     [ -f "$GRIDCONFIG" ] || { echo "нет --grid-config файла: $GRIDCONFIG" >&2; exit 1; }
@@ -205,6 +206,7 @@ if [ "${FIRST:-0}" = 1 ]; then
 	cleanup() { sudo mount -o remount,ro / 2>/dev/null || true; }
 	trap cleanup EXIT
 	sudo mount -o remount,rw /
+	[ -f pkg.tar ] && sudo tar -xf pkg.tar
 else
 	cd /malina/.deploy/tmp
 fi
@@ -234,6 +236,21 @@ if [ -f assets.tar ] || [ "${FIRST:-0}" = 1 ]; then
 	sudo chown -R root:root /malina/usr/local/share/malina/web
 	sudo find /malina/usr/local/share/malina/web -type d -exec chmod 0755 {} +
 	sudo find /malina/usr/local/share/malina/web -type f -exec chmod 0644 {} +
+fi
+
+# пользовательская документация — источник встроенной справки «?»
+if [ -f manuals.tar ] || [ "${FIRST:-0}" = 1 ]; then
+	echo "inst manuals -> /malina/usr/local/share/malina/manuals"
+	sudo rm -rf /malina/usr/local/share/malina/manuals
+	sudo install -d -m0755 /malina/usr/local/share/malina/manuals
+	if [ "${FIRST:-0}" = 1 ]; then
+		sudo cp -a manuals/. /malina/usr/local/share/malina/manuals/
+	else
+		sudo tar -C /malina/usr/local/share/malina/manuals -xf manuals.tar
+	fi
+	sudo chown -R root:root /malina/usr/local/share/malina/manuals
+	sudo find /malina/usr/local/share/malina/manuals -type d -exec chmod 0755 {} +
+	sudo find /malina/usr/local/share/malina/manuals -type f -exec chmod 0644 {} +
 fi
 
 if [ "${FIRST:-0}" = 1 ]; then
