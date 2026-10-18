@@ -1768,5 +1768,5 @@
   "settings.status.proto_modbus": "Modbus",
   "grid.alm.sofar.alert": "到目前为止警报代码",
   "settings.status.error": "获取状态失败",
-  "help.title": "Помощь"
+  "help.title": "帮助"
 }
