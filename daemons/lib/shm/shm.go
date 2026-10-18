@@ -143,6 +143,13 @@ func (sl *Slot) seq() *uint64   { return (*uint64)(unsafe.Pointer(&sl.b[16])) }
 func (sl *Slot) lenn() *uint32  { return (*uint32)(unsafe.Pointer(&sl.b[24])) }
 func (sl *Slot) crc() *uint32   { return (*uint32)(unsafe.Pointer(&sl.b[28])) }
 
+// Gen возвращает поколение слота (атомарно).
+func (sl *Slot) Gen() uint64 { return atomic.LoadUint64(sl.gen()) }
+
+// ClearGen сбрасывает поколение при освобождении слота: старый пулер не должен
+// принять освобождённый слот за свой.
+func (sl *Slot) ClearGen() { atomic.StoreUint64(sl.gen(), 0) }
+
 // PrepareGen готовит слот к записи (state=0 до первой публикации) и задаёт gen.
 func (sl *Slot) PrepareGen(gen uint64) {
 	atomic.StoreUint32(sl.state(), 0)

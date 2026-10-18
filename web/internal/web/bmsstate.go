@@ -41,8 +41,8 @@ var bmsShmPath = "/dev/shm/malina-bms-state"
 type BmsInfo struct {
 	ID       int    `json:"id"`        // индекс слота (0..15)
 	Gen      uint64 `json:"gen"`       // генерация слота
-	Serial   string `json:"serial"`    // наш ID (BASE-NNNNN)
-	Base     string `json:"base"`      // BASE от probe
+	Serial   string `json:"serial"`    // логический ID (BASE)
+	Base     string `json:"base"`      // нормализованный BASE (= ID)
 	Source   string `json:"source"`    // дескриптор источника
 	TypeID   int    `json:"type_id"`   // внутренний код типа
 	TypeName string `json:"bms_type"`  // имя типа (AntBMS-DSP / EnBMS-RS485)
@@ -50,8 +50,8 @@ type BmsInfo struct {
 	LastSeen int64  `json:"last_seen"` // unix
 }
 
-// MenuLabel — подпись устройства для меню: наш серийник/ID (BASE-NNNNN),
-// чтобы устройства одного типа не дублировались (тип виден на странице).
+// MenuLabel — подпись устройства для меню: логический ID (BASE). При
+// совпадении BASE у нескольких BMS подписи могут совпадать — это принято.
 func (b BmsInfo) MenuLabel(tr map[string]string) string {
 	return b.Serial
 }

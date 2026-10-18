@@ -282,21 +282,25 @@
     (arr || []).forEach(function (d) {
       var key = prefix + d.id;
       seen[key] = true;
+      // Ссылка на страницу устройства (МАП/КЭС/БМС) по id+gen, как пункты меню.
+      // serial добавляем только если сервер его отдал (иначе параметр пустой).
+      // URL пересчитываем на каждом обновлении: gen/serial могли измениться.
+      var url = mode + "?id=" + encodeURIComponent(d.id) +
+        "&gen=" + encodeURIComponent(d.gen || "");
+      if (d.serial) { url += "&serial=" + encodeURIComponent(d.serial); }
       var el = tiles[key];
       if (!el) {
         el = document.createElement("div");
         el.className = "home-tile";
         el.setAttribute("data-key", key);
-        // Ссылка на страницу устройства (МАП/КЭС/БМС) по id+gen, как пункты меню.
-        // serial добавляем только если сервер его отдал (иначе параметр пустой).
-        var url = mode + "?id=" + encodeURIComponent(d.id) +
-          "&gen=" + encodeURIComponent(d.gen || "");
-        if (d.serial) { url += "&serial=" + encodeURIComponent(d.serial); }
         el.innerHTML = '<a class="home-tile-link" href="' + url + '">' +
           '<div class="home-card"></div></a>' +
           '<div class="home-fog" hidden><span class="home-fog-text"></span></div>';
         wrapEl.appendChild(el); // только в конец — новая плитка
         tiles[key] = el;
+      } else {
+        var link = el.querySelector("a.home-tile-link");
+        if (link) { link.setAttribute("href", url); }
       }
       el.querySelector(".home-card").innerHTML = cardHTML(d, mode);
       setFog(el, d.online ? "" : "stale");

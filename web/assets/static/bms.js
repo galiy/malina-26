@@ -163,8 +163,8 @@
       fetch("api/bms/devices", { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (list) {
         var d = null; list = list || [];
         for (var i = 0; i < list.length; i++) { if (SERIAL && String(list[i].serial) === SERIAL) { d = list[i]; break; } }
-        if (!d && list.length === 1) { d = list[0]; }
-        if (d) { window.location.href = "bms?id=" + encodeURIComponent(d.id) + "&gen=" + encodeURIComponent(d.gen) + "&serial=" + encodeURIComponent(SERIAL); return; }
+        // Никакого fallback на единственную живую BMS: это открыло бы чужое устройство.
+        if (d) { window.location.href = "bms?id=" + encodeURIComponent(d.id) + "&gen=" + encodeURIComponent(d.gen) + "&serial=" + encodeURIComponent(d.serial); return; }
         if (++tries < max) { setTimeout(attempt, 1000); } else { window.location.href = "/"; }
       }).catch(function () { if (++tries < max) { setTimeout(attempt, 1000); } else { window.location.href = "/"; } });
     })();

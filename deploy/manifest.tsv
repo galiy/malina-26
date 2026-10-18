@@ -39,5 +39,4 @@ daemons/bms-proxy/bms-proxy.service	/etc/systemd/system/malina-bms-proxy.service
 system/map/map-reader.json	/malina/etc/malina/map-reader.json	0644	if_absent
 system/kes/kes-reader.json	/malina/etc/malina/kes-reader.json	0644	if_absent
 system/bms/bms-reader.json	/malina/etc/malina/bms-reader.json	0644	if_absent
-system/bms/bms-ident.json	/malina/etc/malina/bms-ident.json	0644	if_absent
 system/bms/bms-proxy.json	/malina/etc/malina/bms-proxy.json	0644	if_absent

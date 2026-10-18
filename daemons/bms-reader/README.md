@@ -7,13 +7,15 @@
 - Контракт/циклы: `docs/bms-reader.md` (§1 — контракт, §2 — probe, §3 — пулер).
 - Типы: `docs/bms/README.md`, `docs/bms/<TYPE>.md`.
 - План: `docs/bms-reader-plan.md`.
+- ID = BASE (без `-NNNNN` и без реестра); несколько BMS могут иметь одинаковый ID —
+  это принятый риск, уникальность BASE обеспечивает пользователь.
 
 ## Состав
 
 | Файл | Назначение |
 |---|---|
 | `main.go` | запуск, обработка сигналов (SIGHUP→reload) |
-| `config.go` | `bms-gateways.json` / `bms-ident.json` (атомарная запись) |
+| `config.go` | `bms-reader.json` / legacy `bms-gateways.json` (чтение) |
 | `shm.go` | раскладка сегмента: список (Items) + телеметрия 107 Б (Slots) |
 | `control.go` | control-сокет: `ping`/`list`/`reload` |
 | `transport.go` | Transport: Serial (`lib/transport`) и TCP |
@@ -21,7 +23,7 @@
 | `antbms.go` | тип AntBMS-DSP (пассив, 19200, кадр 140 Б) |
 | `enbms.go`, `pace.go` | тип EnBMS RS485 (PACE ASCII, ADR 0..15, SN `0xA4`) |
 | `orchestrator.go` | пул источников, backoff/баны, рескан, пулеры |
-| `registry.go` | реестр ID (`BASE-NNNNN`, привязка) |
+| `base.go` | нормализация BASE/ID (ID = BASE, без суффикса) |
 | `publish.go` | shm 107 Б + raw (`tscontract`/`stat`) |
 
 ## Запуск
@@ -33,13 +35,13 @@ go test ./daemons/bms-reader/...    # unit + e2e (TCP-эмулятор EnBMS)
 ```
 
 Systemd: `bms-reader.service` → `malina-bms-reader.service`; `ExecReload` — SIGHUP
-(перечитать `bms-gateways.json`).
+(перечитать `bms-reader.json` / legacy `bms-gateways.json`).
 
 ## Пути (устройство)
 
 - shm: `/dev/shm/malina-bms-state`
 - control: `/run/malina-bms/control.sock`
-- конфиги: `/malina/etc/malina/bms-gateways.json`, `bms-ident.json`
+- конфиг: `/malina/etc/malina/bms-reader.json` (legacy `bms-gateways.json` — fallback)
 - raw tsdb: `/run/malina-ts-raw/tsdb.sock`
 
 Ограничения: только **чтение** BMS (RO); TCP-шлюзы — только по явной настройке.

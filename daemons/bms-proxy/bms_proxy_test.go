@@ -409,3 +409,37 @@ func putSlot(data []byte, slot int, gen uint64, payload []byte) {
 	binary.LittleEndian.PutUint32(s[24:28], uint32(len(payload)))
 	copy(s[bmsSlotHdr:bmsSlotHdr+len(payload)], payload)
 }
+
+// TestBuildAliveListDuplicateBase — две BMS с одинаковым BASE/ID должны обе
+// попасть в живой список и обе отдаваться по своим слотам/генерациям.
+func TestBuildAliveListDuplicateBase(t *testing.T) {
+	data := mkSeg(t)
+	now := time.Now()
+	for slot := 0; slot < 2; slot++ {
+		var it [bmsListLen]byte
+		binary.LittleEndian.PutUint32(it[0:4], 1)
+		it[itOffState] = 1
+		copy(it[itOffID:], "AntBMS-DSP-160")
+		copy(it[itOffBase:], "AntBMS-DSP-160")
+		binary.LittleEndian.PutUint64(it[itOffGen:], uint64(100+slot))
+		binary.LittleEndian.PutUint64(it[itOffLastSeen:], uint64(now.Unix()))
+		writeItem(data, slot, it[:])
+
+		var tel bmscontract.Telemetry
+		tel.CellCount = 1
+		putSlot(data, slot, uint64(100+slot), bmscontract.Encode(&tel))
+	}
+
+	live := buildAliveList(data, now)
+	if len(live) != 2 {
+		t.Fatalf("живых=%d, ожидалось 2", len(live))
+	}
+	if live[0].Slot != 0 || live[0].Gen != 100 || live[1].Slot != 1 || live[1].Gen != 101 {
+		t.Fatalf("живой список: %+v", live)
+	}
+	for _, b := range live {
+		if p := readTelemetry(data, b.Slot, b.Gen); p == nil {
+			t.Fatalf("телеметрия слота %d недоступна", b.Slot)
+		}
+	}
+}

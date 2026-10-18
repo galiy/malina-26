@@ -163,6 +163,9 @@ while IFS=$'\t' read -r src dst mode pol; do
 	$SUDO install -D -o root -g root -m "$mode" "$SRC/$src" "$tgt"
 done < "$SRC/deploy/manifest.tsv"
 
+# ID = BASE: реестр bms-ident.json больше не используется — убираем мусор.
+$SUDO rm -f "$MALM/etc/malina/bms-ident.json"
+
 # --- 2.8 бинарники (на /malina — так их ждут юниты) ---
 log "бинарники"
 $SUDO install -D -o root -g root -m0755 "$SRC/web/dist/malina-web-armv7" "$MALM/usr/local/bin/malina-web"

@@ -1,5 +1,6 @@
 // Command bms-reader — сбор телеметрии BMS (docs/bms-reader-arch.md,
-// docs/bms-reader.md). Настройки (enabled/log_level) — в bms-gateways.json.
+// docs/bms-reader.md). Настройки (enabled/log_level) — в bms-reader.json
+// (legacy bms-gateways.json читается как fallback).
 // При enabled=false демон остаётся активным, но не опрашивает BMS и публикует
 // ПУСТОЙ список/shm.
 package main
@@ -35,18 +36,13 @@ func main() {
 		lx.Errorf("%v", err)
 		os.Exit(1)
 	}
-	ident, err := loadIdent()
-	if err != nil {
-		lx.Errorf("%v", err)
-		os.Exit(1)
-	}
 	if *debug {
 		holder.setForcedDebug()
 	}
 	holder.applyLevel(lx)
 	st, gws := holder.get()
-	lx.Infof("шлюзов=%d, записей реестра=%d, enabled=%v log=%s",
-		len(gws.Gateways), len(ident.Entries), st.Enabled, lx.LevelName())
+	lx.Infof("шлюзов=%d, enabled=%v log=%s",
+		len(gws.Gateways), st.Enabled, lx.LevelName())
 
 	seg, err := openShm()
 	if err != nil {
@@ -87,8 +83,7 @@ func main() {
 			phase := make(chan struct{})
 			var wg sync.WaitGroup
 			sink := stat.New(rawSock)
-			idr := newIDRegistry(ident)
-			orch := newOrchestrator(seg, sink, idr, phase)
+			orch := newOrchestrator(seg, sink, phase)
 			orch.setGateways(gws)
 			wg.Add(1)
 			go func() {

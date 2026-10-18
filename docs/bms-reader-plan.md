@@ -8,7 +8,7 @@
 
 ## 1. Что уже готово (спека)
 
-- Архитектура (компоненты, пул/backoff/баны, probe-цикл, ID-реестр, тайминги,
+- Архитектура (компоненты, пул/backoff/баны, probe-цикл, ID = BASE, тайминги,
   конфиг/reload, tsdb, имена/пути).
 - Контракт `bms` v1: раскладка 107 Б, tsdb-схема (`field_id` 1..58) и агрегация
   (`alarm`/`flags`/`balance_mask` → OR; `mode` → last).
@@ -21,8 +21,8 @@
    `web`, `deploy/`).
 3. **Кодека контракта**: 107-Б бинарный + `tscontract`-contract `(bms, v1)`.
 4. **Транспорта**: единый интерфейс Serial/TCP (TCP — новый в `lib`).
-5. **Реестра ID** (`bms-ident.json`) и пула источников/слотов.
-6. **tsdb**: расширение `validKey` (10→50) + тесты + `telemetry-store.md`.
+5. **Пула источников/слотов** (реестр ID не нужен: ID = BASE).
+6. **tsdb**: `validKey` уже 50 байт (проверить тестами/`telemetry-store.md`).
 7. **Аккумулятора**: колонки `bms` и поддержка агрегации **OR** для битфилдов.
 8. **Веб / web-API** — **вне рамок** текущей реализации (отложено; см. M7).
 9. **Тестов/эмуляторов**: AntBMS (пассив) и EnBMS PACE (сервер) для e2e/smoke.
@@ -41,7 +41,7 @@
 ### M1. Контракт и tsdb
 - 107-Б бинарный кодек (encode/decode, BE) — `lib` или `daemons/bms-reader/contract`.
 - `tscontract` contract `(bms, v1)`: `field_id` 1..58, типы/ед.
-- tsdb: `validKey` 10→50 (`store.go`), `format.go`, тесты, `telemetry-store.md`.
+- tsdb: `validKey` = 50 байт (`store.go`), `format.go`, тесты, `telemetry-store.md`.
 - **Приёмка:** unit — round-trip 107 Б; contract encode/decode; `validKey` ≥50.
 
 ### M2. Транспорт
@@ -50,12 +50,13 @@
 - TCP: framing-метка `m-tcp`/`m-rtu`/`native`.
 - **Приёмка:** unit (mock TCP), открытие/закрытие/таймауты.
 
-### M3. Оркестратор (пул + probe-цикл + ID)
+### M3. Оркестратор (пул + probe-цикл + ID = BASE)
 - Пул источников (порт/слот), backoff-лестница, баны (NotMine 5 мин),
   последовательный probe-цикл (`Found/NotMine/NoAnswer`), рескан, мьютекс порта.
-- Реестр ID (`bms-ident.json`): BASE↔ID, привязка `by-path`, суффикс `-NNNNN`,
-  атомарная запись (temp+rename+fsync), reload по SIGHUP.
-- **Приёмка:** unit — пул/баны/ID-матчинг/атомарность.
+- ID = `sanitize(BASE)`, без суффикса/реестра/счётчика; активные устройства
+  ключуются по слоту (у дублей BASE ID может совпадать).
+- **Приёмка:** unit — пул/баны, два устройства с одинаковым BASE живут в разных
+  слотах и теряются независимо.
 
 ### M4. Тип AntBMS-DSP
 - probe (пассив 500 мс, `AA 55 AA FF`+CRC), модуль (разбор 140 Б → 107 Б),
@@ -108,7 +109,7 @@
 - **Списки сервисов `deploy/deploy.sh`:** добавить `malina-bms-reader` в `enable`,
   `restart`, `is-active` (там же, где `map-reader`/`kes-reader`/`malina-tsdb`).
 - **`deploy/manifest.tsv`:** строки для бинаря, юнита и конфигов (`bms-reader.json`,
-  `bms-ident.json`) — первичное развёртывание (`--first-run`).
+  `bms-proxy.json`) — первичное развёртывание (`--first-run`).
 - **`deploy/local/deploy-local.sh` + `deploy/local-deploy.md` + `deploy/restore.md`:** офлайн-карта
   и восстановление (демон/юнит/конфиги/каталоги rw).
 - **Веб-ассеты:** страница/i18n `bms` уезжают в `web/assets` (`assets.tar`) — списки
@@ -125,7 +126,7 @@
 - **Go-модуль:** демон в `daemons/bms-reader` (в модуле `daemons`); общий код — в
   `daemons/lib` (новое: TCP-транспорт, контракт-кодек).
 - **Конфиги (подтверждено):** `bms-reader.json` — `[{host, port, mode:"modbus"|"none"}]`;
-  `bms-ident.json` — `{counter, entries:[{base,id,binding}]}`.
+  реестр `bms-ident.json` **не используется** (ID = BASE).
 - **control-сокет (подтверждено):** команды `reload`, `list`.
 - **shm:** сегмент: **список + до 16 телеметрийных слотов (107 Б)** — по образцу `map`/`kes`.
 - **unit:** `malina-bms-reader.service`, `ExecReload=/bin/kill -HUP $MAINPID`.

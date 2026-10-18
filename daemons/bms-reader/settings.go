@@ -6,7 +6,7 @@ import (
 	"github.com/galiy/malina-26/daemons/lib/logx"
 )
 
-// settings — настройки bms-reader (из bms-gateways.json: enabled/log_level).
+// settings — настройки bms-reader (из bms-reader.json; legacy bms-gateways.json — fallback).
 type settings struct {
 	Enabled  bool
 	LogLevel string
@@ -36,7 +36,7 @@ func (h *stateHolder) applyLevel(lx *logx.Logger) {
 	}
 }
 
-// loadState читает bms-gateways.json (настройки + шлюзы). Умолчание без файла:
+// loadState читает bms-reader.json (legacy bms-gateways.json — fallback). Умолчание без файла:
 // enabled=false («выключен»), log_level=info.
 func loadState() (stateHolder, error) {
 	g, err := loadGateways()

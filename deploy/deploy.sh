@@ -2,7 +2,7 @@
 # Единый деплой артефактов проекта на устройство (единый список сервисов).
 #
 # Использование:
-#   deploy/deploy.sh [--build] [--first-run] [--only s1,s2,...] [user@host]
+#   deploy/deploy.sh [--build] [--first-run] [--only s1,s2,...] [--purge-bms-history] [user@host]
 #
 #   --build      пересобрать ARM-бинарники выбранных сервисов
 #   --first-run  ПЕРВИЧНОЕ развёртывание «голого» устройства: units/конфиги по
@@ -12,12 +12,16 @@
 #                `--only` при `--first-run` игнорируется.)
 #   --only LIST  точечное обновление ТОЛЬКО выбранных сервисов (через запятую):
 #                web,netd,map,kes,bmsr,bmsp,tsdb.
+#   --purge-bms-history
+#                одноразовая миграция: остановить bms-reader/tsdb, удалить ВСЮ
+#                историю bms (старые ID BASE-NNNNN) в avg и raw, затем поднять
+#                сервисы. Требует bmsr или --first-run; tsdb добавляется в --only.
 #   --all        обновить ВСЕ сервисы (весь скрипт). Без `--only`/`--all` обычный
-#                деплой НЕ запускается (правило: на .60 деплоим только изменённые).
+#                деплой НЕ запускается (правило: на .68 деплоим только изменённые).
 #   (без флага)  точечное ОБНОВЛЕНИЕ работающего устройства: только бинарники +
 #                веб-ассеты + unit-файлы выбранных сервисов; `/etc` — коротким
 #                rw-окном.
-#   user@host    по умолчанию malina@192.168.13.60 (или env HOST)
+#   user@host    по умолчанию malina@192.168.13.68 (или env HOST)
 #
 # Пароль SSH: env MALINA_PASS или строка MALINA_PASS=... в .kilo/secrets (не коммитится).
 #
@@ -29,12 +33,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 ALL_SERVICES="web netd map kes bmsr bmsp tsdb"
 
-BUILD=0 FIRST=0 ALL=0 HOSTARG="" ONLY=""
+BUILD=0 FIRST=0 ALL=0 PURGE=0 HOSTARG="" ONLY=""
 parse() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --build) BUILD=1 ;;
       --first-run) FIRST=1 ;;
+      --purge-bms-history) PURGE=1 ;;
       --all) ALL=1 ;;
       --only) shift; ONLY="${1:-}" ;;
       --only=*) ONLY="${1#--only=}" ;;
@@ -66,7 +71,16 @@ done
 
 has() { case " $ONLY " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
-HOST="${HOSTARG:-${HOST:-malina@192.168.13.60}}"
+if [ "$PURGE" = 1 ] && [ "$FIRST" != 1 ] && ! has bmsr; then
+  echo "--purge-bms-history требует bmsr в --only или --first-run" >&2
+  exit 2
+fi
+# purge требует совместимый tsdb (validKey 50) — добавляем его в обновление.
+if [ "$PURGE" = 1 ] && [ "$FIRST" != 1 ] && ! has tsdb; then
+  ONLY="$ONLY tsdb"
+fi
+
+HOST="${HOSTARG:-${HOST:-malina@192.168.13.68}}"
 [ "${HOST#-}" = "$HOST" ] || { echo "некорректный хост: $HOST" >&2; exit 2; }
 
 PASS="${MALINA_PASS:-}"
@@ -163,7 +177,7 @@ else
 fi
 
 # --- удалённая установка (общая; ветвление по FIRST/ONLY) ---
-"${SSH[@]}" "$HOST" "FIRST=$FIRST ONLY='$ONLY' bash -s" <<'REMOTE'
+"${SSH[@]}" "$HOST" "FIRST=$FIRST ONLY='$ONLY' PURGE=$PURGE bash -s" <<'REMOTE'
 set -e
 has() { case " $ONLY " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 if [ "${FIRST:-0}" = 1 ]; then
@@ -256,14 +270,165 @@ else
 	fi
 fi
 
+# Одноразовая миграция ID: удаляем весь namespace bms (старые <BASE>-NNNNN).
+# Выполняется после установки бинарников/юнитов, до перезапуска сервисов.
+PURGE_MARKER=/malina/etc/malina/.bms-history-purged
+RWCTL=/malina/usr/local/sbin/malina-rw
+PURGE_RUN=0
+HAS_WEB_UNIT=0
+if systemctl cat malina-web >/dev/null 2>&1; then HAS_WEB_UNIT=1; fi
+if [ "${PURGE:-0}" = 1 ]; then
+	if [ -e "$PURGE_MARKER" ]; then
+		echo "purge: уже выполнялся (маркер $PURGE_MARKER); удаление пропускаю"
+		echo "purge: для повторного удаления истории удалите маркер вручную"
+	else
+		PURGE_RUN=1
+	fi
+	# Если прошлый запуск оставил runtime-mask, снимаем его для retry.
+	if [ "$PURGE_RUN" = 0 ]; then
+		if ! sudo systemctl unmask --runtime malina-bms-reader; then
+			echo "purge: не удалось снять runtime-mask (возможно persistent mask) malina-bms-reader" >&2
+			sudo systemctl start malina-tsdb malina-tsdb-raw 2>/dev/null || true
+			if [ "$HAS_WEB_UNIT" = 1 ]; then
+				sudo systemctl start malina-web 2>/dev/null || true
+			fi
+			exit 1
+		fi
+	fi
+fi
+if [ "$PURGE_RUN" = 1 ]; then
+	echo "purge: удаляю всю историю bms (avg+raw)"
+	for u in malina-tsdb malina-tsdb-raw malina-bms-reader; do
+		if ! systemctl cat "$u" >/dev/null 2>&1; then
+			echo "purge: unit $u не установлен" >&2
+			exit 1
+		fi
+	done
+	# Проверяем записываемость маркера ДО удаления истории.
+	if ! sudo mkdir -p "$(dirname "$PURGE_MARKER")" \
+		|| ! sudo touch "$(dirname "$PURGE_MARKER")/.purge-write-test" \
+		|| ! sudo sync \
+		|| ! sudo rm -f "$(dirname "$PURGE_MARKER")/.purge-write-test"; then
+		echo "purge: каталог маркера недоступен — удаление отменено" >&2
+		exit 1
+	fi
+	if [ ! -x "$RWCTL" ]; then
+		echo "purge: нет $RWCTL — удаление отменено" >&2
+		exit 1
+	fi
+	# Reader выключаем из автозапуска ДО удаления: при любом сбое он не должен
+	# писать новые bms-ряды без маркера (в т.ч. после ребута).
+	if ! sudo "$RWCTL" run systemctl disable malina-bms-reader; then
+		echo "purge: не удалось disable malina-bms-reader — удаление отменено" >&2
+		exit 1
+	fi
+	# Runtime-mask отменяет Restart=on-failure: SIGKILL не должен вернуть reader
+	# во время удаления/до маркера. Маска снимается после успешного purge.
+	if ! sudo systemctl mask --runtime malina-bms-reader 2>/dev/null; then
+		case "$(systemctl is-enabled malina-bms-reader 2>/dev/null || true)" in
+			masked|masked-runtime) ;;
+			*) echo "purge: не удалось mask malina-bms-reader — удаление отменено" >&2; exit 1 ;;
+		esac
+	fi
+	sudo systemctl stop malina-bms-reader malina-web malina-tsdb malina-tsdb-raw 2>/dev/null || true
+	for u in malina-tsdb malina-tsdb-raw malina-bms-reader; do
+		if systemctl is-active --quiet "$u"; then
+			if [ "$u" = malina-bms-reader ]; then
+				echo "purge: bms-reader не остановился — SIGKILL" >&2
+				sudo systemctl kill --signal=SIGKILL "$u" 2>/dev/null || true
+				sleep 1
+			fi
+			if systemctl is-active --quiet "$u"; then
+				echo "purge: $u не остановился — удаление отменено" >&2
+				sudo systemctl unmask --runtime malina-bms-reader 2>/dev/null || true
+				sudo systemctl start malina-tsdb malina-tsdb-raw 2>/dev/null || true
+				[ "$HAS_WEB_UNIT" = 1 ] && sudo systemctl start malina-web 2>/dev/null || true
+				# bms-reader оставляем остановленным/disabled до успешного purge.
+				exit 1
+			fi
+		fi
+	done
+	if [ "$HAS_WEB_UNIT" = 1 ] && systemctl is-active --quiet malina-web; then
+		echo "purge: malina-web не остановился — удаление отменено" >&2
+		sudo systemctl unmask --runtime malina-bms-reader 2>/dev/null || true
+		sudo systemctl start malina-tsdb malina-tsdb-raw malina-web 2>/dev/null || true
+		exit 1
+	fi
+	if ! sudo rm -rf /malina/var/malina-ts/bms /run/malina-ts-raw/bms; then
+		echo "purge: ошибка удаления — поднимаю tsdb/web, reader оставляю остановленным" >&2
+		sudo systemctl unmask --runtime malina-bms-reader 2>/dev/null || true
+		sudo systemctl start malina-tsdb malina-tsdb-raw 2>/dev/null || true
+		[ "$HAS_WEB_UNIT" = 1 ] && sudo systemctl start malina-web 2>/dev/null || true
+		exit 1
+	fi
+	# Маркер — СРАЗУ после успешного удаления, до запуска bms-reader:
+	# иначе после сбоя повторный purge удалит уже новые ряды.
+	if ! sudo mkdir -p "$(dirname "$PURGE_MARKER")" || ! sudo touch "$PURGE_MARKER" || ! sudo sync; then
+		echo "purge: не удалось надёжно создать маркер $PURGE_MARKER" >&2
+		# bms-reader уже disabled до удаления; новых bms-рядов быть не должно,
+		# пока маркер не создан.
+		sudo systemctl start malina-tsdb malina-tsdb-raw 2>/dev/null || true
+		if [ "$HAS_WEB_UNIT" = 1 ]; then
+			sudo systemctl start malina-web 2>/dev/null || true
+		fi
+		exit 1
+	fi
+	# Маркер создан — снимаем runtime-mask, иначе общий RESTART не поднимет reader.
+	if ! sudo systemctl unmask --runtime malina-bms-reader; then
+		echo "purge: не удалось снять runtime-mask (возможно persistent mask) malina-bms-reader" >&2
+		sudo systemctl start malina-tsdb malina-tsdb-raw 2>/dev/null || true
+		if [ "$HAS_WEB_UNIT" = 1 ]; then
+			sudo systemctl start malina-web 2>/dev/null || true
+		fi
+		exit 1
+	fi
+	# Мусорный файл больше не нужен; его ошибка не должна оставлять сервисы лежать.
+	sudo rm -f /malina/etc/malina/bms-ident.json 2>/dev/null || true
+	# tsdb должен подняться до bms-reader; web — до чтения истории.
+	sudo systemctl start malina-tsdb malina-tsdb-raw 2>/dev/null || true
+	if ! systemctl is-active --quiet malina-tsdb || ! systemctl is-active --quiet malina-tsdb-raw; then
+		echo "purge: tsdb/raw не поднялись; поднимаю web/bms-reader best-effort" >&2
+		if [ "$HAS_WEB_UNIT" = 1 ]; then
+			sudo systemctl start malina-web 2>/dev/null || true
+		fi
+		sudo systemctl start malina-bms-reader 2>/dev/null || true
+		exit 1
+	fi
+	if [ "$HAS_WEB_UNIT" = 1 ]; then
+		sudo systemctl start malina-web 2>/dev/null || true
+	fi
+fi
+
+# Если purge ранее оставил runtime-mask, обычный deploy не должен «успешно»
+# пропустить запуск reader: требуем повторить purge.
+if [ "${PURGE:-0}" != 1 ] && has bmsr; then
+	case "$(systemctl is-enabled malina-bms-reader 2>/dev/null || true)" in
+		masked|masked-runtime)
+			echo "deploy: malina-bms-reader masked после purge; повторите --purge-bms-history" >&2
+			exit 1
+			;;
+		disabled)
+			echo "deploy: malina-bms-reader disabled; если это после purge — повторите --purge-bms-history, иначе включите unit" >&2
+			exit 1
+			;;
+	esac
+fi
+
 # перезапуск выбранных сервисов (malina-netd не трогаем: сетевой стек)
 RESTART=""
-has web  && RESTART="$RESTART malina-web"
-has map  && RESTART="$RESTART map-reader"
-has kes  && RESTART="$RESTART kes-reader"
-has bmsr && RESTART="$RESTART malina-bms-reader"
-has bmsp && RESTART="$RESTART malina-bms-proxy"
-has tsdb && RESTART="$RESTART malina-tsdb malina-tsdb-raw"
+add_restart() { case " $RESTART " in *" $1 "*) ;; *) RESTART="${RESTART:+$RESTART }$1" ;; esac; }
+# purge: tsdb/raw первыми, затем web, bms-reader — позже в общем порядке.
+if [ "$PURGE" = 1 ]; then
+	add_restart malina-tsdb
+	add_restart malina-tsdb-raw
+	if [ "$HAS_WEB_UNIT" = 1 ]; then add_restart malina-web; fi
+fi
+has web  && add_restart malina-web
+has map  && add_restart map-reader
+has kes  && add_restart kes-reader
+has bmsr && add_restart malina-bms-reader
+has bmsp && add_restart malina-bms-proxy
+has tsdb && { add_restart malina-tsdb; add_restart malina-tsdb-raw; }
 for u in $RESTART; do
 	[ -n "$u" ] || continue
 	sudo systemctl restart "$u" 2>/dev/null && echo "restart $u" || echo "skip   $u (не активен/не установлен)"
@@ -274,6 +439,26 @@ for u in $RESTART; do
 	[ -n "$u" ] || continue
 	printf '%-18s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
 done
+if [ "$PURGE" = 1 ]; then
+	for u in $RESTART; do
+		[ -n "$u" ] || continue
+		if ! systemctl is-active --quiet "$u"; then
+			echo "purge: $u не активен после рестарта" >&2
+			exit 1
+		fi
+	done
+	# После успешного purge/повтора reader должен остаться в автозапуске.
+	if ! sudo "$RWCTL" run systemctl enable malina-bms-reader; then
+		echo "purge: enable не удался; reader активен сейчас, но не в автозапуске; повторите --purge-bms-history" >&2
+		exit 1
+	fi
+fi
+# ID = BASE: реестр bms-ident.json больше не используется — убираем мусор после
+# рестарта, чтобы старый reader не успел создать его снова. Только если
+# обновляем bms-reader или это first-run.
+if [ "${FIRST:-0}" = 1 ] || has bmsr; then
+	sudo rm -f /malina/etc/malina/bms-ident.json 2>/dev/null || true
+fi
 has web && curl -s -o /dev/null -w "login http=%{http_code}\n" http://127.0.0.1/login || true
 
 if [ "${FIRST:-0}" = 1 ]; then

@@ -59,7 +59,7 @@ type Options struct {
 	TsdbRawSock         string        // сокет raw-tsdb
 	TsdbSock            string        // сокет avg-tsdb
 	TsdbAvgRoot         string        // каталог avg-tsdb (перечисление устройств)
-	BmsConfigPath       string        // путь к bms-gateways.json (BMS-Receiver)
+	BmsConfigPath       string        // путь к bms-reader.json (BMS-Receiver)
 	BmsControlSock      string        // control-сокет bms-reader (reload)
 	BmsProxyConfigPath  string        // путь к bms-proxy.json (BMS-Proxy)
 	BmsProxyControlSock string        // control-сокет bms-proxy (reload)

@@ -535,12 +535,12 @@ func (s *Server) handleBmsPage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	id, _ := strconv.Atoi(r.URL.Query().Get("id"))
-	sn := r.URL.Query().Get("serial")
-	b, ok := findBms(id)
-	if !ok && sn != "" {
-		b, ok = findBmsBySerial(sn)
-	}
+	q := r.URL.Query()
+	// Слот доверяем только при наличии валидных id+gen. Иначе — только serial:
+	// отсутствующий/битый gen не должен открывать текущий слот 0.
+	id, gen, slotValid := parseBmsSlotQuery(q.Get("id"), q.Get("gen"))
+	sn := q.Get("serial")
+	b, ok := findBmsForPage(id, gen, sn, slotValid)
 	data := s.baseData(r)
 	data["Active"] = "bms"
 	if ok {
@@ -550,8 +550,9 @@ func (s *Server) handleBmsPage(w http.ResponseWriter, r *http.Request) {
 		data["BmsType"] = b.TypeName
 		data["Title"] = b.MenuLabel(s.trFor(r))
 	} else if sn != "" {
-		// Устройство ещё не обнаружено — страница-ожидание; клиент повторит поиск.
-		data["ID"] = id
+		// Устройство ещё не обнаружено — страница-ожидание; клиент повторит поиск
+		// по serial. Не подставляем id устаревшего слота.
+		data["ID"] = 0
 		data["Gen"] = 0
 		data["Serial"] = sn
 		data["Title"] = bmsTypeLabel(0, s.trFor(r)) + " · " + sn
@@ -562,7 +563,32 @@ func (s *Server) handleBmsPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, http.StatusOK, "bms", data)
 }
 
-// findBmsBySerial — поиск записи списка BMS по серийнику (при устаревшем id/gen).
+// parseBmsSlotQuery разбирает id/gen и решает, можно ли доверять слоту.
+// gen=0/отсутствующий/битый id или gen — слот невалиден.
+func parseBmsSlotQuery(idStr, genStr string) (id int, gen uint64, valid bool) {
+	id, idErr := strconv.Atoi(idStr)
+	gen, genErr := strconv.ParseUint(genStr, 10, 64)
+	valid = idStr != "" && idErr == nil && genStr != "" && genErr == nil && gen != 0
+	return id, gen, valid
+}
+
+// findBmsForPage выбирает запись для страницы /bms. Основной путь — валидные
+// id+gen; если gen не совпал, слот переиспользован. Тогда пробуем serial
+// (первое совпадение; при дублях BASE это принято) либо отдаём «ожидание».
+func findBmsForPage(id int, gen uint64, serial string, slotValid bool) (BmsInfo, bool) {
+	if slotValid {
+		if b, ok := findBms(id); ok && b.Gen == gen {
+			return b, true
+		}
+	}
+	if serial != "" {
+		return findBmsBySerial(serial)
+	}
+	return BmsInfo{}, false
+}
+
+// findBmsBySerial — поиск записи списка BMS по логическому ID (BASE) при
+// устаревшем id/gen. При дублях BASE возвращает первую запись — это принято.
 func findBmsBySerial(serial string) (BmsInfo, bool) {
 	if serial == "" {
 		return BmsInfo{}, false

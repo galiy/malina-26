@@ -104,8 +104,8 @@ mux.HandleFunc("/api/mainlist", s.handleAPIMainList)
 - `maps` / `kes` / `bms` — **всегда** массивы (могут быть `[]`). `null` не отдаём.
   Инициализация: `resp := mainlistResp{Maps: []mainMapTile{}, Kes: []mainKesTile{}, Bms: []mainBmsTile{}}`
   (`mainlist.go`).
-- `bms` — плитки BMS (`mainBmsTile`): `id`, `gen`, `title` (серийник/ID),
-  `serial` (наш ID), `mode` (режим), `soc`, `pack` (U/I/P/T), `online`; источник — `loadBmsList()` +
+- `bms` — плитки BMS (`mainBmsTile`): `id`, `gen`, `title` (логический ID/BASE),
+  `serial` (ID = BASE; может совпадать у нескольких BMS), `mode` (режим), `soc`, `pack` (U/I/P/T), `online`; источник — `loadBmsList()` +
   `bmsRawPayload()` + `bmscontract.Decode` (`bms.go`).
 
 ### 3.4 Логика сборки (сервер, псевдокод)
@@ -197,8 +197,8 @@ type mainlistResp struct {
 }
 ```
 
-> `mainBmsTile` (см. `bms.go`): `id`, `gen`, `title` (серийник/ID),
-> `serial` (наш ID), `mode` (локализованный режим), `soc *float64`, `pack mainBlock`
+> `mainBmsTile` (см. `bms.go`): `id`, `gen`, `title` (логический ID/BASE),
+> `serial` (ID = BASE; может совпадать у нескольких BMS), `mode` (локализованный режим), `soc *float64`, `pack mainBlock`
 > (U/I/P/T), `online`.
 
 > `Soc` у обеих плиток — `*float64` (nullable). У КЭС `Soc=nil` при отсутствии

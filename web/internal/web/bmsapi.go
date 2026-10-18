@@ -24,9 +24,9 @@ func (s *Server) handleAPIBmsDevices(w http.ResponseWriter, r *http.Request) {
 	}
 	type device struct {
 		Type         string `json:"type"`
-		ID           int    `json:"id"`
-		Gen          uint64 `json:"gen"`
-		Serial       string `json:"serial"`
+		ID           int    `json:"id"`     // индекс слота
+		Gen          uint64 `json:"gen"`    // поколение слота
+		Serial       string `json:"serial"` // логический ID (BASE), может совпадать
 		Base         string `json:"base"`
 		BmsType      string `json:"bms_type"`
 		BmsTypeLabel string `json:"bms_type_label"` // локализованная метка типа
@@ -59,7 +59,12 @@ func (s *Server) handleAPIBmsRaw(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	id, _ := strconv.Atoi(r.URL.Query().Get("id"))
+	idStr := r.URL.Query().Get("id")
+	id, err := strconv.Atoi(idStr)
+	if idStr == "" || err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	g, err := strconv.ParseUint(r.URL.Query().Get("gen"), 10, 64)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

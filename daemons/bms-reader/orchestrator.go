@@ -61,11 +61,10 @@ type devEvent struct {
 type orchestrator struct {
 	seg  *bmsShm
 	sink *stat.Sink
-	idr  *idRegistry
 
 	mu        sync.Mutex
 	states    map[string]*srcState
-	devByID   map[string]*device
+	devBySlot map[int]*device // активные устройства: слот уникален, ID — нет
 	freeSlots []int
 	backoff   map[string]*boState
 	gws       gatewaysFile
@@ -101,7 +100,9 @@ func (o *orchestrator) closeAll() {
 		sts = append(sts, st)
 	}
 	o.states = make(map[string]*srcState)
-	o.devByID = make(map[string]*device)
+	o.devBySlot = make(map[int]*device)
+	// freeSlots не пересобираем: после closeAll оркестратор не переиспользуется
+	// (main создаёт новый), а сброс мог бы раздать слоты «зависшему» run().
 	o.mu.Unlock()
 	for _, st := range sts {
 		if st.src != nil && st.src.tr != nil {
@@ -110,14 +111,14 @@ func (o *orchestrator) closeAll() {
 	}
 }
 
-func newOrchestrator(seg *bmsShm, sink *stat.Sink, idr *idRegistry, stop chan struct{}) *orchestrator {
+func newOrchestrator(seg *bmsShm, sink *stat.Sink, stop chan struct{}) *orchestrator {
 	free := make([]int, 0, maxDevices)
 	for i := 0; i < maxDevices; i++ {
 		free = append(free, i)
 	}
 	return &orchestrator{
-		seg: seg, sink: sink, idr: idr,
-		states: make(map[string]*srcState), devByID: make(map[string]*device),
+		seg: seg, sink: sink,
+		states: make(map[string]*srcState), devBySlot: make(map[int]*device),
 		freeSlots: free, backoff: make(map[string]*boState),
 		events: make(chan devEvent, 64), stop: stop,
 	}
@@ -175,7 +176,7 @@ func (o *orchestrator) run() {
 func (o *orchestrator) scanInterval() time.Duration {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if len(o.devByID) > 0 {
+	if len(o.devBySlot) > 0 {
 		return scanActive
 	}
 	return scanIdle
@@ -309,6 +310,20 @@ func (o *orchestrator) addSource(src *source, bt bmsType, slots []probeSlot) {
 			added = true
 		}
 	}
+	if !ok && !added {
+		// Свободных слотов нет: не оставляем пустое состояние без пулера,
+		// иначе hasState навсегда блокирует повторный scan, а rescan добавит
+		// слоты в состояние, которое никто не опрашивает.
+		st.mu.Lock()
+		empty := len(st.devs) == 0
+		st.mu.Unlock()
+		o.mu.Lock()
+		if cur, exists := o.states[src.desc]; exists && cur == st && empty {
+			delete(o.states, src.desc)
+		}
+		o.mu.Unlock()
+		return
+	}
 	if added && !ok {
 		o.pollWg.Add(1)
 		go func() {
@@ -323,31 +338,40 @@ func (o *orchestrator) addSource(src *source, bt bmsType, slots []probeSlot) {
 }
 
 // addSlot занимает слот и регистрирует устройство.
+//
+// Ключ активных устройств — слот, а не ID: несколько BMS могут иметь одинаковый
+// BASE/ID (принятый риск), но слот всегда уникален.
 func (o *orchestrator) addSlot(st *srcState, s probeSlot) bool {
+	st.mu.Lock()
+	for _, x := range st.devs {
+		if x.addr == s.Addr {
+			st.mu.Unlock()
+			return false
+		}
+	}
+	st.mu.Unlock()
+
 	o.mu.Lock()
 	if len(o.freeSlots) == 0 {
 		o.mu.Unlock()
 		return false
 	}
-	for _, x := range o.devByID {
-		if x.st == st && x.addr == s.Addr {
-			o.mu.Unlock()
-			return false
-		}
-	}
 	slot := o.freeSlots[0]
 	o.freeSlots = o.freeSlots[1:]
 	o.mu.Unlock()
 
-	id, _ := o.idr.assignID(s.Base, st.src.desc)
+	id, truncated := sanitizeBaseN(s.Base)
+	if truncated {
+		lx.Warnf("bms-reader: BASE > %d байт, обрезан: %q", idMax, s.Base)
+	}
 	gen := o.nextGen()
 	o.seg.allocSlot(slot, gen)
-	d := &device{id: id, base: s.Base, addr: s.Addr, slot: slot, gen: gen, st: st}
+	d := &device{id: id, base: id, addr: s.Addr, slot: slot, gen: gen, st: st}
 	st.mu.Lock()
 	st.devs = append(st.devs, d)
 	st.mu.Unlock()
 	o.mu.Lock()
-	o.devByID[id] = d
+	o.devBySlot[slot] = d
 	o.mu.Unlock()
 	lx.Infof("bms-reader: + %s (%s) на %s addr=%d slot=%d", id, st.bt.Name(), st.src.desc, s.Addr, slot)
 	return true
@@ -397,7 +421,18 @@ func (o *orchestrator) sourcePoller(st *srcState) {
 				continue
 			}
 			d.miss = 0
-			o.seg.publishTelemetry(d.slot, bmscontract.Encode(&tel))
+			// Устройство могло быть потеряно, пока шёл опрос. Не публикуем
+			// телеметрию и heartbeat для уже освобождённого/переиспользованного
+			// слота: старый пулер не должен писать в чужой слот.
+			if !o.isActive(d) {
+				continue
+			}
+			if !o.seg.publishTelemetry(d.slot, d.gen, bmscontract.Encode(&tel)) {
+				continue
+			}
+			if !o.isActive(d) {
+				continue
+			}
 			publishRaw(o.sink, d.id, tel)
 			select {
 			case o.events <- devEvent{d: d}:
@@ -429,7 +464,17 @@ func (o *orchestrator) handleEvent(ev devEvent) {
 		o.loseDevice(ev.d)
 		return
 	}
+	if !o.isActive(ev.d) {
+		return // heartbeat от устройства, уже потерянного/переиспользованного
+	}
 	o.publishList(ev.d, 1)
+}
+
+// isActive — устройство всё ещё владеет своим слотом.
+func (o *orchestrator) isActive(d *device) bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.devBySlot[d.slot] == d
 }
 
 func (o *orchestrator) publishList(d *device, state uint8) {
@@ -445,11 +490,12 @@ func (o *orchestrator) publishList(d *device, state uint8) {
 // иначе слот попадёт в freeSlots дважды.
 func (o *orchestrator) loseDevice(d *device) {
 	o.mu.Lock()
-	if _, ok := o.devByID[d.id]; !ok {
+	cur, ok := o.devBySlot[d.slot]
+	if !ok || cur != d {
 		o.mu.Unlock()
 		return
 	}
-	delete(o.devByID, d.id)
+	delete(o.devBySlot, d.slot)
 	o.freeSlots = append(o.freeSlots, d.slot)
 	o.mu.Unlock()
 	o.seg.release(d.slot) // снятие записи из списка (arch §12/§13)

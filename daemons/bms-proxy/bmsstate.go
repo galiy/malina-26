@@ -24,7 +24,7 @@ const (
 
 // Смещения записи списка (200 Б) — daemons/bms-reader/shm.go encodeItem.
 const (
-	itOffID       = 16  // string[50] — наш ID / серийник BASE-NNNNN
+	itOffID       = 16  // string[50] — логический ID (BASE)
 	itOffBase     = 66  // string[50]
 	itOffSource   = 116 // string[64]
 	itOffTypeID   = 180 // u8

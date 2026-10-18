@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"sync"
 
 	"github.com/galiy/malina-26/daemons/lib/shm"
 )
@@ -46,18 +47,27 @@ type listRecord struct {
 }
 
 // bmsShm — обёртка сегмента: параллельные списки Item (метаданные) и Slot (107 Б).
-type bmsShm struct{ seg *shm.Segment }
+//
+// mu сериализует писателей (оркестратор и пулеры) на время alloc/release/publish.
+// Без него старый пулер мог записать payload в слот, уже выданный новому
+// устройству (проверка gen + запись должны быть атомарны относительно allocSlot).
+type bmsShm struct {
+	seg *shm.Segment
+	mu  sync.Mutex
+}
 
 // releaseAll — освободить все занятые слоты (пустой список/пустой shm); нужно
 // при переходе демона в «спящий» режим (enabled=false). Индекс слота — позиция в
 // сегменте, а НЕ порядок в компактном срезе list().
 func (s *bmsShm) releaseAll() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for i := 0; i < s.seg.Slots(); i++ {
 		b := s.seg.Item(i).Bytes()
 		if binary.LittleEndian.Uint32(b[0:4]) == 0 {
 			continue
 		}
-		s.release(i)
+		s.releaseLocked(i)
 	}
 }
 
@@ -73,6 +83,8 @@ func (s *bmsShm) Close() { s.seg.Close() }
 
 // list возвращает занятые записи списка (state != 0).
 func (s *bmsShm) list() []listRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	out := make([]listRecord, 0, s.seg.Slots())
 	for i := 0; i < s.seg.Slots(); i++ {
 		b := s.seg.Item(i).Bytes()
@@ -86,24 +98,42 @@ func (s *bmsShm) list() []listRecord {
 
 // publishList публикует запись списка в item i.
 func (s *bmsShm) publishList(i int, r listRecord) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.seg.Item(i).Publish(func(b []byte) { encodeItem(b, r) })
 }
 
 // allocSlot готовит item+slot i под устройство (gen).
 func (s *bmsShm) allocSlot(i int, gen uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.seg.Item(i).Clear()
 	s.seg.Slot(i).PrepareGen(gen)
 }
 
-// publishTelemetry публикует 107-Б payload в slot i.
-func (s *bmsShm) publishTelemetry(i int, payload []byte) {
+// publishTelemetry публикует 107-Б payload в slot i, только если gen совпал.
+// Возвращает false, если слот уже переиспользован другим устройством.
+func (s *bmsShm) publishTelemetry(i int, gen uint64, payload []byte) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.seg.Slot(i).Gen() != gen {
+		return false
+	}
 	s.seg.Slot(i).Publish(payload)
+	return true
 }
 
 // release освобождает item и slot i.
 func (s *bmsShm) release(i int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.releaseLocked(i)
+}
+
+func (s *bmsShm) releaseLocked(i int) {
 	s.seg.Item(i).Release()
 	s.seg.Slot(i).Release()
+	s.seg.Slot(i).ClearGen()
 }
 
 // bmsLayout — раскладка сегмента: список + до maxDevices телеметрийных слотов.
