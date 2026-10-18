@@ -125,6 +125,28 @@ func TestHelpHandler(t *testing.T) {
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("asset без входа: got %d, want 404", rr.Code)
 	}
+	// Локализованный документ и fallback на русский.
+	if err := os.MkdirAll(filepath.Join(dir, "i18n", "en", "pages"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "i18n", "en", "pages", "info.md"), []byte("# Test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/help?doc=pages/info", nil).WithContext(ctx)
+	req.AddCookie(&http.Cookie{Name: langCookie, Value: "en"})
+	rr = httptest.NewRecorder()
+	s.handleHelp(rr, req)
+	if !strings.Contains(rr.Body.String(), "<h1>Test</h1>") {
+		t.Errorf("нет английской версии: %s", rr.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/help?doc=pages/info", nil).WithContext(ctx)
+	req.AddCookie(&http.Cookie{Name: langCookie, Value: "de"})
+	rr = httptest.NewRecorder()
+	s.handleHelp(rr, req)
+	if !strings.Contains(rr.Body.String(), "<h1>Тест</h1>") {
+		t.Errorf("нет fallback на русский")
+	}
+
 	rr = httptest.NewRecorder()
 	s.handleHelpAsset(rr, httptest.NewRequest(http.MethodGet, "/help-asset?path=img/pages/x.png", nil).WithContext(ctx))
 	if rr.Code != http.StatusOK {

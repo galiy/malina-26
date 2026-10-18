@@ -21,8 +21,11 @@ import (
 const langCookie = "lang"
 
 func (s *Server) lang(r *http.Request) string {
-	if c, err := r.Cookie(langCookie); err == nil && s.bundle.Has(c.Value) {
+	if c, err := r.Cookie(langCookie); err == nil && (s.bundle == nil || s.bundle.Has(c.Value)) {
 		return c.Value
+	}
+	if s.bundle == nil {
+		return "ru"
 	}
 	return s.initial
 }

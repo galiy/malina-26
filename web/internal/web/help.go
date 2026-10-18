@@ -37,6 +37,8 @@ var helpDocs = map[string]string{
 	"pages/stats-tables":    "pages/stats-tables.md",
 	"pages/master":          "pages/master.md",
 	"pages/master-settings": "pages/master-settings.md",
+	"api-legacy":            "api-legacy.md",
+	"api-native":            "api-native.md",
 }
 
 // helpDocFor возвращает ключ документа для страницы. Пусто — справки нет.
@@ -106,16 +108,28 @@ func (s *Server) handleHelp(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	lang := s.lang(r)
 	data, err := os.ReadFile(filepath.Join(s.helpDir, filepath.FromSlash(rel)))
+	if lang != "ru" {
+		if tr, err2 := os.ReadFile(filepath.Join(s.helpDir, "i18n", lang, filepath.FromSlash(rel))); err2 == nil {
+			data, err = tr, nil
+		}
+	}
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	body := renderHelpMarkdown(string(data), key)
+	title := "Помощь"
+	if s.bundle != nil {
+		if t := s.tr(lang, "help.title"); t != "" {
+			title = t
+		}
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(helpPageHTML(body)))
+	_, _ = w.Write([]byte(helpPageHTML(body, lang, title)))
 }
 
 // handleHelpAsset отдаёт картинки из каталога manuals/img (если появятся).
@@ -138,13 +152,14 @@ func (s *Server) handleHelpAsset(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, full)
 }
 
-func helpPageHTML(body string) string {
+func helpPageHTML(body, lang, title string) string {
+	title = html.EscapeString(title)
 	return `<!doctype html>
-<html lang="ru">
+<html lang="` + html.EscapeString(lang) + `">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Помощь</title>
+<title>` + title + `</title>
 <style>
 :root { color-scheme: light; }
 * { box-sizing: border-box; }

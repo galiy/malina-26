@@ -233,8 +233,8 @@ API-хендлеров (например, `/api/mainlist`) отвечает «г
 {
   "id": 0,
   "gen": 1792312123347,
-  "title": "AntBMS-DSP-160",
-  "serial": "AntBMS-DSP-160",
+  "title": "AntBMS-DSP-000",
+  "serial": "AntBMS-DSP-000",
   "mode": "Discharge",
   "soc": 25,
   "pack": {
@@ -331,8 +331,8 @@ API-хендлеров (например, `/api/mainlist`) отвечает «г
     "type": "bms",
     "id": 0,
     "gen": 1792312123347,
-    "serial": "AntBMS-DSP-160",
-    "base": "AntBMS-DSP-160",
+    "serial": "AntBMS-DSP-000",
+    "base": "AntBMS-DSP-000",
     "bms_type": "AntBMS-DSP",
     "bms_type_label": "ANT BMS",
     "source": "serial:/dev/ttyUSB0",
