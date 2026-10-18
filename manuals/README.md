@@ -54,3 +54,10 @@
 - [Мастер-узел](pages/master.md) — обзор нескольких устройств «Малина».
 - [Настройка мастер-узла](pages/master-settings.md) — список узлов.
 - [Вход](pages/login.md) — вход в веб-админку и выбор языка.
+
+## API для разработчиков
+
+- [Native API: lists, raws](api-native.md) — токены, списки устройств, сырые
+  контракты, запись и статистика.
+- [Legacy API](api-legacy.md) — весь старый API: `read_json.php`, `read_memory.php`,
+  `check_daemons.php`, `read_bms.php`, `read_sec.php`, запись через `write_*`.
