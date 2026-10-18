@@ -21,10 +21,11 @@
 добавление/удаление/перестановка ячеек затрагивает ВСЕ места ниже; map-reader и
 web выкладывать **одним релизом** (иначе payload разойдётся с декодером).
 
-- `daemons/map-reader`: `cells.go` (`documentedCells`, `regionsT`, `regionsPHD`,
-  `regionsFor`), `contract.go` (`buildContract`, `DecodePayload`,
+- `daemons/map-reader`: `cells.go` (`documentedCells`, `mapRegions`),
+  `contract.go` (`buildContract`, `DecodePayload`,
   `readRegionsNative/Modbus`, `contractVersion`), `mapdata.go` (структура `MapData`
-  — порядок полей = id), `poll.go`/`write.go` (`buildContract`, `regionsFor`).
+  — порядок полей = id), `poll.go` (`buildContract`, `mapRegions`),
+  `write.go` (`buildContract`).
 - `web` (Go): `internal/web/mapfields.go` (`mapFieldNames`), `internal/web/legacy_cells.go`
   (`mapCellAddr`, `mapCellSize`), `internal/web/legacy.go` (`legacyFieldIdx`, `buildMem`),
   `internal/web/legacyapi.go` (размеры по `mapFieldNames`), `internal/web/maps.go`
@@ -381,7 +382,7 @@ Go-классы — `maplist.go`: `MapListItem`, `MapList`, `DecodeList(data)`.
 
 Канонический список всех полей контракта (`id` = позиция в массиве `documentedCells`) —
 в коде: **`daemons/map-reader/cells.go`**. Там же адрес и размер каждой ячейки;
-регионы чтения — `regionsT`/`regionsPHD`/`regionsFor` (там же). Адреса и регионы по
+регионы чтения — единый `mapRegions` для всех моделей (там же). Адреса и регионы по
 памяти МАП — `docs/map-memory.md`; детальные описания и признак модели
 («Титанатор») — в исходном документе `protocol_MAP_cells_2026_07_15`.
 

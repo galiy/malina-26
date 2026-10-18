@@ -183,11 +183,13 @@ func ParseWriteReply(raw []byte) error {
 
 // Read выполняет чтение страницы по протоколу Микроарт с побайтовым эхо.
 //
-// Экономия ioctl: буфер НЕ сбрасывается перед каждым запросом (на исправной
-// линии устройство отвечает только по запросу и замолкает после '\n', лишнего
-// в буфере нет). Сброс (Flush) делается ТОЛЬКО на пути ошибки — чтобы
-// рассинхронизированная/загрязнённая линия не «залипала» к следующему запросу.
+// По умолчанию буфер перед кадром не сбрасывается (на исправной линии
+// устройство отвечает только по запросу и замолкает после '\n'). Для моделей,
+// у которых после ответа остаются лишние байты, порт включает предкадровый
+// Flush (см. transport.Port.SetFlushBeforeFrame). На пути ошибки Flush
+// выполняется всегда.
 func Read(p *transport.Port, addr uint16, page byte, echoTO, respTO time.Duration) ([]byte, error) {
+	p.FlushBeforeFrame()
 	req := BuildReadRequest(addr, page)
 	for _, b := range req {
 		if err := p.WriteAll([]byte{b}); err != nil {
@@ -216,6 +218,7 @@ func Read(p *transport.Port, addr uint16, page byte, echoTO, respTO time.Duratio
 // Write выполняет запись страницы по протоколу Микроарт с побайтовым эхо.
 // (О сбросе буфера — см. Read.)
 func Write(p *transport.Port, addr uint16, data []byte, echoTO, respTO time.Duration) error {
+	p.FlushBeforeFrame()
 	req := BuildWriteRequest(addr, data)
 	for _, b := range req {
 		if err := p.WriteAll([]byte{b}); err != nil {

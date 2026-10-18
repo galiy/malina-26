@@ -10,6 +10,20 @@
   var last = null;                   // {from,to,dir} для повторного запроса (чекбокс)
   var LIMIT = 200;
 
+  // «Показать неактуальные устройства»: по умолчанию в закладках только устройства
+  // с обновлением телеметрии за последний час. Флаг — в памяти модуля (не персистентен
+  // при перезагрузке страницы, сохраняется при переходах между закладками).
+  var showStale = false;
+  var STALE_MS = 3600 * 1000;
+  var staleCb = document.getElementById("stats-show-stale");
+
+  function visibleDevs() {
+    var now = Date.now();
+    return devs.filter(function (d) {
+      return showStale || (d.last && (now - d.last) < STALE_MS);
+    });
+  }
+
   var tabsEl = document.getElementById("stats-tabs");
   var extEl = document.getElementById("stats-extremes");
   var tableEl = document.getElementById("stats-table");
@@ -79,7 +93,7 @@
 
   function renderTabs() {
     tabsEl.innerHTML = "";
-    devs.forEach(function (d, i) {
+    visibleDevs().forEach(function (d, i) {
       var b = document.createElement("button");
       b.className = "stats-tab" + (active === d ? " active" : "");
       b.textContent = d.type + " " + d.id; // заголовок в одну строку
@@ -207,7 +221,10 @@
   }
 
   function select(i) {
-    active = devs[i];
+    var vis = visibleDevs();
+    if (i < 0 || i >= vis.length) { i = 0; }
+    active = vis[i];
+    if (!active) return;
     active.ex = active.ex || {};
     renderTabs();
     refreshExtremes();
@@ -251,10 +268,18 @@
   var detailCb = document.getElementById("stats-detail");
   if (detailCb) detailCb.onchange = function () { if (last) query(last.from, last.to, last.dir); };
 
+  // «Показать неактуальные устройства»: перерисовка закладок. Если активное
+  // устройство оказалось скрыто фильтром — выбираем первое видимое.
+  if (staleCb) staleCb.onchange = function () {
+    showStale = staleCb.checked;
+    select(visibleDevs().indexOf(active));
+  };
+
   api("/api/stats/devices").then(function (j) {
     devs = j.devices || [];
     renderTabs();
-    if (devs.length) select(0);
+    var vis = visibleDevs();
+    if (vis.length) select(0);
     else tableEl.innerHTML = '<div class="muted">' + T("stats.no_data") + "</div>";
   }).catch(function () {
     tableEl.innerHTML = '<div class="muted">' + T("stats.no_data") + "</div>";

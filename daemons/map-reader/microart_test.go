@@ -103,3 +103,26 @@ func TestParseCellsModelSerial(t *testing.T) {
 		t.Fatalf("доминатор: info=%+v err=%v, ждали модель D", info, err)
 	}
 }
+
+// TestRegionsCoverDocumentedCells — единая раскладка обязана покрывать все
+// документированные ячейки (включая T-only) и не превышать лимит кадра.
+func TestRegionsCoverDocumentedCells(t *testing.T) {
+	for _, r := range mapRegions {
+		if n := r[1] - r[0] + 1; n > 256 {
+			t.Errorf("регион %#x..%#x: %d Б > лимита 256", r[0], r[1], n)
+		}
+	}
+	for _, c := range documentedCells {
+		last := c.Addr + c.Size - 1
+		covered := false
+		for _, r := range mapRegions {
+			if c.Addr >= r[0] && last <= r[1] {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			t.Errorf("ячейка %s (%#x..%#x) не покрыта mapRegions", c.Tag, c.Addr, last)
+		}
+	}
+}

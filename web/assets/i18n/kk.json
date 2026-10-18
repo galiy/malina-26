@@ -248,6 +248,7 @@
   "stats.raw": "Толық",
   "stats.avg": "Орташаланған",
   "stats.detail": "Толық деректер",
+  "stats.show_stale": "Белсенді емес құрылғыларды көрсету",
   "app.tab_title": "Микроарт-Малина",
   "net.choose_mode": "Режимді таңдаңыз",
   "map.disable_update": "Жаңартуды өшіру",

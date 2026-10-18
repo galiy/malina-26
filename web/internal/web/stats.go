@@ -27,6 +27,20 @@ const followWindowMs int64 = int64(5 * time.Minute / time.Millisecond)
 type statsDev struct {
 	Type string `json:"type"`
 	ID   string `json:"id"`
+	// Last — время последнего обновления телеметрии (мс), max(raw,avg) из памяти
+	// tsdb. 0 — данных нет (busy/ненайден). Клиент фильтрует неактуальные по нему.
+	Last int64 `json:"last,omitempty"`
+}
+
+// lastSeen — максимальное max-время устройства из обеих tsdb; false — данных нет.
+func lastSeen(rawCli, avgCli *tsdbclient.Client, typ, id string) (int64, bool) {
+	last := int64(0)
+	for _, cli := range []*tsdbclient.Client{rawCli, avgCli} {
+		if _, mx, ok, err := cli.Extremes(typ, id); err == nil && ok && mx > last {
+			last = mx
+		}
+	}
+	return last, last > 0
 }
 
 // statsCol — колонка таблицы (поле контракта + человеческая единица для UI).
@@ -154,6 +168,15 @@ func (s *Server) statsDevices() []statsDev {
 	sort.Strings(orph)
 	for _, id := range orph {
 		add("mbms", id)
+	}
+	// Время последнего обновления телеметрии — для фильтра «неактуальных»
+	// на клиенте (показ только устройств с обновлением в последний час).
+	rawCli := tsdbclient.New(s.opts.TsdbRawSock)
+	avgCli := tsdbclient.New(s.opts.TsdbSock)
+	for i := range order {
+		if last, ok := lastSeen(rawCli, avgCli, order[i].Type, order[i].ID); ok {
+			order[i].Last = last
+		}
 	}
 	return order
 }

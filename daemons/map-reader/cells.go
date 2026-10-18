@@ -417,28 +417,10 @@ var documentedCells = []cellDef{
 	{"LCD_ReleII_Gist", 0x127, 1},
 }
 
-var regionsT = [][2]int{
-	{0x000, 0x08A},
-	{0x0D7, 0x107},
-	{0x120, 0x127},
-	{0x138, 0x1CF},
-	{0x400, 0x45F},
-	{0x480, 0x4FF},
-	{0x516, 0x52E},
-	{0x530, 0x56F},
-	{0x582, 0x59F},
-	{0x5DC, 0x5DD},
-	{0x718, 0x71B},
-}
-
-var regionsPHD = [][2]int{
+// mapRegions — единая раскладка чтения для всех моделей МАП (P/H/D/T).
+// Диапазоны T целиком вкладываются в эти регионы, поэтому отдельная
+// T-раскладка не нужна: читаются те же 5 кадров, лишние адреса — «дыры».
+var mapRegions = [][2]int{
 	{0x000, 0x08A}, {0x0D7, 0x1CF}, {0x400, 0x4FF},
 	{0x516, 0x5DD}, {0x718, 0x71B},
-}
-
-func regionsFor(model string) [][2]int {
-	if model == "T" {
-		return regionsT
-	}
-	return regionsPHD
 }

@@ -248,6 +248,7 @@
   "stats.raw": "Detailed",
   "stats.avg": "Averaged",
   "stats.detail": "Detailed data",
+  "stats.show_stale": "Show inactive devices",
   "app.tab_title": "Microart-Malina",
   "net.choose_mode": "Choose mode",
   "map.disable_update": "Disable update",

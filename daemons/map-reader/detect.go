@@ -25,6 +25,9 @@ type detected struct {
 // Приоритет: native Микроарт, затем Modbus (с перебором unit=1,2,3…).
 // Порт остаётся настроен на найденную скорость.
 func probePort(p *Port, cfg *config) (string, int, []detected, error) {
+	// Проба всегда идёт в текущем (лёгком) режиме: предкадровый Flush
+	// выбирается по модели уже после обнаружения.
+	p.SetFlushBeforeFrame(false)
 	start := time.Now()
 
 	for _, baud := range speeds {

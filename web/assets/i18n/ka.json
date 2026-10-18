@@ -248,6 +248,7 @@
   "stats.raw": "დეტალური",
   "stats.avg": "საშუალო",
   "stats.detail": "დეტალური მონაცემები",
+  "stats.show_stale": "არააქტიური მოწყობილობების ჩვენება",
   "app.tab_title": "MicroArt-Malina",
   "net.choose_mode": "აირჩიეთ რეჟიმი",
   "map.disable_update": "განახლების გამორთვა",

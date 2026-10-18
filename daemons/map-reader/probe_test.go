@@ -176,6 +176,44 @@ func TestProbeMicroartForeign(t *testing.T) {
 // TestProbeMicroartRetryAfterDeviceError — первый кадр после смены бода МАП
 // отклоняет ошибкой e04 (эффект «мусора» на чужой скорости). Проба должна
 // повторить запрос на той же скорости и найти устройство (см. probeMicroart).
+// TestFlushBeforeFrame — предкадровый Flush должен очищать накопленный мусор,
+// иначе первый байт побайтового эха берётся из буфера и кадр сбивается.
+func TestFlushBeforeFrame(t *testing.T) {
+	master, slave := openPTYPair(t)
+	defer master.Close()
+	p, err := transport.Open(slave)
+	if err != nil {
+		t.Fatalf("open slave: %v", err)
+	}
+	defer p.Close()
+
+	if _, err := master.Write([]byte("garbage")); err != nil {
+		t.Fatalf("write master: %v", err)
+	}
+	out, _ := p.ReadUntilNL(time.Now().Add(200*time.Millisecond), 64, false)
+	if len(out) == 0 {
+		t.Fatal("без Flush мусор не прочитан — тест не воспроизводит условие")
+	}
+
+	master2, slave2 := openPTYPair(t)
+	defer master2.Close()
+	p2, err := transport.Open(slave2)
+	if err != nil {
+		t.Fatalf("open slave2: %v", err)
+	}
+	defer p2.Close()
+
+	p2.SetFlushBeforeFrame(true)
+	if _, err := master2.Write([]byte("garbage")); err != nil {
+		t.Fatalf("write master2: %v", err)
+	}
+	p2.FlushBeforeFrame()
+	out, _ = p2.ReadUntilNL(time.Now().Add(150*time.Millisecond), 64, false)
+	if len(out) != 0 {
+		t.Fatalf("после Flush прочитано %q, ждали пусто", out)
+	}
+}
+
 func TestProbeMicroartRetryAfterDeviceError(t *testing.T) {
 	f := &fakeMap{failFirst: true}
 	f.eep[0x0000] = 3 // _Device = МАП

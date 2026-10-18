@@ -248,6 +248,7 @@
   "stats.raw": "Дэталёвыя",
   "stats.avg": "Усярэдненыя",
   "stats.detail": "Дэталёвыя даныя",
+  "stats.show_stale": "Паказаць неактуальныя прылады",
   "app.tab_title": "Мікраарт-Маліна",
   "net.choose_mode": "Выберыце рэжым",
   "map.disable_update": "Адключыць абнаўленне",

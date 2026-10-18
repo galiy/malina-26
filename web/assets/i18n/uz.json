@@ -248,6 +248,7 @@
   "stats.raw": "Batafsil",
   "stats.avg": "O'rtachalashtirilgan",
   "stats.detail": "Batafsil ma'lumotlar",
+  "stats.show_stale": "Faol bo'lmagan qurilmalarni ko'rsatish",
   "app.tab_title": "Mikroart-Malina",
   "net.choose_mode": "Режимни танланг",
   "map.disable_update": "Янгиланишни ўчириш",

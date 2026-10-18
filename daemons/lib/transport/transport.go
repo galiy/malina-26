@@ -76,6 +76,21 @@ type Port struct {
 	path string
 	fd   int
 	baud int
+
+	// flushBeforeFrame — сбрасывать буфер перед каждым кадром MicroArt.
+	// Включается для моделей, у которых после ответа остаются лишние байты:
+	// без сброса побайтовое эхо сбивается и кадр приходится повторять.
+	flushBeforeFrame bool
+}
+
+// SetFlushBeforeFrame включает/выключает сброс буфера перед кадром.
+func (p *Port) SetFlushBeforeFrame(v bool) { p.flushBeforeFrame = v }
+
+// FlushBeforeFrame сбрасывает буфер, если режим включён.
+func (p *Port) FlushBeforeFrame() {
+	if p.flushBeforeFrame {
+		p.Flush()
+	}
 }
 
 // ErrBusy — порт занят другим держателем (flock LOCK_EX не взяли).

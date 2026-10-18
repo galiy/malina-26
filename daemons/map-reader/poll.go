@@ -22,6 +22,11 @@ const pollReopenAfter = 6
 func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, proto string, baud int, entries []*MapEntry, cmds chan *writeJob) {
 	defer func() { p.Close() }() // closure: закроет актуальный p (см. переоткрытие)
 
+	// Титанатор оставляет лишние байты после ответа: без сброса буфера перед
+	// кадром побайтовое эхо сбивается и кадр приходится повторять.
+	flushBeforeFrame := len(entries) > 0 && entries[0].info.Model == "T"
+	p.SetFlushBeforeFrame(flushBeforeFrame)
+
 	t := time.NewTicker(cfg.pollInterval)
 	defer t.Stop()
 	miss := make(map[*MapEntry]int, len(entries))
@@ -94,6 +99,7 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 							np.Close()
 							lx.Warnf("poll %s unit=%d: установка скорости %d после переоткрытия не удалась: %v", port, e.unit, baud, serr)
 						} else {
+							np.SetFlushBeforeFrame(flushBeforeFrame)
 							p = np
 							reopened = true
 							lx.Infof("poll %s unit=%d: переоткрыт порт после %d промахов (причина: %v)", port, e.unit, miss[e], firstErr)
@@ -133,7 +139,7 @@ func pollPort(cfg *config, reg *Registry, stop chan struct{}, p *Port, port, pro
 
 // readEntry читает все документированные области одного МАП по его протоколу.
 func readEntry(cfg *config, p *Port, proto string, e *MapEntry) (memMap, error) {
-	regions := regionsFor(e.info.Model)
+	regions := mapRegions
 	if proto == "modbus" {
 		return readRegionsModbus(p, e.unit, regions, cfg.probeResponse)
 	}

@@ -150,6 +150,10 @@ func probeMicroartOnce(p *Port, baud int, echoTO, respTO time.Duration) (*mapInf
 	if dev[0] != device.TypeMap {
 		return nil, errForeignMicroArt
 	}
+	// Между шагами пробы сбрасываем возможный хвост после короткого ответа,
+	// чтобы полная сигнатура не словила мусор. Проба всегда идёт в текущем
+	// (лёгком) режиме — предкадровый Flush включается уже после неё.
+	p.Flush()
 	full, err := microartRead(p, 0x0000, sigPage, echoTO, respTO)
 	if err != nil {
 		return nil, err

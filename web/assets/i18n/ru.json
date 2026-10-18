@@ -248,6 +248,7 @@
   "stats.raw": "Детальные",
   "stats.avg": "Усреднённые",
   "stats.detail": "Детальные данные",
+  "stats.show_stale": "Показать неактуальные устройства",
   "app.tab_title": "Микроарт-Малина",
   "net.choose_mode": "Выберите режим",
   "map.disable_update": "Отключить обновление",

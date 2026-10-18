@@ -243,10 +243,22 @@
 
   // --- Устройства/закладки ---
   var devs = [], active = null;
+  // «Показать неактуальные устройства»: по умолчанию в закладках только устройства
+  // с обновлением телеметрии за последний час. Флаг — в памяти модуля (не персистентен
+  // при перезагрузке страницы, сохраняется при переходах между закладками).
+  var showStale = false;
+  var STALE_MS = 3600 * 1000;
+  var staleCb = document.getElementById("stats-show-stale");
   function devLabel(d) { return (d.type === "map" ? "МАП" : d.type === "kes" ? "КЭС" : "BMS") + " " + d.id; }
+  function visibleDevs() {
+    var now = Date.now();
+    return devs.filter(function (d) {
+      return showStale || (d.last && (now - d.last) < STALE_MS);
+    });
+  }
   function renderTabs() {
     tabsEl.innerHTML = "";
-    devs.forEach(function (d, i) {
+    visibleDevs().forEach(function (d, i) {
       var b = document.createElement("button");
       b.className = "stats-tab" + (active === d ? " active" : "");
       b.textContent = devLabel(d);
@@ -265,7 +277,8 @@
     }
     return api("/api/stats/devices").then(function (j) {
       devs = (j && j.devices) || [];
-      if (devs.length) { active = devs[0]; renderTabs(); loadCharts(); }
+      var vis = visibleDevs();
+      if (vis.length) { active = vis[0]; renderTabs(); loadCharts(); }
       else chartsEl.innerHTML = '<p class="muted">' + esc(T("stats.no_data")) + "</p>";
     }).catch(function () {});
   }
@@ -699,6 +712,16 @@
       if (followActive) followFull().catch(function () {});
     });
   }
+
+  // «Показать неактуальные устройства»: перерисовка закладок. Если активное
+  // устройство скрыто фильтром — выбираем первое видимое, иначе остаёмся на нём.
+  if (staleCb) staleCb.addEventListener("change", function () {
+    showStale = staleCb.checked;
+    var vis = visibleDevs();
+    if (active && vis.indexOf(active) >= 0) { renderTabs(); }
+    else if (vis.length) { active = vis[0]; renderTabs(); loadCharts(); }
+    else { active = null; renderTabs(); chartsEl.innerHTML = '<p class="muted">' + esc(T("stats.no_data")) + "</p>"; }
+  });
 
   loadDevs();
 })();

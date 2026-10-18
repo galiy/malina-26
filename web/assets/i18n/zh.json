@@ -248,6 +248,7 @@
   "stats.raw": "详细",
   "stats.avg": "平均",
   "stats.detail": "详细数据",
+  "stats.show_stale": "显示不活跃设备",
   "app.tab_title": "Microart-Malina",
   "net.choose_mode": "选择模式",
   "map.disable_update": "停用更新",
