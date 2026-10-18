@@ -15,6 +15,7 @@
 //	FTBytes(3): varint len | байты
 //	FTU8(4):    1 байт
 //	FTU16(5):   2 байта LE
+//	FTI16(6):   2 байта LE, signed
 //
 // Зарегистрированные схемы (docs/stat.md):
 //   - map  v1      — 26 колонок (регистры МАП, u8/u16);
@@ -22,7 +23,8 @@
 //   - kes  v1      — 15 колонок (ячейки КЭС, u8/u16);
 //   - mbms v1..v32 — BMS отдельным рядом: Vn = n ячеек × (u16+u8+u8),
 //     device_id — тот же, что у МАП;
-//   - bms  v1      — 58 колонок контракта BMS-Receiver (описание — docs/bms-reader.md §1).
+//   - bms  v1      — 58 колонок контракта BMS-Receiver (описание — docs/bms-reader.md §1);
+//   - grid v1      — 24 поля (50 Б payload) сетевых инверторов (docs/grid-reader.md).
 package tscontract
 
 import (
@@ -44,6 +46,7 @@ const (
 	FTBytes FieldType = 3
 	FTU8    FieldType = 4
 	FTU16   FieldType = 5
+	FTI16   FieldType = 6
 )
 
 // Field — поле схемы контракта.
@@ -143,6 +146,8 @@ func AppendValue(b []byte, t FieldType, v Value) []byte {
 		return append(b, byte(v.Int))
 	case FTU16:
 		return binary.LittleEndian.AppendUint16(b, uint16(v.Int))
+	case FTI16:
+		return binary.LittleEndian.AppendUint16(b, uint16(int16(v.Int)))
 	case FTFloat:
 		var u [8]byte
 		binary.LittleEndian.PutUint64(u[:], math.Float64bits(v.Float))
@@ -178,6 +183,12 @@ func DecodeValue(b []byte, t FieldType) (Value, []byte, error) {
 			return v, nil, errShort
 		}
 		v.Int = int64(binary.LittleEndian.Uint16(b[:2]))
+		return v, b[2:], nil
+	case FTI16:
+		if len(b) < 2 {
+			return v, nil, errShort
+		}
+		v.Int = int64(int16(binary.LittleEndian.Uint16(b[:2])))
 		return v, b[2:], nil
 	case FTFloat:
 		if len(b) < 8 {
@@ -381,6 +392,35 @@ func mbmsFields(n int) []Field {
 	return f
 }
 
+// gridV1Fields — контракт сетевых инверторов (docs/grid-reader.md):
+// 15 телеметрических полей, 2 температуры, состояние и 6 слов аварий.
+var gridV1Fields = []Field{
+	{1, FTU16, "pv1_voltage"},
+	{2, FTU16, "pv1_current"},
+	{3, FTU16, "pv1_power"},
+	{4, FTU16, "pv2_voltage"},
+	{5, FTU16, "pv2_current"},
+	{6, FTU16, "pv2_power"},
+	{7, FTU16, "ac_active_power"},
+	{8, FTI16, "ac_reactive_power"},
+	{9, FTU16, "grid_frequency"},
+	{10, FTU16, "l1_voltage"},
+	{11, FTU16, "l1_current"},
+	{12, FTU16, "l2_voltage"},
+	{13, FTU16, "l2_current"},
+	{14, FTU16, "l3_voltage"},
+	{15, FTU16, "l3_current"},
+	{16, FTI16, "temperature_1"},
+	{17, FTI16, "temperature_2"},
+	{18, FTU8, "inverter_status"},
+	{19, FTU16, "alarm_w0"},
+	{20, FTU16, "alarm_w1"},
+	{21, FTU16, "alarm_w2"},
+	{22, FTU16, "alarm_w3"},
+	{23, FTU16, "alarm_w4"},
+	{24, FTU16, "alarm_w5"},
+}
+
 const mbmsMaxCells = 32
 
 // NewDefaultRegistry — реестр со всеми зарегистрированными схемами (docs/stat.md).
@@ -391,6 +431,7 @@ func NewDefaultRegistry() *Registry {
 	r.Register("map", newSchemaContract(3, mapV3Fields))
 	r.Register("kes", newSchemaContract(1, kesV1Fields))
 	r.Register("bms", newSchemaContract(1, bmsV1Fields))
+	r.Register("grid", newSchemaContract(1, gridV1Fields))
 	for n := 1; n <= mbmsMaxCells; n++ {
 		r.Register("mbms", newSchemaContract(uint16(n), mbmsFields(n)))
 	}

@@ -12,12 +12,19 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 	"time"
 )
 
 // Serve обслуживает Unix-сокет по пути sockPath до сигнала stop.
 // handler(reqLine) возвращает значение ответа; nil — «bad request».
 func Serve(sockPath string, stop <-chan struct{}, handler func(reqLine []byte) any) {
+	ServeWG(sockPath, stop, nil, handler)
+}
+
+// ServeWG — Serve с учётом in-flight обработчиков: wg.Add(1) выполняется до
+// запуска горутины, wg.Done — после обработки. nil — без учёта.
+func ServeWG(sockPath string, stop <-chan struct{}, wg *sync.WaitGroup, handler func(reqLine []byte) any) {
 	_ = os.Remove(sockPath)
 	ln, err := net.Listen("unix", sockPath)
 	if err != nil {
@@ -46,8 +53,14 @@ func Serve(sockPath string, stop <-chan struct{}, handler func(reqLine []byte) a
 		}
 		select {
 		case sem <- struct{}{}:
+			if wg != nil {
+				wg.Add(1)
+			}
 			go func() {
 				defer func() { <-sem }()
+				if wg != nil {
+					defer wg.Done()
+				}
 				handle(conn, handler)
 			}()
 		default:

@@ -40,6 +40,12 @@
           <a href="/bms/settings" class="{{if eq .Active "bms_settings"}}active{{end}}">{{index .T "menu.bms_settings"}}</a>
         </div>
       </div>
+      <div class="navitem dropdown {{if eq .Active "grid_settings"}}active{{end}}">
+        <span class="navlink">{{index .T "menu.grid"}} <span class="caret">▾</span></span>
+        <div class="dropdown-menu">
+          <a href="/grid/settings" class="{{if eq .Active "grid_settings"}}active{{end}}">{{index .T "menu.grid_settings"}}</a>
+        </div>
+      </div>
       <div class="navitem dropdown {{if eq .Active "stats"}}active{{end}}">
         <span class="navlink">{{index .T "menu.stats"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">

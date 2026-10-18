@@ -1377,3 +1377,12 @@ tr.ctl-changed { background: #fff8e1; }
   .sysforms .nettable input:not([type="checkbox"]),
   .sysforms .nettable select { width: 100%; max-width: 100%; }
 }
+
+/* grid-reader: статус и инструкция на странице «Сетевые» */
+.grid-help { line-height: 1.5; }
+.grid-help p { margin: 0 0 8px; }
+.grid-status { font-weight: 600; }
+.grid-status.st1 { color: #1a7f37; }
+.grid-status.st2 { color: #9a6700; }
+.grid-status.st3, .grid-status.st4 { color: #b42318; }
+.grid-status.st5, .grid-status.st6, .grid-status.st7 { color: #b42318; }

@@ -103,6 +103,7 @@ make -C web arm
 make -C daemons/map-reader arm
 make -C daemons/kes-reader arm
 make -C daemons/bms-reader arm
+make -C daemons/grid-reader arm
 make -C daemons/bms-proxy arm
 make -C daemons/tsdb arm
 ```
@@ -173,6 +174,7 @@ install -D -o root -g root -m0755 web/dist/malina-netd-armv7          $ROOT/usr/
 install -D -o root -g root -m0755 daemons/map-reader/dist/map-reader-armv7  $ROOT/usr/local/sbin/map-reader
 install -D -o root -g root -m0755 daemons/kes-reader/dist/kes-reader-armv7  $ROOT/usr/local/sbin/kes-reader
 install -D -o root -g root -m0755 daemons/bms-reader/dist/bms-reader-armv7  $ROOT/usr/local/sbin/bms-reader
+install -D -o root -g root -m0755 daemons/grid-reader/dist/grid-reader-armv7 $ROOT/usr/local/sbin/grid-reader
 install -D -o root -g root -m0755 daemons/bms-proxy/dist/bms-proxy-armv7  $ROOT/usr/local/sbin/bms-proxy
 install -D -o root -g root -m0755 daemons/tsdb/dist/malina-tsdb-armv7        $ROOT/usr/local/sbin/malina-tsdb
 ```
@@ -202,7 +204,7 @@ rm -f $ROOT/tmp/malina-pamcheck $ROOT/usr/bin/qemu-arm-static
 
 **2.12. Юниты offline (включение/маски/отключение):**
 ```
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-grid-reader; do
   systemctl --root=$ROOT enable "$u" || true
 done
 # mask/disable по system/provision/{masked,disabled}.txt
@@ -391,13 +393,15 @@ runtime-маска снимается, но reader остаётся disabled; п
 `systemctl unmask malina-bms-reader`. Это **разрушающая** операция.
 
 `deploy/deploy.sh --only s1,s2,…` — **точечное обновление**: выкладывает и перезапускает
-**только выбранные сервисы** (`web,netd,map,kes,bmsr,bmsp,tsdb`). **Без `--only`/`--all` обычный
+**только выбранные сервисы** (`web,netd,map,kes,bmsr,bmsp,tsdb,grid`). Для
+`grid` конфиг ставится только при явном `--grid-config PATH`; без флага файл на
+устройстве не меняется. **Без `--only`/`--all` обычный
 деплой не запускается** (правило: на `.68` — только изменённые сервисы); `--all` — весь
 скрипт; `netd` никогда не перезапускается; при `--first-run` `--only` игнорируется.
 Полный деплой выкладывает бинарники (`malina-web`,
-`malina-netd`, `map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`) + веб-ассеты и обновляет
+`malina-netd`, `map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`, `grid-reader`) + веб-ассеты и обновляет
 **unit-файлы сервисов** — `malina-tsdb`, `malina-tsdb-raw`, `map-reader`,
-`kes-reader`, `malina-bms-reader`, `malina-bms-proxy` (коротким rw-окном под `/etc`).
+`kes-reader`, `malina-bms-reader`, `malina-bms-proxy`, `malina-grid-reader` (коротким rw-окном под `/etc`).
 При `--only map,kes,bmsr,bmsp` также устанавливается
 `system/udev/60-usb-serial-latency.rules` и его значение применяется к существующим
 `/sys/bus/usb-serial/devices/ttyUSB*/latency_timer` (если атрибут есть).

@@ -206,6 +206,25 @@ func fieldConvFor(typ string, _ uint16, id uint16) (fieldConv, bool) {
 		default:
 			return passConv("А"), true // Q_Cell — ток ячейки, А (u8, как есть)
 		}
+	case "grid":
+		// Контракт grid v1 (docs/grid-reader.md): значения в единицах контракта,
+		// пересчёт в физические единицы — на отображении.
+		switch id {
+		case 1, 4, 10, 12, 14:
+			return linConv("В", 0.1, 0), true
+		case 2, 5, 11, 13, 15:
+			return linConv("А", 0.01, 0), true
+		case 3, 6, 7:
+			return linConv("Вт", 10, 0), true
+		case 8:
+			return linConv("вар", 10, 0), true
+		case 9:
+			return linConv("Гц", 0.01, 0), true
+		case 16, 17:
+			return linConv("°C", 0.1, 0), true
+		default:
+			return rawConv(), true // статус и слова аварий
+		}
 	case "bms":
 		// Контракт bms v1 (docs/bms-reader.md §1): значения в единицах контракта
 		// (мВ, 0.01 А, 0.1 %, …), приведение/масштаб — на клиенте (stats_charts.js div).

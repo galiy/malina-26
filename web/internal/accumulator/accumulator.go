@@ -122,6 +122,17 @@ var bmsRules = func() map[uint16]rule {
 	return m
 }()
 
+// gridRules — правила контракта grid v1 (docs/grid-reader.md): состояние
+// инвертора — последнее, слова аварий/предупреждений — побитовое ИЛИ,
+// остальные измеряемые поля — среднее.
+var gridRules = func() map[uint16]rule {
+	m := map[uint16]rule{18: rLast}
+	for id := uint16(19); id <= 24; id++ {
+		m[id] = rOr
+	}
+	return m
+}()
+
 func rulesFor(typ string) map[uint16]rule {
 	switch typ {
 	case "map":
@@ -130,6 +141,8 @@ func rulesFor(typ string) map[uint16]rule {
 		return kesRules
 	case "bms":
 		return bmsRules
+	case "grid":
+		return gridRules
 	default: // mbms и прочие — всё измеряемое
 		return nil
 	}

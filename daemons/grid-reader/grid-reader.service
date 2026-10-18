@@ -1,0 +1,19 @@
+[Unit]
+Description=Malina grid inverter reader (Deye/Sofar poll daemon)
+After=local-fs.target rsyslog.service network.target
+Wants=rsyslog.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/malina/usr/local/sbin/grid-reader
+RuntimeDirectory=malina-grid
+RuntimeDirectoryMode=0755
+Nice=-5
+CPUWeight=1000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

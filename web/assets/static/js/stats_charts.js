@@ -60,6 +60,27 @@
         { n: "stats.f.kes.TempBat", k: "8" },
         { n: "stats.f.kes.TempInt", k: "12" }] }
     ],
+    grid: [
+      { t: "grid.chart.pv", lines: [
+        { n: "PV1", k: "1" },
+        { n: "PV2", k: "4" }] },
+      { t: "grid.chart.pv_i", lines: [
+        { n: "PV1", k: "2" },
+        { n: "PV2", k: "5" }] },
+      { t: "grid.chart.power", lines: [
+        { n: "PV1", k: "3" },
+        { n: "PV2", k: "6" },
+        { n: "AC", k: "7" }] },
+      { t: "grid.chart.reactive", lines: [{ n: "Q", k: "8" }] },
+      { t: "grid.chart.ac", lines: [
+        { n: "L1", k: "10" },
+        { n: "L2", k: "12" },
+        { n: "L3", k: "14" }] },
+      { t: "grid.chart.freq", lines: [{ n: "F", k: "9" }] },
+      { t: "grid.chart.temp", lines: [
+        { n: "T1", k: "16" },
+        { n: "T2", k: "17" }] }
+    ],
     mbms: [
       { t: "stats.c.cells_v", cellGroup: 1 },
       { t: "stats.c.spread", lines: [{ n: "stats.n.spread", calc: "spread" }] },
@@ -252,7 +273,10 @@
   var showStale = false;
   var STALE_MS = 3600 * 1000;
   var staleCb = document.getElementById("stats-show-stale");
-  function devLabel(d) { return (d.type === "map" ? "МАП" : d.type === "kes" ? "КЭС" : "BMS") + " " + d.id; }
+  function devLabel(d) {
+    var name = d.type === "map" ? "МАП" : d.type === "kes" ? "КЭС" : d.type === "grid" ? T("grid.device") : "BMS";
+    return name + " " + d.id;
+  }
   function visibleDevs() {
     var now = Date.now();
     return devs.filter(function (d) {

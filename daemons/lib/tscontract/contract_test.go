@@ -97,3 +97,39 @@ func TestProject(t *testing.T) {
 		t.Fatal("неизвестный тип должен отвергаться")
 	}
 }
+
+// TestGridV1 — контракт grid v1: 24 поля, все присутствуют, payload 50 Б,
+// знаковые поля i16 кодируются/декодируются.
+func TestGridV1(t *testing.T) {
+	reg := NewDefaultRegistry()
+	c, ok := reg.Get("grid", 1)
+	if !ok || len(c.Fields()) != 24 {
+		t.Fatalf("grid v1: ok=%v fields=%d", ok, len(c.Fields()))
+	}
+	vals := make([]Value, 0, 24)
+	for id := uint16(1); id <= 24; id++ {
+		v := Value{ID: id, Type: FTU16, Int: int64(id)}
+		if id == 8 || id == 16 || id == 17 {
+			v.Type = FTI16
+			v.Int = -int64(id)
+		}
+		if id == 18 {
+			v.Type = FTU8
+		}
+		vals = append(vals, v)
+	}
+	p, err := c.Encode(vals)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p) != 50 {
+		t.Fatalf("payload: %d Б, ожидалось 50", len(p))
+	}
+	got, err := c.Decode(p)
+	if err != nil || len(got) != 24 {
+		t.Fatalf("decode: n=%d err=%v", len(got), err)
+	}
+	if got[7].Int != -8 || got[15].Int != -16 || got[17].Int != 18 {
+		t.Fatalf("signed/status: %+v %+v %+v", got[7], got[15], got[17])
+	}
+}

@@ -11,7 +11,7 @@
 #                legacy; корень монтируется rw на весь блок. (Всегда полное;
 #                `--only` при `--first-run` игнорируется.)
 #   --only LIST  точечное обновление ТОЛЬКО выбранных сервисов (через запятую):
-#                web,netd,map,kes,bmsr,bmsp,tsdb.
+#                web,netd,map,kes,bmsr,bmsp,tsdb,grid.
 #   --purge-bms-history
 #                одноразовая миграция: остановить bms-reader/tsdb, удалить ВСЮ
 #                историю bms (старые ID BASE-NNNNN) в avg и raw, затем поднять
@@ -25,15 +25,17 @@
 #
 # Пароль SSH: env MALINA_PASS или строка MALINA_PASS=... в .kilo/secrets (не коммитится).
 #
+#   --grid-config PATH — установить конфиг grid-reader (иначе не трогаем).
 # Сервисы: malina-web, malina-netd, map-reader, kes-reader, bms-reader (bmsr),
-# bms-proxy (bmsp), malina-tsdb (avg), malina-tsdb-raw. `malina-netd` НЕ перезапускается.
+# bms-proxy (bmsp), malina-tsdb (avg), malina-tsdb-raw, grid-reader (grid).
+# `malina-netd` НЕ перезапускается.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-ALL_SERVICES="web netd map kes bmsr bmsp tsdb"
+ALL_SERVICES="web netd map kes bmsr bmsp tsdb grid"
 
-BUILD=0 FIRST=0 ALL=0 PURGE=0 HOSTARG="" ONLY=""
+BUILD=0 FIRST=0 ALL=0 PURGE=0 HOSTARG="" ONLY="" GRIDCONFIG=""
 parse() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -43,6 +45,8 @@ parse() {
       --all) ALL=1 ;;
       --only) shift; ONLY="${1:-}" ;;
       --only=*) ONLY="${1#--only=}" ;;
+      --grid-config) shift; GRIDCONFIG="${1:-}" ;;
+      --grid-config=*) GRIDCONFIG="${1#--grid-config=}" ;;
       -*) echo "неизвестный флаг: $1" >&2; exit 2 ;;
       *) [ -z "$HOSTARG" ] && HOSTARG="$1" ;;
     esac
@@ -106,6 +110,7 @@ if [ "$BUILD" = 1 ]; then
   has bmsr && make -C "$ROOT/daemons/bms-reader" arm
   has bmsp && make -C "$ROOT/daemons/bms-proxy" arm
   has tsdb && make -C "$ROOT/daemons/tsdb" arm
+  has grid && make -C "$ROOT/daemons/grid-reader" arm
 fi
 # netd собирается вместе с web (один модуль web)
 if [ "$BUILD" = 1 ] && has netd && ! has web; then
@@ -119,6 +124,7 @@ BIN_KES="$ROOT/daemons/kes-reader/dist/kes-reader-armv7"
 BIN_BMSR="$ROOT/daemons/bms-reader/dist/bms-reader-armv7"
 BIN_BMSP="$ROOT/daemons/bms-proxy/dist/bms-proxy-armv7"
 BIN_TSDB="$ROOT/daemons/tsdb/dist/malina-tsdb-armv7"
+BIN_GRID="$ROOT/daemons/grid-reader/dist/grid-reader-armv7"
 
 req() { [ -f "$1" ] || { echo "нет $1 (собери: $0 --build --only $2)"; exit 1; }; }
 has web  && { req "$BIN_WEB"  web; }
@@ -128,6 +134,7 @@ has kes  && { req "$BIN_KES"  kes; }
 has bmsr && { req "$BIN_BMSR" bmsr; }
 has bmsp && { req "$BIN_BMSP" bmsp; }
 has tsdb && { req "$BIN_TSDB" tsdb; }
+has grid && { req "$BIN_GRID" grid; }
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
@@ -138,6 +145,7 @@ has kes  && cp "$BIN_KES"  "$STAGE/kes-reader"
 has bmsr && cp "$BIN_BMSR" "$STAGE/bms-reader"
 has bmsp && cp "$BIN_BMSP" "$STAGE/bms-proxy"
 has tsdb && cp "$BIN_TSDB" "$STAGE/malina-tsdb"
+has grid && cp "$BIN_GRID" "$STAGE/grid-reader"
 
 # --- сборка списка файлов для передачи ---
 FILES=( )
@@ -148,6 +156,7 @@ has kes  && FILES+=( "$STAGE/kes-reader" )
 has bmsr && FILES+=( "$STAGE/bms-reader" )
 has bmsp && FILES+=( "$STAGE/bms-proxy" )
 has tsdb && FILES+=( "$STAGE/malina-tsdb" )
+has grid && FILES+=( "$STAGE/grid-reader" )
 
 if [ "$FIRST" = 1 ]; then
   # --- первичное развёртывание (полное) ---
@@ -163,12 +172,18 @@ else
     tar -C "$ROOT/web/assets" -cf "$STAGE/assets.tar" templates static i18n
     FILES+=( "$STAGE/assets.tar" )
   fi
+  if has grid && [ -n "$GRIDCONFIG" ]; then
+    [ -f "$GRIDCONFIG" ] || { echo "нет --grid-config файла: $GRIDCONFIG" >&2; exit 1; }
+    cp "$GRIDCONFIG" "$STAGE/grid-reader.json"
+    FILES+=( "$STAGE/grid-reader.json" )
+  fi
   UNITS=( )
   has map  && { cp "$ROOT/daemons/map-reader/map-reader.service"     "$STAGE/map-reader.service";        UNITS+=( "$STAGE/map-reader.service" ); }
   has kes  && { cp "$ROOT/daemons/kes-reader/kes-reader.service"     "$STAGE/kes-reader.service";        UNITS+=( "$STAGE/kes-reader.service" ); }
   has bmsr && { cp "$ROOT/daemons/bms-reader/bms-reader.service"     "$STAGE/malina-bms-reader.service"; UNITS+=( "$STAGE/malina-bms-reader.service" ); }
   has bmsp && { cp "$ROOT/daemons/bms-proxy/bms-proxy.service"       "$STAGE/malina-bms-proxy.service"; UNITS+=( "$STAGE/malina-bms-proxy.service" ); }
   has tsdb && { cp "$ROOT/daemons/tsdb/tsdb.service"                 "$STAGE/malina-tsdb.service";       UNITS+=( "$STAGE/malina-tsdb.service" ); }
+  has grid && { cp "$ROOT/daemons/grid-reader/grid-reader.service"   "$STAGE/malina-grid-reader.service"; UNITS+=( "$STAGE/malina-grid-reader.service" ); }
   has tsdb && { cp "$ROOT/system/systemd/malina-tsdb-raw.service"    "$STAGE/malina-tsdb-raw.service";   UNITS+=( "$STAGE/malina-tsdb-raw.service" ); }
   # udev latency_timer — при обновлении любого serial-демона
   if has map || has kes || has bmsr || has bmsp; then
@@ -203,6 +218,8 @@ echo "install: $(ls -1 2>/dev/null | tr '\n' ' ')"
 [ -f bms-reader ]    && { sudo install -D -m0755 bms-reader    /malina/usr/local/sbin/bms-reader;  echo "inst bms-reader"; }
 [ -f bms-proxy ]     && { sudo install -D -m0755 bms-proxy     /malina/usr/local/sbin/bms-proxy;   echo "inst bms-proxy"; }
 [ -f malina-tsdb ]   && { sudo install -D -m0755 malina-tsdb   /malina/usr/local/sbin/malina-tsdb; echo "inst malina-tsdb"; }
+[ -f grid-reader ]   && { sudo install -D -m0755 grid-reader   /malina/usr/local/sbin/grid-reader; echo "inst grid-reader"; }
+[ -f grid-reader.json ] && { sudo install -D -m0600 grid-reader.json /malina/etc/malina/grid-reader.json; echo "inst grid-reader.json"; }
 
 # веб-ассеты — только если уезжали (обновление web/first-run)
 if [ -f assets.tar ] || [ "${FIRST:-0}" = 1 ]; then
@@ -256,12 +273,12 @@ if [ "${FIRST:-0}" = 1 ]; then
 	sudo mkdir -p /run/malina-ts-raw
 	sudo mountpoint -q /run/malina-ts-raw || sudo mount /run/malina-ts-raw 2>/dev/null || true
 
-	for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-tsdb malina-tsdb-raw; do
+	for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-tsdb malina-tsdb-raw malina-grid-reader; do
 		sudo systemctl enable "$u" >/dev/null 2>&1 || true
 	done
 else
 	# --- точечное обновление: unit-файлы выбранных сервисов (rw-окно под /etc) ---
-	if [ -f malina-tsdb.service ] || [ -f malina-tsdb-raw.service ] || [ -f map-reader.service ] || [ -f kes-reader.service ] || [ -f malina-bms-reader.service ] || [ -f malina-bms-proxy.service ] || [ -f 60-usb-serial-latency.rules ]; then
+	if [ -f malina-tsdb.service ] || [ -f malina-tsdb-raw.service ] || [ -f map-reader.service ] || [ -f kes-reader.service ] || [ -f malina-bms-reader.service ] || [ -f malina-bms-proxy.service ] || [ -f malina-grid-reader.service ] || [ -f 60-usb-serial-latency.rules ]; then
 		sudo mount -o remount,rw /
 		[ -f malina-tsdb.service ]       && sudo install -m0644 malina-tsdb.service       /etc/systemd/system/malina-tsdb.service
 		[ -f malina-tsdb-raw.service ]   && sudo install -m0644 malina-tsdb-raw.service   /etc/systemd/system/malina-tsdb-raw.service
@@ -269,6 +286,7 @@ else
 		[ -f kes-reader.service ]        && sudo install -m0644 kes-reader.service        /etc/systemd/system/kes-reader.service
 		[ -f malina-bms-reader.service ] && sudo install -m0644 malina-bms-reader.service /etc/systemd/system/malina-bms-reader.service
 		[ -f malina-bms-proxy.service ]  && sudo install -m0644 malina-bms-proxy.service  /etc/systemd/system/malina-bms-proxy.service
+		[ -f malina-grid-reader.service ] && sudo install -m0644 malina-grid-reader.service /etc/systemd/system/malina-grid-reader.service
 		[ -f 60-usb-serial-latency.rules ] && sudo install -m0644 60-usb-serial-latency.rules /etc/udev/rules.d/60-usb-serial-latency.rules
 		sudo systemctl daemon-reload
 		sync
@@ -451,6 +469,7 @@ has kes  && add_restart kes-reader
 has bmsr && add_restart malina-bms-reader
 has bmsp && add_restart malina-bms-proxy
 has tsdb && { add_restart malina-tsdb; add_restart malina-tsdb-raw; }
+has grid && add_restart malina-grid-reader
 for u in $RESTART; do
 	[ -n "$u" ] || continue
 	sudo systemctl restart "$u" 2>/dev/null && echo "restart $u" || echo "skip   $u (не активен/не установлен)"

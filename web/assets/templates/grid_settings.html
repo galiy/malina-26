@@ -1,0 +1,105 @@
+{{define "content"}}
+{{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
+{{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
+
+<div class="page-head page-head-left">
+  <h1>{{index .T "grid.title"}}</h1>
+</div>
+
+<section class="card" id="gridStatusCard">
+  <h2>{{index .T "grid.status_title"}}</h2>
+  <p class="muted">{{index .T "grid.status_hint"}}</p>
+  <table class="nettable">
+    <thead><tr>
+      <th>{{index .T "grid.col_id"}}</th>
+      <th>{{index .T "grid.col_name"}}</th>
+      <th>{{index .T "grid.col_serial"}}</th>
+      <th>{{index .T "grid.col_addr"}}</th>
+      <th>{{index .T "grid.col_kind"}}</th>
+      <th>{{index .T "grid.col_status"}}</th>
+      <th>{{index .T "grid.col_last_seen"}}</th>
+    </tr></thead>
+    <tbody id="gridStatusRows">
+      <tr><td colspan="7" class="muted">{{index .T "grid.status_empty"}}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <div class="grid-help">{{index .T "grid.instructions" | safeHTML}}</div>
+  <div class="flash warn" style="margin-top:12px">{{index .T "grid.ip_note"}}</div>
+</section>
+
+<form method="post" action="/grid/settings" id="gridForm">
+  <section class="card">
+    <table class="nettable"><tbody>
+      <tr>
+        <td><label><input type="checkbox" name="grid_enabled" {{if .Enabled}}checked{{end}}> {{index .T "grid.enabled"}}</label></td>
+        <td>{{index .T "grid.log_level"}}:
+          <select name="grid_log_level">
+            {{range .Levels}}<option value="{{.}}" {{if eq . $.Level}}selected{{end}}>{{.}}</option>{{end}}
+          </select>
+        </td>
+        <td>{{index .T "grid.period"}}:
+          <select name="grid_period">
+            {{range .Periods}}<option value="{{.}}" {{if eq . $.Period}}selected{{end}}>{{.}} {{index $.T "grid.period_s"}}</option>{{end}}
+          </select>
+        </td>
+      </tr>
+    </tbody></table>
+  </section>
+
+  <section class="card">
+    <h2>{{index .T "grid.placements"}}</h2>
+    <table class="nettable"><tbody id="gridPlacements">
+      {{range .Placements}}
+      <tr>
+        <td><input name="placement_name" value="{{.}}" maxlength="64"></td>
+        <td><button type="button" class="gp-del" title="{{index $.T "grid.del"}}" aria-label="{{index $.T "grid.del"}}">✕</button></td>
+      </tr>
+      {{end}}
+    </tbody></table>
+    <div class="head-actions end">
+      <button type="button" id="gpAdd">{{index .T "grid.add_placement"}}</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>{{index .T "grid.inverters"}}</h2>
+    <table class="nettable"><thead><tr>
+      <th>{{index .T "grid.col_name"}}</th>
+      <th>{{index .T "grid.col_ip"}}</th>
+      <th>{{index .T "grid.col_port"}}</th>
+      <th>{{index .T "grid.col_type"}}</th>
+      <th>{{index .T "grid.col_placement"}}</th>
+      <th>{{index .T "grid.col_logger_sn"}}</th>
+      <th></th>
+    </tr></thead><tbody id="gridRows">
+      {{range .Inverters}}
+      <tr>
+        <td><input name="name" value="{{.Name}}" maxlength="64"></td>
+        <td><input name="ip" value="{{.IP}}"></td>
+        <td><input name="port" type="number" min="1" max="65535" value="{{.Port}}"></td>
+        <td><select name="type">
+          <option value="deye" {{if eq .Type "deye"}}selected{{end}}>Deye</option>
+          <option value="sofar" {{if eq .Type "sofar"}}selected{{end}}>Sofar</option>
+        </select></td>
+        <td><select name="placement">
+          {{$p := .Placement}}{{range $.Placements}}<option value="{{.}}" {{if eq . $p}}selected{{end}}>{{.}}</option>{{end}}
+        </select></td>
+        <td><input name="logger_sn" value="{{.LoggerSN}}" inputmode="numeric"> <button type="button" class="gr-detect">{{index $.T "grid.detect"}}</button></td>
+        <td><button type="button" class="gr-del" title="{{index $.T "grid.del"}}" aria-label="{{index $.T "grid.del"}}">✕</button></td>
+      </tr>
+      {{end}}
+    </tbody></table>
+    <div class="head-actions end">
+      <button type="button" id="grAdd">{{index .T "grid.add"}}</button>
+      <a class="btn" href="/grid/settings">{{index .T "sys.cancel"}}</a>
+      <button type="submit">{{index .T "sys.save"}}</button>
+    </div>
+  </section>
+</form>
+
+<script>window.I18N = {{json .T}};</script>
+<script src="{{asset "grid_settings.js"}}"></script>
+{{end}}

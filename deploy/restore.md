@@ -27,7 +27,7 @@
 2. **Доводка на устройстве (`deploy/`)** — после прошивки:
    - создание раздела `/malina` (p3) и его ФС/монтирование;
    - установка артефактов по `deploy/manifest.tsv`;
-   - бинарники `malina-web`, `malina-netd`, `map/kes/bms-reader`, `bms-proxy`,
+   - бинарники `malina-web`, `malina-netd`, `map/kes/bms-reader`, `bms-proxy`, `grid-reader`,
      `malina-tsdb`, `malina-pamcheck`;
    - веб-ассеты, seed-конфиги сети, симлинки, включение юнитов.
    Кастомные артефакты (бинарники/юниты/ассеты) **в образ не запекаются** —
@@ -61,7 +61,7 @@
 
 `deploy/deploy.sh --first-run` включает только базовые: `dhclient-eth0`,
 `malina-web`, `malina-net`, `malina-net-fallback.timer`, `malina-logrotate.timer`,
-`map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`,
+`map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`, `grid-reader`,
 `malina-tsdb-raw`.
 
 Юниты режимов/сети (`malina-hostapd`, `malina-dnsmasq`, `malina-wpa`,
@@ -73,12 +73,13 @@
 ## Проверка после восстановления
 
 ```
-systemctl is-active malina-web malina-netd map-reader kes-reader bms-reader bms-proxy malina-tsdb rsyslog ssh cron
+systemctl is-active malina-web malina-netd map-reader kes-reader bms-reader bms-proxy malina-grid-reader malina-tsdb rsyslog ssh cron
 ip -br a                                   # режим AP/STA
 curl -sI http://127.0.0.1/login | head -1  # web :80
 ls -l /dev/shm/malina-map-state            # shm map-reader
 ls -l /dev/shm/malina-kes-state            # shm kes-reader
 ls -l /dev/shm/malina-bms-state            # shm bms-reader (список + телеметрия); источник bms-proxy
+ls -l /dev/shm/malina-grid-state           # shm grid-reader (список + телеметрия)
 findmnt /malina                            # rw-раздел
 ```
 

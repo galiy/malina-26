@@ -1,0 +1,10 @@
+{
+  "enabled": false,
+  "log_level": "info",
+  "poll_period": 10,
+  "placements": [
+    "Дом",
+    "Гараж"
+  ],
+  "inverters": []
+}

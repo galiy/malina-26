@@ -175,6 +175,7 @@ $SUDO install -D -o root -g root -m0755 "$SRC/daemons/kes-reader/dist/kes-reader
 $SUDO install -D -o root -g root -m0755 "$SRC/daemons/tsdb/dist/malina-tsdb-armv7" "$MALM/usr/local/sbin/malina-tsdb"
 $SUDO install -D -o root -g root -m0755 "$SRC/daemons/bms-reader/dist/bms-reader-armv7" "$MALM/usr/local/sbin/bms-reader"
 $SUDO install -D -o root -g root -m0755 "$SRC/daemons/bms-proxy/dist/bms-proxy-armv7" "$MALM/usr/local/sbin/bms-proxy"
+$SUDO install -D -o root -g root -m0755 "$SRC/daemons/grid-reader/dist/grid-reader-armv7" "$MALM/usr/local/sbin/grid-reader"
 
 # --- 2.9 веб-ассеты (на /malina) ---
 log "веб-ассеты"
@@ -210,7 +211,7 @@ fi
 
 # --- 2.12 юниты offline ---
 log "enable/mask/disable юнитов"
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-tsdb malina-tsdb-raw; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-tsdb malina-tsdb-raw malina-grid-reader; do
 	$SUDO systemctl --root="$ROOTM" enable "$u" >/dev/null 2>&1 || true
 done
 [ -f "$PROV/masked.txt" ]   && while read -r u; do [ -n "$u" ] && $SUDO systemctl --root="$ROOTM" mask "$u"    >/dev/null 2>&1 || true; done < "$PROV/masked.txt"
@@ -254,7 +255,7 @@ $SUDO mount -o ro "$(PART 2)" "$ROOTM"
 $SUDO mount -o ro "$(PART 3)" "$MALM"
 echo "[verify] /malina dir: $( [ -d "$ROOTM/malina" ] && echo ok || echo MISSING )"
 echo "[verify] fstab: malina=$(grep -c 'LABEL=malina' "$ROOTM/etc/fstab") dhcp=$(grep -c '/var/lib/dhcp' "$ROOTM/etc/fstab") nm=$(grep -c NetworkManager "$ROOTM/etc/fstab")"
-echo "[verify] /malina binaries: $(ls "$MALM/usr/local/bin" "$MALM/usr/local/sbin" 2>/dev/null | grep -cE 'malina-web|malina-netd|map-reader|kes-reader|bms-reader|bms-proxy|malina-tsdb')/7"
+echo "[verify] /malina binaries: $(ls "$MALM/usr/local/bin" "$MALM/usr/local/sbin" 2>/dev/null | grep -cE 'malina-web|malina-netd|map-reader|kes-reader|bms-reader|bms-proxy|malina-tsdb|grid-reader')/8"
 echo "[verify] rootfs /usr/local пусто: $(find "$ROOTM/usr/local/bin" "$ROOTM/usr/local/sbin" -type f 2>/dev/null | wc -l)"
 echo "[verify] assets: $(find "$MALM/usr/local/share/malina/web" -type f 2>/dev/null | wc -l)"
 $SUDO umount "$MALM" "$ROOTM"

@@ -64,6 +64,8 @@ func descKeyFor(typ string, id uint16, name string) string {
 		return "stats.f.map." + name
 	case "kes":
 		return "stats.f.kes." + name
+	case "grid":
+		return "" // описания полей grid появятся после согласования набора графиков
 	case "mbms":
 		switch id % 3 {
 		case 1:
@@ -117,7 +119,7 @@ func (s *Server) statsDevices() []statsDev {
 		order = append(order, statsDev{Type: typ, ID: id})
 	}
 
-	var maps, kess, bmss []string
+	var maps, kess, grids, bmss []string
 	for _, cli := range []*tsdbclient.Client{tsdbclient.New(s.opts.TsdbRawSock), tsdbclient.New(s.opts.TsdbSock)} {
 		devs, err := cli.List()
 		if err != nil {
@@ -133,6 +135,10 @@ func (s *Server) statsDevices() []statsDev {
 				if !containsStr(kess, d.ID) {
 					kess = append(kess, d.ID)
 				}
+			case "grid":
+				if !containsStr(grids, d.ID) {
+					grids = append(grids, d.ID)
+				}
 			case "mbms":
 				mbms[d.ID] = true
 			case "bms":
@@ -144,6 +150,7 @@ func (s *Server) statsDevices() []statsDev {
 	}
 	sort.Strings(maps)
 	sort.Strings(kess)
+	sort.Strings(grids)
 	sort.Strings(bmss)
 	usedMBMS := map[string]bool{}
 	for _, m := range maps {
@@ -155,6 +162,9 @@ func (s *Server) statsDevices() []statsDev {
 	}
 	for _, k := range kess {
 		add("kes", k)
+	}
+	for _, g := range grids {
+		add("grid", g)
 	}
 	for _, b := range bmss { // BMS-Receiver (device_type=bms), id — наш серийник/ID
 		add("bms", b)
@@ -400,7 +410,15 @@ func (s *Server) statsSeries(typ, id string, from, to int64, fields []string, so
 	// прореживания). Порог: raw 1.75 с; avg PeriodMin × 1.5 (период агрегации).
 	window := to - from
 	bucketAvg := bucketFor(window, int64(s.accPeriodMin())*60_000*3/2)
-	bucketRaw := bucketFor(window, 1750)
+	rawBucketMin := int64(1750)
+	if typ == "grid" {
+		gp := s.loadGridConfig().PollPeriod
+		if gp <= 0 {
+			gp = 10
+		}
+		rawBucketMin = int64(gp) * 1000 * 7 / 2 // 3,5 периода
+	}
+	bucketRaw := bucketFor(window, rawBucketMin)
 
 	// source: "" — сшив avg+raw; "raw" — только raw; "avg" — только avg.
 	var rowsAvg, rowsRaw []tsdbclient.Row
