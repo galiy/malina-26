@@ -8,6 +8,7 @@ import (
 
 	"github.com/galiy/malina-26/daemons/lib/bmscontract"
 	"github.com/galiy/malina-26/web/internal/mapmode"
+	"github.com/galiy/malina-26/web/internal/measure"
 )
 
 // mainlist.go — API `GET /api/mainlist`: сводка по всем подключённым устройствам
@@ -156,29 +157,23 @@ func buildMapTile(tr map[string]string, m MapInfo, f map[string]uint32) mainMapT
 	tile.ModeNum = code
 	tile.Mode = modeText(tr, code, f["StatusCh"])
 
-	// Направление заряд/разряд аккумулятора — по композитному режиму (4..9 — заряд).
-	charging := code >= 4 && code <= 9
-
 	// --- Напряжение сети/нагрузки ---
 	uinV, uinOK := voltage100From(f, "UNET")
 	uoutV, uoutOK := voltage100From(f, "UOUTmed")
 
-	// --- Ток сети ---
+	// --- Ток сети (знак по PNET_Sign_P) ---
 	iin, iinOK := gridCurrent(f)
 
-	// --- Мощность сети (после Uin/Iin, знак по PNET_Sign_P) ---
+	// --- Мощность сети: знак уже в токе ---
 	pnet, havePnet := 0.0, false
 	if uinOK && iinOK {
 		pnet = uinV * iin
-		if sign, ok := f["PNET_Sign_P"]; ok && sign == 0 {
-			pnet = -pnet
-		}
 		havePnet = true
 	}
 
-	// --- АКБ (МАП) ---
+	// --- АКБ (МАП): знак по MODE_RAM == 4 ---
 	uacc, uaccOK := batteryVoltage(f)
-	iacc, iaccOK := batteryCurrent(f, charging)
+	iacc, iaccOK := batteryCurrent(f)
 	var pbat float64
 	havePbat := uaccOK && iaccOK
 	if havePbat {
@@ -189,10 +184,10 @@ func buildMapTile(tr map[string]string, m MapInfo, f map[string]uint32) mainMapT
 		tile.Soc = &soc
 	}
 
-	// --- Нагрузка: P = Pnet − Pbat, строго после Pnet/Pbat (см. map.js) ---
+	// --- Нагрузка: Pload = Pnet + Pbat (в новых знаках) ---
 	pout, havePout := 0.0, false
 	if havePnet && havePbat {
-		pout = pnet - pbat
+		pout = measure.LoadPower(pnet, pbat)
 		havePout = true
 	}
 
@@ -258,8 +253,7 @@ func buildMapTile(tr map[string]string, m MapInfo, f map[string]uint32) mainMapT
 		tile.Load.F = mvND()
 	}
 	if havePout {
-		if uoutOK && uoutV != 0 {
-			iout := pout / uoutV
+		if iout, ok := measure.LoadCurrent(pout, uoutV); ok && uoutOK {
 			tile.Load.I = mv(iout)
 		} else {
 			tile.Load.I = mvND()
@@ -278,17 +272,26 @@ func buildMapTile(tr map[string]string, m MapInfo, f map[string]uint32) mainMapT
 	return tile
 }
 
-// gridCurrent — ток сети (INET_16_4 / (INET>=16 ? 4 : 16)).
+// gridCurrent — ток сети со знаком: INET_16_4 / (INET>=16 ? 4 : 16),
+// знак по PNET_Sign_P (1 — потребление, 0 — отдача). Без флага — нет данных.
 func gridCurrent(f map[string]uint32) (float64, bool) {
 	in16, ok := f["INET_16_4"]
 	if !ok {
 		return 0, false
 	}
+	sign, okSign := f["PNET_Sign_P"]
+	if !okSign {
+		return 0, false
+	}
+	inet, okInet := f["INET"]
+	if !okInet { // без INET неизвестен делитель (4 или 16)
+		return 0, false
+	}
 	div := 16.0
-	if inet, okInet := f["INET"]; okInet && inet >= 16 {
+	if inet >= 16 {
 		div = 4
 	}
-	return float64(in16) / div, true
+	return measure.GridCurrentSigned(float64(in16)/div, sign), true
 }
 
 // batteryVoltage — измеренное напряжение АКБ МАП (В), приоритет точного источника.
@@ -308,18 +311,17 @@ func batteryVoltage(f map[string]uint32) (float64, bool) {
 	return 0, false
 }
 
-// batteryCurrent — ток АКБ МАП (А) со знаком по заряду/разряду.
-func batteryCurrent(f map[string]uint32, charging bool) (float64, bool) {
+// batteryCurrent — ток АКБ МАП (А): заряд (MODE_RAM==4) «−», разряд «+».
+// Без MODE_RAM — нет данных.
+func batteryCurrent(f map[string]uint32) (float64, bool) {
 	il, ok1 := f["IAcc_med_A_u16_L"]
 	ih, ok2 := f["IAcc_med_A_u16_H"]
-	if !ok1 || !ok2 {
+	mode, okMode := f["MODE_RAM"]
+	if !ok1 || !ok2 || !okMode {
 		return 0, false
 	}
 	cur := float64(il+ih*256) / 16
-	if !charging {
-		cur = -cur
-	}
-	return cur, true
+	return measure.BatteryCurrentSigned(cur, mode), true
 }
 
 // voltage100From — напряжение вида «сырое + 100» (UNET/UOUTmed): 0 → 0.

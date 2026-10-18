@@ -227,6 +227,12 @@ PHP-страница рендерит форму-заготовку: конте�
 `time` и т.д.). Формат полей — `docs/legacy/legacy_read_json_map.md`.
 Наш `malina-web` реализует только `device=map` (см. `docs/legacy/legacy-api.md`).
 
+> **Знаки (2026-10-18):** Master Node берёт направление сети из знака
+> `_INET_16_4`, поэтому Legacy API отдаёт его со знаком по `PNET_Sign_P`
+> (потребление `+`, отдача `−`). `_PNET_calc` уже знаковый. Для АКБ
+> используется `_IAcc_med_A_u16`/`_PLoad_calc` с конвенцией `+ заряд /
+> − разряд`. Код Master Node при этом не меняется.
+
 ### 7.3 `GET /read_json.php?device=bat`
 
 **Назначение:** снимки АКБ/BMS.

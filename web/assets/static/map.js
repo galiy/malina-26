@@ -86,7 +86,6 @@
     }
     return 3;
   }
-  function isCharge(f) { var c = modeNum(f); return c >= 4 && c <= 9; }
   function modeLabel(c, f) {
     if (c === 9) { var sc = (f && f.StatusCh) || 0; return t("p1.mode9_prefix") + " " + sc + " (" + sc.toString(2) + ")"; }
     return t("p1.mode" + c);
@@ -109,14 +108,17 @@
     v.Uin = (unet === undefined) ? undefined : (unet === 0 ? 0 : unet + 100);
     v.Uout = (uout === undefined) ? undefined : (uout === 0 ? 0 : uout + 100);
     var inet = num(f, "INET"), inet16 = num(f, "INET_16_4");
-    if (inet16 !== undefined) { v.Iin = inet16 / ((inet !== undefined && inet >= 16) ? 4 : 16); }
+    if (inet16 !== undefined && inet !== undefined && typeof f.PNET_Sign_P === "number") {
+      var iin = inet16 / (inet >= 16 ? 4 : 16);
+      v.Iin = (f.PNET_Sign_P === 0) ? -iin : iin;
+    }
     var vh = num(f, "UAcc_med_VH"), vl = num(f, "UAcc_med_VL");
     if (vh !== undefined && vl !== undefined) { v.Uacc = (vh * 256 + vl) / 10; }
     var il = num(f, "IAcc_med_A_u16_L"), ih = num(f, "IAcc_med_A_u16_H");
-    if (il !== undefined && ih !== undefined) {
-      // Как в mapd: беззнаковое (L + H*256)/16, знак — по режиму (заряд MODE==4 → «+», иначе «−»).
+    if (il !== undefined && ih !== undefined && typeof f.MODE_RAM === "number") {
+      // Знак для отображения: заряд (MODE_RAM==4) → «−», разряд → «+».
       v.Iacc = (il + ih * 256) / 16;
-      if (!isCharge(f)) { v.Iacc = -v.Iacc; }
+      if (f.MODE_RAM === 4) { v.Iacc = -v.Iacc; }
     }
     var sh = (typeof f["UACC"] === "number") ? (f["UACC"] & 0x1f) : 2;
     if (typeof f["E_LCD_UAccChBUF"] === "number") { v.Ubuf = (f["E_LCD_UAccChBUF"] << sh) / 10; }
@@ -138,14 +140,13 @@
     v.PbatMax = v.Pmax * powAccPct;
     v.Imax = (pow !== undefined && uacc !== undefined && VOLTAGE[uacc]) ? POWER_KW[pow] * 1500 / VOLTAGE[uacc] : 50;
     v.Pnet = (v.Uin !== undefined && v.Iin !== undefined) ? v.Uin * v.Iin : undefined;
-    if (v.Pnet !== undefined && f["PNET_Sign_P"] === 0) { v.Pnet = -v.Pnet; }
     v.Pbat = (v.Uacc !== undefined && v.Iacc !== undefined) ? v.Uacc * v.Iacc : undefined;
     v.IFaze = num(f, "LCD_MAP_iFaze");
     function ph(l, h) { var L = num(f, l) || 0, H = num(f, h) || 0; var x = ((L & 0xff) | ((H & 0x7f) << 8)) / 10; return (H & 0x80) ? -x : x; }
     v.Iph1 = ph("I_Akb_MAP_faz1L", "I_Akb_MAP_faz1H"); v.Iph2 = ph("I_Akb_MAP_faz2L", "I_Akb_MAP_faz2H"); v.Iph3 = ph("I_Akb_MAP_faz3L", "I_Akb_MAP_faz3H");
-    // Pвых = Pnet − Pbat (мощность сети минус мощность нагрузки по АКБ)
-    v.Pout = (typeof v.Pnet === "number" ? v.Pnet : 0) - (typeof v.Pbat === "number" ? v.Pbat : 0);
-    v.Iout = v.Uout ? Math.round((v.Pout / v.Uout) * 10) / 10 : undefined; // Iвых = Pвых / Uвых (≤1 знак)
+    // Нагрузка = Pсеть + Pакб в новых знаках; при нехватке одного слагаемого — нет данных.
+    v.Pout = (typeof v.Pnet === "number" && typeof v.Pbat === "number") ? v.Pnet + v.Pbat : undefined;
+    v.Iout = (typeof v.Pout === "number" && v.Uout) ? Math.round((v.Pout / v.Uout) * 10) / 10 : undefined; // Iвых = Pвых / Uвых (≤1 знак)
     if (v.Uacc !== undefined) { v.Ph1 = v.Uacc * v.Iph1 / 1000; v.Ph2 = v.Uacc * v.Iph2 / 1000; v.Ph3 = v.Uacc * v.Iph3 / 1000; }
     v.FlagUnet2 = num(f, "flagUnet2") || 0;
     v.Cooler = num(f, "CulerSpead") || 0;
@@ -366,7 +367,7 @@
       case "v100": return String(raw === 0 ? 0 : raw + 100);
       case "f6250": return raw ? (6250 / raw).toFixed(2) : null;
       case "f2500": return raw ? (2500 / raw).toFixed(2) : null;
-      case "inet164": { var inet = gv(f, "INET") || 0; return (raw / (inet >= 16 ? 4 : 16)).toFixed(2); }
+      case "inet164": { var inet = gv(f, "INET"); if (inet === undefined || typeof f.PNET_Sign_P !== "number") { return null; } var x = raw / (inet >= 16 ? 4 : 16); if (f.PNET_Sign_P === 0) { x = -x; } return x.toFixed(2); }
       case "p8": return String(s16(raw) * 10);
       case "pow_kw": return (MPOW[raw] !== undefined) ? String(MPOW[raw]) : String(raw);
       case "uacc_v": return (MVOLT[raw] !== undefined) ? String(MVOLT[raw]) : String(raw);
@@ -396,7 +397,7 @@
     function r(v, u, k) { return { v: v, u: u, t: k }; }
     switch (name) {
       case "UAcc_med_VH": { var vh = gv(f, "UAcc_med_VH"), vl = gv(f, "UAcc_med_VL"); if (vh === undefined && vl === undefined) { return null; } return r((((vh || 0) * 256 + (vl || 0)) / 10).toFixed(1), "V", "mi.f.battery_voltage"); }
-      case "IAcc_med_A_u16_L": { var l = gv(f, "IAcc_med_A_u16_L"), h = gv(f, "IAcc_med_A_u16_H"); if (l === undefined && h === undefined) { return null; } var am = (l + (h || 0) * 256) / 16; if (!isCharge(f)) { am = -am; } return r(am.toFixed(2), "A", "mi.f.iacc_med"); }
+      case "IAcc_med_A_u16_L": { var l = gv(f, "IAcc_med_A_u16_L"), h = gv(f, "IAcc_med_A_u16_H"); if (l === undefined || h === undefined || typeof f.MODE_RAM !== "number") { return null; } var am = (l + h * 256) / 16; if (f.MODE_RAM === 4) { am = -am; } return r(am.toFixed(2), "A", "mi.f.iacc_med"); }
       case "M_POWhourNET_L": return r(cnt24(f, "M_POWhourNET").toFixed(2), "kWh", "mi.f.e_net");
       case "M_POWhourMAP_L": return r(cnt24(f, "M_POWhourMAP").toFixed(2), "kWh", "mi.f.e_acc");
       case "M_POWhourMAPCharge_L": return r(cnt24(f, "M_POWhourMAPCharge").toFixed(2), "kWh", "mi.f.e_chg");
@@ -558,6 +559,7 @@
     }
     var c = combo(n, f), val, unit = meta.u;
     if (c) { val = c.v; if (c.u) { unit = c.u; } }
+    else if (c === null) { val = "—"; }
     else { var disp = conv(meta.c, raw, f); val = (disp === null ? "—" : disp); }
     return rowHTML(name, addr, val, unit, title, na);
   }

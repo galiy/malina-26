@@ -34,9 +34,9 @@
     if (v > 0) { return "red"; }
     return "blue";
   }
-  function colorBatCur(v) {  // I/P АКБ: >0 заряд → red, <0 разряд → green, 0 → blue
-    if (v > 0) { return "red"; }
-    if (v < 0) { return "green"; }
+  function colorBatCur(v) {  // I/P АКБ: >0 разряд → green, <0 заряд → red, 0 → blue
+    if (v > 0) { return "green"; }
+    if (v < 0) { return "red"; }
     return "blue";
   }
   function colorLoadPower(v) {  // I/P нагрузки: >0 потребление → red, <0 → green, 0 → blue

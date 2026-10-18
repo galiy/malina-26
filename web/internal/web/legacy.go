@@ -87,6 +87,12 @@ func (f *legacyFields) u(name string) uint32 {
 	return 0
 }
 
+// has — поле присутствует в снимке (битовая карта контракта).
+func (f *legacyFields) has(name string) bool {
+	i, ok := legacyFieldIdx[name]
+	return ok && f.pres[i]
+}
+
 func (f *legacyFields) s16(name string) int32 { return int32(int16(uint16(f.u(name)))) }
 
 // u24 — 24-битное значение по трём однобайтовым ячейкам (_L/_H/_HH).
@@ -359,8 +365,14 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 		inet16_4 /= 16
 	}
 	pnetCalc := float64(unet) * inet16_4
+	inet16_4Out := inet16_4
+	// _PNET_calc оставляем без изменений (старое поведение, в т.ч. для v1/v2).
 	if f.u("PNET_Sign_P") == 0 {
 		pnetCalc = -pnetCalc
+	}
+	// Для _INET_16_4 без флага направление неизвестно: оставляем магнитуду.
+	if f.has("PNET_Sign_P") && f.u("PNET_Sign_P") == 0 {
+		inet16_4Out = -inet16_4Out
 	}
 	pnet := int32(int16(uint16(f.u("PNET_8")))) * 10
 
@@ -400,9 +412,10 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 	// знаков 0x14060..0x140b0):
 	//   _Iacc           = byte[0x408] (IAcc_med_A_2) * 2          — беззнаковый
 	//   _IAcc_med_A_u16 = (byte[0x433]*256 + byte[0x432]) / 16
-	//   _PLoad          = byte[0x409] (PLoad_L) * 100
+	//   _PLoad          = byte[0x409] (PLoad_L) * 100 — беззнаковая магнитуда
 	//   _PLoad_calc     = Uacc * _IAcc_med_A_u16
-	// Знак: вне режимов заряда (MODE не 4..9) _IAcc_med_A_u16 и _PLoad инвертируются.
+	// Знак: вне режимов заряда (MODE не 4..9) инвертируется только _IAcc_med_A_u16;
+	// _PLoad остаётся беззнаковым.
 	iaccU16 := (float64(f.u("IAcc_med_A_u16_L")) + float64(f.u("IAcc_med_A_u16_H"))*256) / 16
 	pload := int32(f.u("PLoad_L")) * 100
 	if !(mode >= 4 && mode <= 9) { // заряд — режимы 4..9
@@ -447,7 +460,7 @@ func renderLegacy(f *legacyFields, a *legacyAcc) []byte {
 		freq("TFNET"), freq("ThFMAP"), uout, tfLimit, unetLimit,
 		f.u("RSErrSis"), f.u("RSErrJobM"), f.u("RSErrJob"), f.u("RSWarning"),
 		int32(f.u("Temp_Grad0"))-50, int32(f.u("Temp_Grad2"))-50,
-		inet16_4, iaccU16, f.u("Temp_off"),
+		inet16_4Out, iaccU16, f.u("Temp_off"),
 		e.net, e.acc, e.chg, e.signNet, 0,
 		0.0, impptSum, i2c,
 		int32(f.u("Temp_Grad1"))-50, relay1, relay2,

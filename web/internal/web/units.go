@@ -66,25 +66,31 @@ func freq6250() fieldConv {
 	})
 }
 
-// inet164 — ток сети (МАП, measure.Inet). Без INET — нет данных.
+// inet164 — ток сети (МАП) со знаком по PNET_Sign_P. Без INET или без
+// PNET_Sign_P — нет данных.
 func inet164() fieldConv {
 	return numConv("А", func(v float64, row map[uint16]float64) (float64, bool) {
 		inet, ok := row[2] // INET
 		if !ok {
 			return 0, false
 		}
-		return measure.Inet(uint32(inet), uint32(v)), true
+		sign, ok := row[33] // PNET_Sign_P
+		if !ok {
+			return 0, false
+		}
+		return measure.GridCurrentSigned(measure.Inet(uint32(inet), uint32(v)), uint32(sign)), true
 	})
 }
 
-// iaccU16 — ток АКБ (МАП, measure.Iacc; знак по MODE_RAM). Без MODE — нет данных.
+// iaccU16 — ток АКБ (МАП) для отображения: заряд (MODE_RAM==4) «−»,
+// разряд «+». Без MODE — нет данных.
 func iaccU16() fieldConv {
 	return numConv("А", func(v float64, row map[uint16]float64) (float64, bool) {
 		mode, ok := row[19] // MODE_RAM
 		if !ok {
 			return 0, false
 		}
-		return measure.Iacc(uint32(v), uint32(mode)), true
+		return measure.BatteryCurrentSigned(float64(v)/16, uint32(mode)), true
 	})
 }
 

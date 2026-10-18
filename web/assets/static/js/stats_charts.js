@@ -96,7 +96,7 @@
 
   // Поля контракта, нужные графикам: ключи линий наборов (§3.2) + поля,
   // которые читают вычисляемые ряды (calcSeries). Сервер отдаёт только их.
-  var CALC_DEPS = { map: ["33", "29", "30", "31", "32"] }; // PNET_Sign_P + MPPT-каналы
+  var CALC_DEPS = { map: ["29", "30", "31", "32"] }; // MPPT-каналы; знак поля 3 берётся из строки сервером
   function fieldsFor(type) {
     var seen = {};
     function add(k) { if (k) seen[k] = 1; }
@@ -124,17 +124,20 @@
   function g(vals, k, t) { var m = vals.byKey[k]; return m ? m.get(t) : undefined; }
   function sumKeys(vals, t, ids) { var s = 0, any = false; for (var i = 0; i < ids.length; i++) { var v = g(vals, String(ids[i]), t); if (v != null) { s += v; any = true; } } return any ? s : undefined; }
 
-  // Pnet = Uin·Iin со знаком по PNET_Sign_P (0 → отрицательное), как в панели 1.
+  // Поле 3 (INET_16_4) уже знаковое: конверсия сервера применяет PNET_Sign_P.
+  // Здесь знак повторно НЕ применяем.
   function pnetAt(vals, t) {
     var u = g(vals, "1", t), i = g(vals, "3", t);
     if (u == null || i == null) return undefined;
-    var p = u * i, s = g(vals, "33", t);
-    if (s === 0) p = -p;
-    return p;
+    return u * i;
   }
   function pbatAt(vals, t) {
     var ua = g(vals, "8", t), ia = g(vals, "10", t);
     return (ua != null && ia != null) ? ua * ia : undefined;
+  }
+  function poutAt(vals, t) {
+    var pn = pnetAt(vals, t), pb = pbatAt(vals, t);
+    return (pn != null && pb != null) ? (pn + pb) : undefined;
   }
   function calcSeries(calc, vals) {
     var out = [];
@@ -143,8 +146,8 @@
       if (calc === "imppt") v = sumKeys(vals, t, [29, 30, 31, 32]);
       else if (calc === "pnet") v = pnetAt(vals, t);
       else if (calc === "pbat") v = pbatAt(vals, t);
-      else if (calc === "pout") { var pn = pnetAt(vals, t), pb = pbatAt(vals, t); v = (pn != null && pb != null) ? (pn - pb) : undefined; }
-      else if (calc === "iout") { var pn2 = pnetAt(vals, t), pb2 = pbatAt(vals, t), uo = g(vals, "6", t); var po = (pn2 != null && pb2 != null) ? (pn2 - pb2) : undefined; v = (po != null && uo) ? po / uo : undefined; }
+      else if (calc === "pout") v = poutAt(vals, t);
+      else if (calc === "iout") { var uo = g(vals, "6", t), po = poutAt(vals, t); v = (po != null && uo) ? po / uo : undefined; }
       else if (calc === "pmppt") { var ua2 = g(vals, "8", t), im = sumKeys(vals, t, [29, 30, 31, 32]); v = (ua2 != null && im != null) ? ua2 * im : undefined; }
       else if (calc === "spread" || calc === "pack") {
         var vals2 = [], m = vals.byKey;

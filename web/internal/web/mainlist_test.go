@@ -129,11 +129,11 @@ func TestMapTileFields(t *testing.T) {
 	if tile.Batt.U.V != 51.5 || tile.Batt.U.ND {
 		t.Fatalf("batt.U=%+v, ожидалось v=51.5, nd=false", tile.Batt.U)
 	}
-	if tile.Batt.I.V != 0.625 || tile.Batt.I.ND { // +0.625 (заряд), без округления
-		t.Fatalf("batt.I=%+v, ожидалось v=0.625, nd=false", tile.Batt.I)
+	if tile.Batt.I.V != -0.625 || tile.Batt.I.ND { // −0.625 (заряд), без округления
+		t.Fatalf("batt.I=%+v, ожидалось v=-0.625, nd=false", tile.Batt.I)
 	}
-	if tile.Batt.P.V != 32.1875 || tile.Batt.P.ND { // 51.5*0.625, без округления
-		t.Fatalf("batt.P=%+v, ожидалось v=32.1875, nd=false", tile.Batt.P)
+	if tile.Batt.P.V != -32.1875 || tile.Batt.P.ND { // 51.5*(-0.625), без округления
+		t.Fatalf("batt.P=%+v, ожидалось v=-32.1875, nd=false", tile.Batt.P)
 	}
 	if tile.Batt.T.V != 18 || tile.Batt.T.ND {
 		t.Fatalf("batt.T=%+v, ожидалось v=18, nd=false", tile.Batt.T)
@@ -149,7 +149,7 @@ func TestMapTileFields(t *testing.T) {
 	if tile.Load.F.V != 50 || tile.Load.F.ND {
 		t.Fatalf("load.F=%+v, ожидалось v=50, nd=false", tile.Load.F)
 	}
-	pout := 4600 - 32.1875 // pnet − pbat
+	pout := 4600 + (-32.1875) // pnet + pbat (новые знаки)
 	if tile.Load.P.V != pout || tile.Load.P.ND {
 		t.Fatalf("load.P=%+v, ожидалось v=%v, nd=false", tile.Load.P, pout)
 	}
@@ -331,17 +331,98 @@ func TestModeMap(t *testing.T) {
 	}
 }
 
-// TestMapTilePnetSignAbsent — отсутствие PNET_Sign_P НЕ инвертирует знак Pсети
-// (как map.js: инверсия только при наличии поля, равном 0).
+// TestMapTileDischargeExportSigns — разряд АКБ и отдача в сеть:
+// сеть −, АКБ +, нагрузка = Pnet + Pbat (может быть отрицательной).
+func TestMapTileDischargeExportSigns(t *testing.T) {
+	f := map[string]uint32{
+		"UNET":             130, // 230 В
+		"INET":             20,
+		"INET_16_4":        80,  // 20 А
+		"PNET_Sign_P":      0,   // отдача
+		"UOUTmed":          120, // 220 В
+		"UAcc_med_VH":      2,
+		"UAcc_med_VL":      3, // 51.5 В
+		"IAcc_med_A_u16_L": 100,
+		"IAcc_med_A_u16_H": 0, // 6.25 А
+		"MODE_RAM":         0, // разряд
+	}
+	tile := buildMapTile(testTr(), MapInfo{LastSeen: nowSec()}, f)
+
+	if tile.Grid.I.V != -20 || tile.Grid.I.ND {
+		t.Fatalf("grid.I=%+v, ожидалось -20", tile.Grid.I)
+	}
+	if tile.Grid.P.V != -4600 || tile.Grid.P.ND {
+		t.Fatalf("grid.P=%+v, ожидалось -4600", tile.Grid.P)
+	}
+	if tile.Batt.I.V != 6.25 || tile.Batt.I.ND {
+		t.Fatalf("batt.I=%+v, ожидалось +6.25", tile.Batt.I)
+	}
+	if tile.Batt.P.V != 321.875 || tile.Batt.P.ND {
+		t.Fatalf("batt.P=%+v, ожидалось +321.875", tile.Batt.P)
+	}
+	if tile.Load.P.V != -4278.125 || tile.Load.P.ND {
+		t.Fatalf("load.P=%+v, ожидалось -4278.125", tile.Load.P)
+	}
+	if tile.Load.I.V != -4278.125/220 || tile.Load.I.ND {
+		t.Fatalf("load.I=%+v, ожидалось %v", tile.Load.I, -4278.125/220)
+	}
+}
+
+// TestMapTilePnetSignAbsent — отсутствие PNET_Sign_P → ток и мощность сети ND
+// (нельзя угадывать направление).
 func TestMapTilePnetSignAbsent(t *testing.T) {
 	f := map[string]uint32{"UNET": 130, "INET": 20, "INET_16_4": 80} // нет PNET_Sign_P
 	tile := buildMapTile(testTr(), MapInfo{LastSeen: nowSec()}, f)
-	if tile.Grid.P.V != 4600 {
-		t.Fatalf("grid.P=%v, ожидалось 4600 (без инверсии)", tile.Grid.P.V)
+	if !tile.Grid.I.ND || !tile.Grid.P.ND {
+		t.Fatalf("grid.I=%+v grid.P=%+v, ожидалось nd=true", tile.Grid.I, tile.Grid.P)
 	}
 }
 
 // nowSec — текущее время Unix (свежий LastSeen для online=true).
 func nowSec() int64 {
 	return time.Now().Unix()
+}
+
+// TestMapTileNDRules — нет MODE_RAM → нет данных АКБ; нет Uout → нет тока
+// нагрузки, но мощность нагрузки считается.
+func TestMapTileNDRules(t *testing.T) {
+	base := map[string]uint32{
+		"UNET":             130,
+		"INET":             20,
+		"INET_16_4":        80,
+		"PNET_Sign_P":      1,
+		"UAcc_med_VH":      2,
+		"UAcc_med_VL":      3,
+		"IAcc_med_A_u16_L": 100,
+		"IAcc_med_A_u16_H": 0,
+	}
+
+	// Нет MODE_RAM — направление АКБ неизвестно.
+	noMode := map[string]uint32{}
+	for k, v := range base {
+		noMode[k] = v
+	}
+	tile := buildMapTile(testTr(), MapInfo{LastSeen: nowSec()}, noMode)
+	if !tile.Batt.I.ND || !tile.Batt.P.ND {
+		t.Fatalf("batt.I=%+v batt.P=%+v, ожидалось nd=true", tile.Batt.I, tile.Batt.P)
+	}
+	if !tile.Load.P.ND || !tile.Load.I.ND {
+		t.Fatalf("load.P=%+v load.I=%+v, ожидалось nd=true", tile.Load.P, tile.Load.I)
+	}
+
+	// Есть MODE_RAM (разряд), но нет UOUTmed — мощность есть, тока нет.
+	noUout := map[string]uint32{"MODE_RAM": 0}
+	for k, v := range base {
+		noUout[k] = v
+	}
+	tile = buildMapTile(testTr(), MapInfo{LastSeen: nowSec()}, noUout)
+	if tile.Batt.I.ND || tile.Batt.I.V != 6.25 {
+		t.Fatalf("batt.I=%+v, ожидалось +6.25", tile.Batt.I)
+	}
+	if tile.Load.P.ND {
+		t.Fatalf("load.P=%+v, ожидалось значение", tile.Load.P)
+	}
+	if !tile.Load.I.ND {
+		t.Fatalf("load.I=%+v, ожидалось nd=true", tile.Load.I)
+	}
 }

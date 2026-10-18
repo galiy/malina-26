@@ -22,15 +22,19 @@ func TestFieldConvNum(t *testing.T) {
 		{"map", 8, 127, nil, 12.7, "В", true},
 		{"map", 5, 100, nil, 10000, "Вт", true},
 		{"map", 14, 75, nil, 25, "°C", true},
-		{"map", 3, 16, map[uint16]float64{2: 16}, 4, "А", true},     // INET≥16 → /4
-		{"map", 3, 16, map[uint16]float64{2: 1}, 1, "А", true},      // INET<16 → /16
-		{"map", 3, 16, nil, 0, "А", false},                          // R1: без INET — нет данных
-		{"map", 10, 160, map[uint16]float64{19: 5}, 10, "А", true},  // заряд → +
-		{"map", 10, 160, map[uint16]float64{19: 0}, -10, "А", true}, // не заряд → −
-		{"map", 10, 160, nil, 0, "А", false},                        // R1: без MODE — нет данных
-		{"map", 9, 7, nil, 7, "", true},                             // IAcc_med_A_2 — без масштаба (raw)
-		{"map", 28, 50, nil, 125, "Гц", true},                       // ThFMAP: 6250/50
-		{"map", 29, 0x0100, nil, 16, "А", true},                     // I_Akb_MPPT0: (0x0100&0x7FFF)/16
+		{"map", 3, 16, map[uint16]float64{2: 16, 33: 1}, 4, "А", true},  // потребление +
+		{"map", 3, 16, map[uint16]float64{2: 1, 33: 1}, 1, "А", true},   // INET<16 → /16
+		{"map", 3, 16, map[uint16]float64{2: 16, 33: 0}, -4, "А", true}, // отдача −
+		{"map", 3, 16, nil, 0, "А", false},                              // без INET — нет данных
+		{"map", 3, 16, map[uint16]float64{2: 16}, 0, "А", false},        // без PNET_Sign_P — нет данных
+		{"map", 10, 160, map[uint16]float64{19: 4}, -10, "А", true},     // заряд → −
+		{"map", 10, 160, map[uint16]float64{19: 0}, 10, "А", true},      // разряд → +
+		{"map", 10, 160, map[uint16]float64{19: 5}, 10, "А", true},      // не заряд → +
+		{"map", 10, 160, map[uint16]float64{19: 9}, 10, "А", true},      // не заряд → +
+		{"map", 10, 160, nil, 0, "А", false},                            // без MODE — нет данных
+		{"map", 9, 7, nil, 7, "", true},                                 // IAcc_med_A_2 — без масштаба (raw)
+		{"map", 28, 50, nil, 125, "Гц", true},                           // ThFMAP: 6250/50
+		{"map", 29, 0x0100, nil, 16, "А", true},                         // I_Akb_MPPT0: (0x0100&0x7FFF)/16
 		{"kes", 1, 1234, nil, 12.34, "В", true},
 		{"kes", 8, 75, nil, 25, "°C", true},
 		{"kes", 4, 65535, nil, 0, "", false}, // Windspeed: 0xFFFF — н/д

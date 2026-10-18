@@ -378,9 +378,12 @@ func kesModeString(f *kesFields) string {
 |---|---|---|
 | U сети | `unet=` f["UNET"]; `unet==0 ? 0 : unet+100` | `map.js:117` |
 | F сети | `f["TFNET"] ? 6250/f["TFNET"] : ND` | `map.js:139` |
-| I сети | `in16=f["INET_16_4"]; inet=f["INET"]; in16/(inet>=16?4:16)` | `map.js:120` |
-| P сети | `Uin * Iin`; знак: `f["PNET_Sign_P"]==0 → −` | `map.js:149` |
+| I сети | `in16=f["INET_16_4"]; inet=f["INET"]; x=in16/(inet>=16?4:16)`; знак: `f["PNET_Sign_P"]==0 → −x` | `map.js` (`compute`) |
+| P сети | `Uin * Iin` (знак уже в токе) | `map.js` (`compute`) |
 | T тора | `f["Temp_Grad1"] - 50` | `map.js:137` (`Ttor`) |
+
+> Если `PNET_Sign_P` отсутствует (исторические `map v1/v2`), ток и мощность
+> сети — `ND`: направление не угадывается.
 
 > **Маппинг TempGrad** (проверено `map.js:136..138`):
 > `Temp_Grad0 = Tacc` (АКБ), `Temp_Grad1 = Ttor` (тор), `Temp_Grad2 = Ttr`
@@ -393,8 +396,8 @@ func kesModeString(f *kesFields) string {
 |---|---|---|
 | U АКБ | `(f["UAcc_med_VH"]*256+f["UAcc_med_VL"])/10` | `map.js:122` |
 | SOC | §5.3 | `ocv.go` |
-| I АКБ | `il=f["IAcc_med_A_u16_L"], ih=f["IAcc_med_A_u16_H"]; x=(il+ih*256)/16; заряд→«+», иначе −x` | `map.js:124` |
-| P АКБ | `Uacc * Iacc` | `map.js:151` |
+| I АКБ | `il=f["IAcc_med_A_u16_L"], ih=f["IAcc_med_A_u16_H"]; x=(il+ih*256)/16; MODE_RAM==4 (заряд) → −x, иначе +x` | `map.js` (`compute`) |
+| P АКБ | `Uacc * Iacc` | `map.js` (`compute`) |
 | T АКБ | `f["Temp_Grad0"] - 50` | `map.js:136` (`Tacc`) |
 
 ### 6.3 МАП — «Нагрузка»
@@ -403,8 +406,8 @@ func kesModeString(f *kesFields) string {
 |---|---|---|
 | U нагрузки | `f["UOUTmed"]==0 ? 0 : f["UOUTmed"]+100` | `map.js:118` |
 | F нагрузки | `f["ThFMAP"] ? 6250/f["ThFMAP"] : ND` | `map.js:140` |
-| P нагрузки | `Pnet − Pbat` | `map.js:156` |
-| I нагрузки | `Uout ? Pout/Uout : ND` (≤1 знак) | `map.js:157` |
+| P нагрузки | `Pnet + Pbat` (в новых знаках) | `map.js` (`compute`) |
+| I нагрузки | `Uout ? Pout/Uout : ND` (≤1 знак) | `map.js` (`compute`) |
 | T (транзисторы) | `f["Temp_Grad2"] - 50` | `map.js:138` (`Ttr`) |
 
 Порядок вычисления Pnet/Pbat — строго как `map.js` **до** использования Pout/Iout.
@@ -511,7 +514,7 @@ func kesModeString(f *kesFields) string {
 | U сети/нагрузки (В) | `>235`→red; `<210`→blue; иначе→green |
 | F сети/нагрузки (Гц) | `>50.1`→red; `<49.9`→blue; иначе→green |
 | I/P сети | знач<0 (отдача)→green; знач>0 (потребление)→red; `0`→blue |
-| I/P АКБ | знач>0 (заряд)→red; знач<0 (разряд)→green; `0`→blue |
+| I/P АКБ | знач>0 (разряд)→green; знач<0 (заряд)→red; `0`→blue |
 | I/P нагрузки | знач>0 (потребление из МАП)→red; знач<0 (отдача в МАП)→green; `0`→blue |
 | T транзисторов/тор/панели КЭС (°C) | `<30`→blue; `<50`→green; `<70`→orange; `≥70`→red |
 | T АКБ (°C) | `<0`→blue; `<15`→darkblue; `<35`→green; `<50`→orange; `≥50`→red |

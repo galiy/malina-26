@@ -23,16 +23,48 @@ func Inet(inet, inet164 uint32) float64 {
 	return float64(inet164) / d
 }
 
-// IsCharge — режим заряда: MODE_RAM>3 (эквивалентно modeNum ∈ 4..9 в панели 1).
+// IsCharge — режим заряда: MODE_RAM>3. Историческая конвенция для внутренних
+// расчётов (SOC/события); для отображения АКБ использовать BatteryCurrentSigned.
 func IsCharge(modeRAM uint32) bool { return modeRAM > 3 }
 
 // Iacc — ток АКБ (МАП): u16/16 (А), знак по режиму (заряд → «+», иначе «−»).
+// Историческая конвенция; для нового UI использовать BatteryCurrentSigned.
 func Iacc(u16, modeRAM uint32) float64 {
 	a := float64(u16) / 16
 	if !IsCharge(modeRAM) {
 		a = -a
 	}
 	return a
+}
+
+// GridCurrentSigned — ток сети (А) со знаком направления:
+// PNET_Sign_P=1 — потребление (+), 0 — отдача (−). Магнитуда — снаружи.
+func GridCurrentSigned(mag float64, pnetSign uint32) float64 {
+	if pnetSign == 0 {
+		return -mag
+	}
+	return mag
+}
+
+// BatteryCurrentSigned — ток АКБ (А) со знаком для отображения:
+// MODE_RAM==4 (заряд) → −, иначе разряд → +. Магнитуда — снаружи.
+func BatteryCurrentSigned(mag float64, modeRAM uint32) float64 {
+	if modeRAM == 4 {
+		return -mag
+	}
+	return mag
+}
+
+// LoadPower — мощность нагрузки: Pсеть + Pакб в новых знаках
+// (сеть: потребление +, отдача −; АКБ: заряд −, разряд +).
+func LoadPower(pgrid, pbatt float64) float64 { return pgrid + pbatt }
+
+// LoadCurrent — ток нагрузки: Pload/Uout; ok=false при Uout=0.
+func LoadCurrent(pload, uout float64) (float64, bool) {
+	if uout == 0 {
+		return 0, false
+	}
+	return pload / uout, true
 }
 
 // Power100 — мощность МАП по паре байт (L, H): (L+H·256)·100 (Вт).
