@@ -27,6 +27,7 @@ const followWindowMs int64 = int64(5 * time.Minute / time.Millisecond)
 type statsDev struct {
 	Type string `json:"type"`
 	ID   string `json:"id"`
+	Kind uint8  `json:"kind,omitempty"` // grid: 0 Deye, 1 Sofar
 	// Last — время последнего обновления телеметрии (мс), max(raw,avg) из памяти
 	// tsdb. 0 — данных нет (busy/ненайден). Клиент фильтрует неактуальные по нему.
 	Last int64 `json:"last,omitempty"`
@@ -65,7 +66,7 @@ func descKeyFor(typ string, id uint16, name string) string {
 	case "kes":
 		return "stats.f.kes." + name
 	case "grid":
-		return "" // описания полей grid появятся после согласования набора графиков
+		return "stats.d.grid." + name
 	case "mbms":
 		switch id % 3 {
 		case 1:
@@ -186,6 +187,17 @@ func (s *Server) statsDevices() []statsDev {
 	for i := range order {
 		if last, ok := lastSeen(rawCli, avgCli, order[i].Type, order[i].ID); ok {
 			order[i].Last = last
+		}
+	}
+	if len(order) > 0 {
+		kinds := map[string]uint8{}
+		for _, it := range readGridSHM(s.opts.GridSHMPath) {
+			kinds[it.Serial] = it.Kind
+		}
+		for i := range order {
+			if order[i].Type == "grid" {
+				order[i].Kind = kinds[order[i].ID]
+			}
 		}
 	}
 	return order

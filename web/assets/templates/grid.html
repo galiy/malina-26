@@ -1,0 +1,58 @@
+{{define "content"}}
+<div class="map-head">
+  <h1 class="map-title">{{.Title}}</h1>
+  <div class="map-headctl">
+    <label class="map-pause"><input type="checkbox" id="gridPause"> {{index .T "map.disable_update"}}</label>
+  </div>
+</div>
+<div class="grid-device-sub" id="gridDeviceSub"></div>
+<div class="flash err" id="gridErr" hidden></div>
+
+<div class="map-tabs">
+  <button type="button" class="map-tab active" data-tab="panel">{{index .T "grid.tab.panel"}}</button>
+</div>
+
+<div class="map-tabpane" id="tab-panel">
+  <div class="card" id="gridPanelCard">
+    <div id="gridSections"><p class="muted">{{index .T "stats.no_data"}}</p></div>
+  </div>
+
+  <h2 class="bms-charts-title">{{index .T "grid.charts_title"}}</h2>
+  <div class="stats-controls">
+    <button class="btn" data-period="24h">{{index .T "stats.p24h"}}</button>
+    <button class="btn" data-period="today">{{index .T "stats.p_today"}}</button>
+    <button class="btn" data-period="yesterday">{{index .T "stats.p_yesterday"}}</button>
+    <button class="btn" data-period="7d">{{index .T "stats.p_7d"}}</button>
+    <button class="btn" data-period="month">{{index .T "stats.p_month"}}</button>
+    <button class="btn" data-period="last">{{index .T "stats.p_last"}}</button>
+    <span class="stats-custom">
+      <input type="datetime-local" id="ch-from" step="1">
+      <input type="datetime-local" id="ch-to" step="1">
+      <button class="btn" id="ch-show">{{index .T "stats.show"}}</button>
+    </span>
+    <button class="btn" id="ch-reload">{{index .T "stats.refresh"}}</button>
+    <span class="charts-follow-group" id="ch-follow-group">
+      <label class="check charts-follow"><input type="checkbox" id="ch-follow"> {{index .T "stats.follow"}}</label>
+      <span class="charts-depth" id="ch-depth-wrap" hidden>
+        <input type="range" id="ch-depth" min="1" max="10" step="1" value="5">
+        <span id="ch-depth-val">5</span> {{index .T "stats.minutes"}}
+      </span>
+    </span>
+  </div>
+  <div id="stats-tabs" class="stats-tabs" hidden></div>
+  <div id="stats-charts" class="stats-charts"></div>
+</div>
+
+<script>
+window.I18N = {{json .T}};
+window.GRID_SERIAL = "{{.Serial}}";
+window.GRID_GEN = "{{.Gen}}";
+window.STATS_FIXED = { type: "grid", id: "{{.Serial}}" };
+</script>
+<script src="{{asset "vendor/chartjs/chart.umd.min.js"}}"></script>
+<script src="{{asset "vendor/chartjs/chartjs-adapter-date-fns.bundle.min.js"}}"></script>
+<script src="{{asset "vendor/chartjs/hammer.min.js"}}"></script>
+<script src="{{asset "vendor/chartjs/chartjs-plugin-zoom.min.js"}}"></script>
+<script src="{{asset "js/stats_charts.js"}}"></script>
+<script src="{{asset "grid.js"}}"></script>
+{{end}}

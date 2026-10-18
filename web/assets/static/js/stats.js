@@ -114,12 +114,13 @@
   // Крайние точки — отдельным запросом (из памяти tsdb), точечно на активной вкладке.
   async function refreshExtremes() {
     if (!active) return;
+    var act = active;
     try {
-      active.ex = await api("/api/stats/extremes?type=" + encodeURIComponent(active.type) + "&id=" + encodeURIComponent(active.id));
+      act.ex = await api("/api/stats/extremes?type=" + encodeURIComponent(act.type) + "&id=" + encodeURIComponent(act.id));
     } catch (e) {
-      active.ex = {};
+      act.ex = {};
     }
-    renderExtremes();
+    if (active === act) renderExtremes();
   }
 
   function detailOn() {
@@ -152,7 +153,18 @@
     // колонки — по контракту (имя поля + единица второй строкой); fallback — union field_id
     var names = {}, units = {}, raws = {}, descs = {};
     (cols || []).forEach(function (c) {
-      names[c.id] = c.name; units[c.id] = c.unit || ""; raws[c.id] = !!c.raw; descs[c.id] = c.desc || "";
+      var nm = c.name;
+      if (active && active.type) {
+        var k = "stats.f." + active.type + "." + c.name;
+        var tv = T(k);
+        if (tv && tv !== k) { nm = tv; }
+      }
+      if (active && active.type === "grid" && (+c.id === 16 || +c.id === 17)) {
+        var sofar = active.kind === 1;
+        nm = T(+c.id === 16 ? (sofar ? "home.grid.module" : "home.grid.igbt")
+          : (sofar ? "home.grid.inner" : "home.grid.radiator"));
+      }
+      names[c.id] = nm; units[c.id] = c.unit || ""; raws[c.id] = !!c.raw; descs[c.id] = c.desc || "";
     });
     var colIds = (cols || []).map(function (c) { return String(c.id); });
     if (!colIds.length) {
@@ -177,7 +189,14 @@
     html += "</tr></thead><tbody>";
     rows.forEach(function (r) {
       html += "<tr><td>" + fmtTimeMS(r.t) + "</td><td>" + r.v + "</td>";
-      colIds.forEach(function (c) { html += "<td>" + fmtVal(units[c], r.f && c in r.f ? r.f[c] : null) + "</td>"; });
+      colIds.forEach(function (c) {
+        var v = r.f && c in r.f ? r.f[c] : null;
+        if (active && active.type === "grid" && +c >= 19 && +c <= 24 && typeof v === "number") {
+          var hx = (v >>> 0).toString(16).toUpperCase(); html += "<td>0x" + ("0000" + hx).slice(-4) + "</td>";
+        } else {
+          html += "<td>" + fmtVal(units[c], v) + "</td>";
+        }
+      });
       html += "</tr>";
     });
     html += "</tbody></table>";
@@ -199,15 +218,19 @@
     if (th) { e.stopPropagation(); toggleHint(th); }
   });
 
+  var querySeq = 0;
   async function query(from, to, dir) {
     if (!active) return;
+    var act = active;
+    var seq = ++querySeq;
     last = { from: from, to: to, dir: dir };
     var cb = document.getElementById("stats-detail");
     var detail = cb && cb.checked ? 1 : 0;
     try {
-      var j = await api(url("type=" + encodeURIComponent(active.type) + "&id=" + encodeURIComponent(active.id) +
+      var j = await api(url("type=" + encodeURIComponent(act.type) + "&id=" + encodeURIComponent(act.id) +
         "&from=" + from + "&to=" + to + "&dir=" + dir + "&limit=" + LIMIT +
-        "&rawmin=" + (active.ex && active.ex.raw && active.ex.raw.found ? active.ex.raw.min : 0) + "&detail=" + detail));
+        "&rawmin=" + (act.ex && act.ex.raw && act.ex.raw.found ? act.ex.raw.min : 0) + "&detail=" + detail));
+      if (seq !== querySeq || active !== act) return;
       renderTable(j.rows || [], j.columns || []);
       // дисейбл раздельно по границам БД: «Вверх» — есть данные раньше верхней строки,
       // «Вниз» — есть позже нижней (§4.3).
@@ -215,8 +238,10 @@
       upBtn.disabled = !(om >= 0 && edge.top > om);
       downBtn.disabled = false; // в БД идёт запись — снизу всегда могут быть новые данные
     } catch (e) {
-      tableEl.innerHTML = '<div class="muted">' + T("stats.no_data") + "</div>";
-      upBtn.disabled = downBtn.disabled = true;
+      if (seq === querySeq && active === act) {
+        tableEl.innerHTML = '<div class="muted">' + T("stats.no_data") + "</div>";
+        upBtn.disabled = downBtn.disabled = true;
+      }
     }
   }
 

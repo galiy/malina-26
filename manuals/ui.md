@@ -109,6 +109,7 @@ ssh malina@<адрес-устройства>
 - Главная — `/` (пока пустая страница)
 - [Информация о системе](pages/info.md) — `/info`
 - [МАП](pages/map.md) — `/map` (таблицы «Монитор», «Информация», «Управление»)
+- [Сетевые инверторы](pages/grid.md) — `/grid`, `/grid/settings`
 - [Параметры системы](pages/system.md) — `/system`
 - [Настройка сети](pages/network.md) — `/network`
 - [Сервисы](pages/services.md) — `/services`

@@ -2,6 +2,10 @@
 {{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
 {{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
 
+<section class="card" id="settingsStatus" data-type="bms">
+  <h2>{{index .T "settings.status_title"}}</h2>
+  <table class="nettable"><thead></thead><tbody></tbody></table>
+</section>
 <form method="post" action="/bms/settings" id="bmsForm">
   <div class="page-head page-head-left">
     <h1>{{index .T "bms.settings_title"}}</h1>
@@ -137,4 +141,5 @@
     }
   })();
 </script>
+<script src="{{asset "settings_status.js"}}"></script>
 {{end}}

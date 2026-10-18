@@ -3,6 +3,8 @@ package web
 import (
 	"encoding/binary"
 	"encoding/json"
+	"hash/crc32"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/galiy/malina-26/daemons/lib/tscontract"
 )
 
 func TestParseGridForm(t *testing.T) {
@@ -68,6 +73,8 @@ func TestReadGridSHM(t *testing.T) {
 	b := make([]byte, gridSHMHeader+gridMaxInverters*gridSHMItemSize)
 	binary.LittleEndian.PutUint32(b[0:4], 0x31445247)
 	binary.LittleEndian.PutUint32(b[4:8], 1)
+	binary.LittleEndian.PutUint32(b[8:12], 32+64)
+	binary.LittleEndian.PutUint32(b[12:16], gridMaxInverters)
 	it := b[gridSHMHeader : gridSHMHeader+gridSHMItemSize]
 	binary.LittleEndian.PutUint32(it[0:4], 1)
 	copy(it[16:66], "SN123")
@@ -164,6 +171,8 @@ func TestReadGridSHMBadVersion(t *testing.T) {
 	b := make([]byte, gridSHMHeader+gridMaxInverters*gridSHMItemSize)
 	binary.LittleEndian.PutUint32(b[0:4], 0x31445247)
 	binary.LittleEndian.PutUint32(b[4:8], 2)
+	binary.LittleEndian.PutUint32(b[8:12], 32+64)
+	binary.LittleEndian.PutUint32(b[12:16], gridMaxInverters)
 	if err := os.WriteFile(path, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -179,12 +188,14 @@ func TestAPIGridStatusAuthAndMapping(t *testing.T) {
 	b := make([]byte, gridSHMHeader+gridMaxInverters*gridSHMItemSize)
 	binary.LittleEndian.PutUint32(b[0:4], 0x31445247)
 	binary.LittleEndian.PutUint32(b[4:8], 1)
+	binary.LittleEndian.PutUint32(b[8:12], 32+64)
+	binary.LittleEndian.PutUint32(b[12:16], gridMaxInverters)
 	it := b[gridSHMHeader : gridSHMHeader+gridSHMItemSize]
 	binary.LittleEndian.PutUint32(it[0:4], 1)
 	copy(it[16:66], "SN123")
 	copy(it[66:130], "192.0.2.10:8899")
 	binary.LittleEndian.PutUint64(it[136:144], 1)
-	binary.LittleEndian.PutUint64(it[144:152], 123)
+	binary.LittleEndian.PutUint64(it[144:152], uint64(time.Now().Unix()))
 	if err := os.WriteFile(shmPath, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -236,5 +247,248 @@ func TestFieldConvGrid(t *testing.T) {
 		if !ok || fc.Unit != unit {
 			t.Fatalf("id %d: ok=%v unit=%q", id, ok, fc.Unit)
 		}
+	}
+}
+
+func TestBuildMainGridTiles(t *testing.T) {
+	dir := t.TempDir()
+	shmPath := filepath.Join(dir, "grid")
+	cfgPath := filepath.Join(dir, "grid.json")
+	const slots, itemSize, slotSize = 16, 160, 96
+	b := make([]byte, 64+slots*itemSize+slots*slotSize)
+	binary.LittleEndian.PutUint32(b[0:4], 0x31445247)
+	binary.LittleEndian.PutUint32(b[4:8], 1)
+	binary.LittleEndian.PutUint32(b[8:12], slotSize)
+	binary.LittleEndian.PutUint32(b[12:16], slots)
+	it := b[64 : 64+itemSize]
+	binary.LittleEndian.PutUint32(it[0:4], 1)
+	copy(it[16:66], "SN1")
+	copy(it[66:130], "192.0.2.10:8899")
+	it[130] = 0
+	it[131] = 1
+	binary.LittleEndian.PutUint64(it[136:144], 1)
+	binary.LittleEndian.PutUint64(it[144:152], uint64(time.Now().Unix()))
+
+	vals := make([]tscontract.Value, 0, 24)
+	for id := uint16(1); id <= 24; id++ {
+		v := tscontract.Value{ID: id, Type: tscontract.FTU16, Int: int64(id)}
+		if id == 8 || id == 16 || id == 17 {
+			v.Type = tscontract.FTI16
+		}
+		if id == 18 {
+			v.Type = tscontract.FTU8
+			v.Int = 2
+		}
+		if id >= 19 {
+			v.Int = 0
+		}
+		vals = append(vals, v)
+	}
+	payload, err := gridMainContract.Encode(vals)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload = append(payload, 10, 0, 1, 2, 3) // today=10, total=0x030201
+	sl := b[64+slots*itemSize : 64+slots*itemSize+slotSize]
+	binary.LittleEndian.PutUint32(sl[0:4], 1)
+	binary.LittleEndian.PutUint64(sl[8:16], 1)
+	binary.LittleEndian.PutUint32(sl[24:28], uint32(len(payload)))
+	binary.LittleEndian.PutUint32(sl[28:32], crc32.ChecksumIEEE(payload))
+	copy(sl[32:], payload)
+	if err := os.WriteFile(shmPath, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"enabled":true,"poll_period":10,"placements":["Дом"],"inverters":[{"name":"Deye","ip":"192.0.2.10","port":8899,"type":"deye","placement":"Дом","logger_sn":1}]}`
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{opts: Options{GridSHMPath: shmPath, GridConfigPath: cfgPath}}
+	tr := map[string]string{"grid.st1": "OK", "grid.inv_st2": "норма"}
+	got := s.buildMainGridTiles(tr)
+	if len(got) != 1 {
+		t.Fatalf("tiles=%d", len(got))
+	}
+	g := got[0]
+	if g.Name != "Deye" || g.Placement != "Дом" || !g.Online || g.Alarm || g.InverterStatusText != "норма" {
+		t.Fatalf("tile: %+v", g)
+	}
+	if g.PVVoltage.V != 0.4 || g.PVCurrent.V != 0.07 || g.PVPower.V != 90 ||
+		g.ACActive.V != 70 || g.ACReactive.V != 80 || g.Frequency.V != 0.09 {
+		t.Fatalf("values: %+v", g)
+	}
+	if g.EnergyToday.V != 1 || math.Abs(g.EnergyTotal.V-19712.1) > 1e-6 {
+		t.Fatalf("energy: %+v %+v", g.EnergyToday, g.EnergyTotal)
+	}
+}
+
+func TestAPIGridStatusShowsAllConfigured(t *testing.T) {
+	dir := t.TempDir()
+	shmPath := filepath.Join(dir, "grid")
+	cfgPath := filepath.Join(dir, "grid.json")
+	b := make([]byte, gridSHMHeader+gridMaxInverters*gridSHMItemSize)
+	binary.LittleEndian.PutUint32(b[0:4], 0x31445247)
+	binary.LittleEndian.PutUint32(b[4:8], 1)
+	binary.LittleEndian.PutUint32(b[8:12], 32+64)
+	binary.LittleEndian.PutUint32(b[12:16], gridMaxInverters)
+	it := b[gridSHMHeader : gridSHMHeader+gridSHMItemSize]
+	binary.LittleEndian.PutUint32(it[0:4], 1)
+	copy(it[16:66], "SN1")
+	it[131] = 1
+	binary.LittleEndian.PutUint64(it[144:152], uint64(time.Now().Unix()))
+	if err := os.WriteFile(shmPath, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"enabled":true,"poll_period":10,"placements":["Дом"],"inverters":[` +
+		`{"name":"A","ip":"192.0.2.10","port":8899,"type":"deye","placement":"Дом","logger_sn":1},` +
+		`{"name":"B","ip":"192.0.2.11","port":8899,"type":"sofar","placement":"Дом","logger_sn":2}]}`
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{opts: Options{GridSHMPath: shmPath, GridConfigPath: cfgPath}}
+	w := httptest.NewRecorder()
+	s.handleAPIGridStatus(w, authedReq("GET", "/api/grid/status", ""))
+	var resp struct {
+		Inverters []gridStatusItem `json:"inverters"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Inverters) != 2 {
+		t.Fatalf("inverters=%d", len(resp.Inverters))
+	}
+	if resp.Inverters[0].Status != 1 || resp.Inverters[1].Status != 0 || resp.Inverters[1].Kind != 1 {
+		t.Fatalf("resp=%+v", resp.Inverters)
+	}
+}
+
+func TestBuildMainGridTilesDisabledAndND(t *testing.T) {
+	dir := t.TempDir()
+	shmPath := filepath.Join(dir, "grid")
+	cfgPath := filepath.Join(dir, "grid.json")
+	const slots, itemSize, slotSize = 16, 160, 96
+	b := make([]byte, 64+slots*itemSize+slots*slotSize)
+	binary.LittleEndian.PutUint32(b[0:4], 0x31445247)
+	binary.LittleEndian.PutUint32(b[4:8], 1)
+	binary.LittleEndian.PutUint32(b[8:12], slotSize)
+	binary.LittleEndian.PutUint32(b[12:16], slots)
+	it := b[64 : 64+itemSize]
+	binary.LittleEndian.PutUint32(it[0:4], 1)
+	copy(it[16:66], "SN1")
+	it[131] = 1
+	binary.LittleEndian.PutUint64(it[136:144], 1)
+	binary.LittleEndian.PutUint64(it[144:152], uint64(time.Now().Unix()))
+	// Битый слот: state=1, длина 55, CRC неверный.
+	sl := b[64+slots*itemSize : 64+slots*itemSize+slotSize]
+	binary.LittleEndian.PutUint32(sl[0:4], 1)
+	binary.LittleEndian.PutUint64(sl[8:16], 1)
+	binary.LittleEndian.PutUint32(sl[24:28], 55)
+	binary.LittleEndian.PutUint32(sl[28:32], 0)
+	if err := os.WriteFile(shmPath, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"enabled":true,"poll_period":10,"placements":["Дом"],"inverters":[{"name":"A","ip":"192.0.2.10","port":8899,"type":"deye","placement":"Дом","logger_sn":1}]}`
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{opts: Options{GridSHMPath: shmPath, GridConfigPath: cfgPath}}
+	got := s.buildMainGridTiles(map[string]string{"grid.st1": "OK", "grid.inv_st0": "ожидание"})
+	if len(got) != 1 || !got[0].ACActive.ND || !got[0].PVVoltage.ND || !got[0].EnergyToday.ND {
+		t.Fatalf("ND-фолбэк: %+v", got)
+	}
+	// Выключенный опрос — пусто.
+	cfgOff := `{"enabled":false,"poll_period":10,"inverters":[{"name":"A","ip":"192.0.2.10","port":8899,"type":"deye","logger_sn":1}]}`
+	if err := os.WriteFile(cfgPath, []byte(cfgOff), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s = &Server{opts: Options{GridSHMPath: shmPath, GridConfigPath: cfgPath}}
+	if got := s.buildMainGridTiles(nil); len(got) != 0 {
+		t.Fatalf("disabled: %+v", got)
+	}
+}
+
+func TestAPIGridDevice(t *testing.T) {
+	dir := t.TempDir()
+	shmPath := filepath.Join(dir, "grid")
+	cfgPath := filepath.Join(dir, "grid.json")
+	const slots, itemSize, slotSize = 16, 160, 96
+	b := make([]byte, 64+slots*itemSize+slots*slotSize)
+	binary.LittleEndian.PutUint32(b[0:4], 0x31445247)
+	binary.LittleEndian.PutUint32(b[4:8], 1)
+	binary.LittleEndian.PutUint32(b[8:12], slotSize)
+	binary.LittleEndian.PutUint32(b[12:16], slots)
+	it := b[64 : 64+itemSize]
+	binary.LittleEndian.PutUint32(it[0:4], 1)
+	copy(it[16:66], "SN1")
+	it[130] = 0
+	it[131] = 1
+	binary.LittleEndian.PutUint64(it[136:144], 1)
+	binary.LittleEndian.PutUint64(it[144:152], uint64(time.Now().Unix()))
+	vals := make([]tscontract.Value, 0, 24)
+	for id := uint16(1); id <= 24; id++ {
+		v := tscontract.Value{ID: id, Type: tscontract.FTU16, Int: int64(id)}
+		if id == 8 || id == 16 || id == 17 {
+			v.Type = tscontract.FTI16
+		}
+		if id == 16 {
+			v.Int = -1000
+		}
+		if id == 18 {
+			v.Type = tscontract.FTU8
+		}
+		if id == 19 {
+			v.Int = 1
+		} // W1
+		if id > 19 {
+			v.Int = 0
+		}
+		vals = append(vals, v)
+	}
+	payload, err := gridMainContract.Encode(vals)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload = append(payload, 1, 0, 2, 3, 4)
+	sl := b[64+slots*itemSize : 64+slots*itemSize+slotSize]
+	binary.LittleEndian.PutUint32(sl[0:4], 1)
+	binary.LittleEndian.PutUint64(sl[8:16], 1)
+	binary.LittleEndian.PutUint32(sl[24:28], uint32(len(payload)))
+	binary.LittleEndian.PutUint32(sl[28:32], crc32.ChecksumIEEE(payload))
+	copy(sl[32:], payload)
+	if err := os.WriteFile(shmPath, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"enabled":true,"poll_period":10,"placements":["Дом"],"inverters":[{"name":"Deye","ip":"192.0.2.10","port":8899,"type":"deye","placement":"Дом","logger_sn":1}]}`
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(Options{AssetsDir: "../../assets", AuthStorePath: filepath.Join(dir, "auth"), GridSHMPath: shmPath, GridConfigPath: cfgPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	srv.handleAPIGridDevice(w, authedReq("GET", "/api/grid/device?serial=SN1", ""))
+	if w.Code != 200 {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
+	}
+	var doc gridDeviceDoc
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Fields) != 24 || len(doc.Alarms) == 0 || doc.Alarms[0].NameKey != "grid.alm.deye.w1" {
+		t.Fatalf("doc: %+v", doc)
+	}
+	if doc.Fields[0].UnitKey != "home.grid.v" || doc.Fields[7].UnitKey != "home.grid.var" || !doc.Fields[15].ND || doc.Fields[18].Value != "0x0001" {
+		t.Fatalf("fields: %+v", doc.Fields)
+	}
+	// Страница: без id — редирект, с id — 200.
+	w2 := httptest.NewRecorder()
+	srv.handleGridPage(w2, authedReq("GET", "/grid", ""))
+	if w2.Code != http.StatusSeeOther {
+		t.Fatalf("no id code=%d", w2.Code)
+	}
+	w3 := httptest.NewRecorder()
+	srv.handleGridPage(w3, authedReq("GET", "/grid?id=SN1&gen=1", ""))
+	if w3.Code != http.StatusOK {
+		t.Fatalf("page code=%d body=%s", w3.Code, w3.Body.String())
 	}
 }

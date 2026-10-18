@@ -67,10 +67,11 @@ type mainKesTile struct {
 
 // mainlistResp — тело ответа /api/mainlist.
 type mainlistResp struct {
-	Updated int64         `json:"updated"`
-	Maps    []mainMapTile `json:"maps"`
-	Kes     []mainKesTile `json:"kes"`
-	Bms     []mainBmsTile `json:"bms"`
+	Updated int64          `json:"updated"`
+	Maps    []mainMapTile  `json:"maps"`
+	Kes     []mainKesTile  `json:"kes"`
+	Bms     []mainBmsTile  `json:"bms"`
+	Grid    []mainGridTile `json:"grid"`
 }
 
 // handleAPIMainList — сводка по всем устройствам. Под авторизацией (cookie || Bearer).
@@ -86,7 +87,7 @@ func (s *Server) handleAPIMainList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tr := s.bundle.Translations(s.lang(r))
-	resp := mainlistResp{Updated: time.Now().Unix(), Maps: []mainMapTile{}, Kes: []mainKesTile{}, Bms: []mainBmsTile{}}
+	resp := mainlistResp{Updated: time.Now().Unix(), Maps: []mainMapTile{}, Kes: []mainKesTile{}, Bms: []mainBmsTile{}, Grid: []mainGridTile{}}
 
 	for _, m := range loadMapList().Maps {
 		payload := mapRawPayload(m.ID)
@@ -111,6 +112,8 @@ func (s *Server) handleAPIMainList(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Kes = append(resp.Kes, buildKesTile(tr, k, kf))
 	}
+
+	resp.Grid = s.buildMainGridTiles(tr)
 
 	for _, b := range loadBmsList().Bms {
 		payload := bmsRawPayload(b.ID, b.Gen)

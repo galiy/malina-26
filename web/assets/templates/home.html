@@ -16,6 +16,10 @@
     <h2>{{index .T "home.sec_bms"}}</h2>
     <div class="home-tiles" id="homeBmsTiles"></div>
   </section>
+  <section class="home-section" id="homeGrid" hidden>
+    <h2>{{index .T "home.sec_grid"}}</h2>
+    <div id="homeGridGroups"></div>
+  </section>
 </div>
 <script>
   window.I18N = {{json .T}};

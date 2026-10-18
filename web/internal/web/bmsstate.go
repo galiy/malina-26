@@ -47,6 +47,7 @@ type BmsInfo struct {
 	TypeID   int    `json:"type_id"`   // внутренний код типа
 	TypeName string `json:"bms_type"`  // имя типа (AntBMS-DSP / EnBMS-RS485)
 	Framing  int    `json:"framing"`   // 0 native, 1 m-rtu, 2 m-tcp
+	State    int    `json:"state"`     // 0 lost, 1 ok
 	LastSeen int64  `json:"last_seen"` // unix
 }
 
@@ -123,6 +124,7 @@ func decodeBmsItem(i int, b []byte) (BmsInfo, bool) {
 		TypeID:   int(b[bmsOffTypeID]),
 		TypeName: bmsTypeName(int(b[bmsOffTypeID])),
 		Framing:  int(b[bmsOffFraming]),
+		State:    int(b[bmsOffState]),
 		LastSeen: int64(binary.LittleEndian.Uint64(b[bmsOffLastSeen : bmsOffLastSeen+8])),
 	}, true
 }

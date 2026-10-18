@@ -1,6 +1,10 @@
 {{define "content"}}
 {{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
 {{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
+<section class="card" id="settingsStatus" data-type="kes">
+  <h2>{{index .T "settings.status_title"}}</h2>
+  <table class="nettable"><thead></thead><tbody></tbody></table>
+</section>
 <form method="post" action="/kes/settings">
   <div class="page-head page-head-left">
     <h1>{{index .T "kes.settings_title"}}</h1>
@@ -30,4 +34,6 @@
 <script>
   document.querySelector(".cancelbtn").addEventListener("click", function () { this.form.reset(); });
 </script>
+<script>window.I18N = {{json .T}};</script>
+<script src="{{asset "settings_status.js"}}"></script>
 {{end}}

@@ -276,6 +276,7 @@ func New(o Options) (*Server, error) {
 		"master":          "master.html",
 		"master_settings": "master_settings.html",
 		"grid_settings":   "grid_settings.html",
+		"grid":            "grid.html",
 		"map_settings":    "map_settings.html",
 		"kes_settings":    "kes_settings.html",
 		"bms_settings":    "bms_settings.html",
@@ -429,7 +430,10 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/map/settings", s.handleMapSettings)
 	mux.HandleFunc("/kes/settings", s.handleKesSettings)
 	mux.HandleFunc("/grid/settings", s.handleGridSettings)
+	mux.HandleFunc("/grid", s.handleGridPage)
+	mux.HandleFunc("/api/grid/device", s.handleAPIGridDevice)
 	mux.HandleFunc("/api/grid/status", s.handleAPIGridStatus)
+	mux.HandleFunc("/api/settings/status", s.handleAPISettingsStatus)
 	mux.HandleFunc("/api/grid/detect_sn", s.handleAPIGridDetectSN)
 	mux.HandleFunc("/system/email", s.handleEmail)
 	mux.HandleFunc("/system/email/save", s.handleEmailSave)

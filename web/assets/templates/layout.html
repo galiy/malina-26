@@ -40,9 +40,10 @@
           <a href="/bms/settings" class="{{if eq .Active "bms_settings"}}active{{end}}">{{index .T "menu.bms_settings"}}</a>
         </div>
       </div>
-      <div class="navitem dropdown {{if eq .Active "grid_settings"}}active{{end}}">
+      <div class="navitem dropdown {{if or (eq .Active "grid") (eq .Active "grid_settings")}}active{{end}}">
         <span class="navlink">{{index .T "menu.grid"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
+          <div id="gridMenuItems">{{range .Grid}}<a class="dropdown-sub" href="/grid?id={{.Serial}}&gen={{.Gen}}">{{.Name}}</a>{{end}}</div>
           <a href="/grid/settings" class="{{if eq .Active "grid_settings"}}active{{end}}">{{index .T "menu.grid_settings"}}</a>
         </div>
       </div>

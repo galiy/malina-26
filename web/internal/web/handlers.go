@@ -73,6 +73,7 @@ func (s *Server) baseData(r *http.Request) map[string]any {
 		"Maps":      loadMapList().Maps,
 		"Kes":       loadKesList().Kes, // для меню «КЭС» (как у «МАП»)
 		"Bms":       loadBmsList().Bms, // для меню «БМС»
+		"Grid":      s.gridMenuItems(), // для меню «Сетевые»
 	}
 }
 

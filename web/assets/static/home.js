@@ -97,11 +97,14 @@
   var kesWrap = document.getElementById("homeKesTiles");
   var bmsSection = document.getElementById("homeBms");
   var bmsWrap = document.getElementById("homeBmsTiles");
+  var gridSection = document.getElementById("homeGrid");
+  var gridWrap = document.getElementById("homeGridGroups");
   var errBox = document.getElementById("homeErr");
 
   // Реестр плиток: key ("map:3"/"kes:5") -> элемент .home-tile.
   var tiles = {};
   var timer = null;
+  var lastGrid = 0;
 
   function t(k) { return I18N[k] || k; }
   function fmt(v, d) {
@@ -260,6 +263,87 @@
       esc(t("bms.cells")) + "</div>" + stat + tbl + "</div>";
   }
 
+  function gridVal(v, dec) {
+    if (!v || v.nd) { return esc(t("home.nd")); }
+    return fmt(v.v, dec);
+  }
+  function gridRow(label, v, unit, dec) {
+    return '<tr><td class="home-cell-l">' + esc(label) + '</td>' +
+      '<td class="home-cell-v-wrap"><span class="home-cell-v">' + gridVal(v, dec) + '</span></td>' +
+      '<td class="home-cell-u">' + esc(unit) + '</td></tr>';
+  }
+  function gridTemps(d) {
+    if (d.type === "sofar") {
+      return [t("home.grid.module"), t("home.grid.inner")];
+    }
+    return [t("home.grid.igbt"), t("home.grid.radiator")];
+  }
+  function gridCardHTML(d) {
+    var tt = gridTemps(d);
+    var h = '<div class="home-card grid-card' + (d.online ? "" : " grid-offline") + '">' +
+      '<table class="bms-head"><tbody><tr>' +
+      '<td class="bms-alert-cell" rowspan="2"><span class="bms-alert' + (d.alarm ? " on" : "") +
+      '" title="' + esc(t(d.alarm ? "grid.alarm" : "grid.ok")) + '">!</span></td>' +
+      '<td class="home-title">' + esc(d.name || d.serial) + "</td></tr>" +
+      '<tr><td><div class="home-status"><span class="home-status-mode grid-status st' + d.status + '">' +
+      esc(d.inverter_status_text || "") + '</span><span class="grid-sub">' +
+      esc((d.status_text || "") + " · " + (d.type === "sofar" ? "Sofar" : "Deye") + " " + (d.serial || "")) +
+      '<span class="grid-last-inline">' + esc(d.last_seen ? new Date(d.last_seen * 1000).toLocaleString() : t("home.nd")) + "</span></span></div></td></tr>" +
+      "</tbody></table>" +
+      '<div class="grid-big">' +
+      '<div><div class="grid-big-l">' + esc(t("home.grid.ac")) + '</div><div class="grid-big-v">' + gridVal(d.ac_active, 0) + ' <span class="grid-big-u">' + esc(t("home.grid.w")) + "</span></div></div>" +
+      '<div><div class="grid-big-l">' + esc(t("home.grid.pv")) + '</div><div class="grid-big-v">' + gridVal(d.pv_power, 0) + ' <span class="grid-big-u">' + esc(t("home.grid.w")) + "</span></div></div>" +
+      "</div>" +
+      '<div class="grid-sep"></div>' +
+      '<div class="grid-cols">' +
+      '<div class="grid-col"><table class="home-cols-table"><tbody>' +
+      gridRow(t("home.grid.pv_u"), d.pv_voltage, t("home.grid.v"), 1) +
+      gridRow(t("home.grid.pv_i"), d.pv_current, t("home.grid.a"), 2) +
+      gridRow(tt[0], d.temp1, t("home.grid.c"), 1) +
+      gridRow(tt[1], d.temp2, t("home.grid.c"), 1) +
+      gridRow(t("home.grid.e_today"), d.energy_today, t("home.grid.kwh"), 1) +
+      gridRow(t("home.grid.e_total"), d.energy_total, t("home.grid.kwh"), 1) +
+      "</tbody></table></div>" +
+      '<div class="grid-col grid-col-right"><table class="home-cols-table"><tbody>' +
+      gridRow(t("home.grid.q"), d.ac_reactive, t("home.grid.var"), 0) +
+      gridRow(t("home.grid.f"), d.frequency, t("home.grid.hz"), 2) +
+      gridRow(t("home.grid.l1"), d.l1_voltage, t("home.grid.v"), 1) +
+      gridRow(t("home.grid.l2"), d.l2_voltage, t("home.grid.v"), 1) +
+      gridRow(t("home.grid.l3"), d.l3_voltage, t("home.grid.v"), 1) +
+      gridRow(t("home.grid.i_sum"), d.current_sum, t("home.grid.a"), 2) +
+      "</tbody></table>" +
+      "</div></div>";
+    return h;
+  }
+  function renderGrid(list) {
+    if (!gridSection || !gridWrap) { return; }
+    gridWrap.innerHTML = "";
+    var groups = {};
+    (list || []).forEach(function (d) {
+      var p = d.placement || t("grid.no_placement");
+      (groups[p] || (groups[p] = [])).push(d);
+    });
+    Object.keys(groups).sort().forEach(function (p) {
+      var g = document.createElement("div");
+      g.className = "home-grid-group";
+      var h = document.createElement("h3");
+      h.textContent = p;
+      g.appendChild(h);
+      var tiles = document.createElement("div");
+      tiles.className = "home-tiles";
+      groups[p].sort(function (a, b) { return (a.name || "").localeCompare(b.name || ""); }).forEach(function (d) {
+        var el = document.createElement(d.serial ? "a" : "div");
+        el.className = "home-tile" + (d.serial ? " home-tile-link" : "");
+        if (d.serial) el.href = "/grid?id=" + encodeURIComponent(d.serial) + "&gen=" + encodeURIComponent(d.gen || "");
+        el.innerHTML = gridCardHTML(d);
+        tiles.appendChild(el);
+      });
+      g.appendChild(tiles);
+      gridWrap.appendChild(g);
+    });
+    gridSection.hidden = !(list && list.length);
+  }
+
   function setFog(el, state) {
     var fog = el.querySelector(".home-fog");
     var txt = fog.querySelector(".home-fog-text");
@@ -338,6 +422,10 @@
         applySection(mapSection, mapWrap, d.maps || [], "map:", "map");
         applySection(kesSection, kesWrap, d.kes || [], "kes:", "kes");
         applySection(bmsSection, bmsWrap, d.bms || [], "bms:", "bms");
+        if (Date.now() - lastGrid >= 5000) {
+          lastGrid = Date.now();
+          renderGrid(d.grid || []);
+        }
       })
       .catch(function (e) {
         showErr(t("home.err"));

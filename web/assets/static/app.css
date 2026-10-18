@@ -1383,6 +1383,37 @@ tr.ctl-changed { background: #fff8e1; }
 .grid-help p { margin: 0 0 8px; }
 .grid-status { font-weight: 600; }
 .grid-status.st1 { color: #1a7f37; }
+.home-card .grid-status.st1 { color: #9dff57; text-shadow: 0 0 6px rgba(157, 255, 87, .35); }
 .grid-status.st2 { color: #9a6700; }
 .grid-status.st3, .grid-status.st4 { color: #b42318; }
 .grid-status.st5, .grid-status.st6, .grid-status.st7 { color: #b42318; }
+
+/* Главная: плашки сетевых инверторов */
+.home-grid-group { margin-bottom: 18px; }
+.home-grid-group h3 { margin: 0 0 8px; font-size: 1rem; opacity: .85; }
+.grid-big { display: flex; gap: 16px; padding: 2px 0 0; line-height: 1.05; }
+.grid-big > div { flex: 1; }
+.grid-big-l { font-size: .8rem; color: #b7cec0; opacity: .7; line-height: 1.05; }
+.grid-big-v { font-size: 1.45rem; font-weight: 600; color: #eef6f0; line-height: 1.05; }
+.grid-big-u { font-size: .8rem; font-weight: 400; color: #b7cec0; opacity: .7; }
+.grid-sub { margin-left: 10px; opacity: .75; font-size: .85rem; }
+.grid-card.grid-offline { opacity: .6; }
+.grid-sep { border-top: 1px solid #000; margin: 3px 0; }
+.grid-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.grid-col { min-width: 0; }
+.grid-col:first-child { padding-right: 20px; }
+.grid-col + .grid-col { border-left: 1px solid #000; padding-left: 20px; }
+.grid-cols .home-cols-table td { padding-top: .02rem; padding-bottom: .02rem; }
+.grid-last-inline { margin-left: 8px; opacity: .75; }
+
+/* Страница сетевого инвертора */
+.grid-device-sub { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
+.grid-sec-title { margin: 14px 0 6px; font-size: .95rem; color: #0d5637; }
+.grid-params th { text-align: left; }
+.grid-params .grid-p-name { width: 55%; }
+.grid-params .grid-p-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.grid-params .grid-p-unit { width: 1%; color: var(--muted); white-space: nowrap; }
+.grid-alarms { margin-top: 6px; }
+
+/* Карточка статуса на страницах настроек: отбивка от формы/кнопок */
+#settingsStatus { margin-bottom: 1rem; }

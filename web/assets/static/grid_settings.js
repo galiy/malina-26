@@ -171,7 +171,7 @@
       .catch(function () { /* оставляем прошлые данные */ });
   }
   var timer = null;
-  function schedule() { timer = setTimeout(loop, 5000); }
+  function schedule() { timer = setTimeout(loop, 1000); }
   function loop() {
     if (timer) clearTimeout(timer);
     if (document.hidden) {

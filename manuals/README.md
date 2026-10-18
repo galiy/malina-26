@@ -29,7 +29,7 @@
 
 - [ui.md](ui.md) — **интерфейс**: вход, доступы, SSH, точка доступа, меню и **индекс страниц**.
 - Страницы (отдельными файлами в `pages/`):
-  [Информация о системе](pages/info.md), [МАП](pages/map.md),
+  [Информация о системе](pages/info.md), [МАП](pages/map.md), [Сетевые инверторы](pages/grid.md),
   [Параметры системы](pages/system.md), [Настройка сети](pages/network.md),
   [Сервисы](pages/services.md), [Логи](pages/logs.md).
 

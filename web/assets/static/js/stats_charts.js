@@ -11,6 +11,11 @@
 
   var tabsEl = document.getElementById("stats-tabs");
   var chartsEl = document.getElementById("stats-charts");
+  var reqSeq = 0;
+  var followSeq = 0;
+  var compareMode = false;
+  var compareWrap = document.getElementById("ch-compare-wrap");
+  var compareCb = document.getElementById("ch-compare");
   if (!chartsEl) return;
 
   Chart.register(ChartZoom);
@@ -61,25 +66,28 @@
         { n: "stats.f.kes.TempInt", k: "12" }] }
     ],
     grid: [
-      { t: "grid.chart.pv", lines: [
-        { n: "PV1", k: "1" },
-        { n: "PV2", k: "4" }] },
-      { t: "grid.chart.pv_i", lines: [
-        { n: "PV1", k: "2" },
-        { n: "PV2", k: "5" }] },
-      { t: "grid.chart.power", lines: [
-        { n: "PV1", k: "3" },
-        { n: "PV2", k: "6" },
-        { n: "AC", k: "7" }] },
-      { t: "grid.chart.reactive", lines: [{ n: "Q", k: "8" }] },
-      { t: "grid.chart.ac", lines: [
-        { n: "L1", k: "10" },
-        { n: "L2", k: "12" },
-        { n: "L3", k: "14" }] },
-      { t: "grid.chart.freq", lines: [{ n: "F", k: "9" }] },
-      { t: "grid.chart.temp", lines: [
-        { n: "T1", k: "16" },
-        { n: "T2", k: "17" }] }
+      { t: "grid.chart.voltages", u: "home.grid.v", lines: [
+        { n: "grid.line.pv1", k: "1", u: "home.grid.v", dec: 1 },
+        { n: "grid.line.pv2", k: "4", u: "home.grid.v", dec: 1 },
+        { n: "grid.line.l1", k: "10", u: "home.grid.v", dec: 1 },
+        { n: "grid.line.l2", k: "12", u: "home.grid.v", dec: 1 },
+        { n: "grid.line.l3", k: "14", u: "home.grid.v", dec: 1 }] },
+      { t: "grid.chart.currents", u: "home.grid.a", lines: [
+        { n: "grid.line.pv1", k: "2", u: "home.grid.a", dec: 2 },
+        { n: "grid.line.pv2", k: "5", u: "home.grid.a", dec: 2 },
+        { n: "grid.line.l1", k: "11", u: "home.grid.a", dec: 2 },
+        { n: "grid.line.l2", k: "13", u: "home.grid.a", dec: 2 },
+        { n: "grid.line.l3", k: "15", u: "home.grid.a", dec: 2 }] },
+      { t: "grid.chart.powers", u: "grid.unit.wvar", lines: [
+        { n: "grid.line.pv1", k: "3", u: "home.grid.w", dec: 0 },
+        { n: "grid.line.pv2", k: "6", u: "home.grid.w", dec: 0 },
+        { n: "grid.line.ac", k: "7", u: "home.grid.w", dec: 0 },
+        { n: "grid.line.q", k: "8", u: "home.grid.var", dec: 0 },
+        { n: "grid.line.pvsum", calc: "pvsum", u: "home.grid.w", dec: 0 }] },
+      { t: "grid.chart.freq_temp", u: "grid.unit.hz_c", lines: [
+        { n: "grid.line.f", k: "9", u: "home.grid.hz", dec: 2 },
+        { n: "grid.line.t1", k: "16", u: "home.grid.c", dec: 1 },
+        { n: "grid.line.t2", k: "17", u: "home.grid.c", dec: 1 }] }
     ],
     mbms: [
       { t: "stats.c.cells_v", cellGroup: 1 },
@@ -169,6 +177,7 @@
       else if (calc === "pbat") v = pbatAt(vals, t);
       else if (calc === "pout") v = poutAt(vals, t);
       else if (calc === "iout") { var uo = g(vals, "6", t), po = poutAt(vals, t); v = (po != null && uo) ? po / uo : undefined; }
+      else if (calc === "pvsum") v = sumKeys(vals, t, [3, 6]);
       else if (calc === "pmppt") { var ua2 = g(vals, "8", t), im = sumKeys(vals, t, [29, 30, 31, 32]); v = (ua2 != null && im != null) ? ua2 * im : undefined; }
       else if (calc === "spread" || calc === "pack") {
         var vals2 = [], m = vals.byKey;
@@ -198,7 +207,7 @@
     if (p === "yesterday") { d.setHours(0, 0, 0, 0); return { from: d.getTime() - 864e5, to: d.getTime() - 1 }; }
     if (p === "7d") return { from: to - 7 * 864e5, to: to };
     if (p === "month") { d.setDate(d.getDate() - 30); return { from: d.getTime(), to: to }; }
-    if (p === "last") return { from: 0, to: to }; // «Последние данные» — хвост БД (как в таблицах)
+    if (p === "last") return { from: 0, to: to };
     return { from: to - 24 * 3600e3, to: to };
   }
   // Значение для <input type="datetime-local" step="1"> (локальная зона, секунды).
@@ -224,6 +233,7 @@
   function followControls(dis) {
     Array.prototype.forEach.call(document.querySelectorAll(".stats-controls [data-period], #ch-from, #ch-to, #ch-show, #ch-reload"),
       function (el) { el.disabled = dis; });
+    var cc = document.getElementById("ch-compare"); if (cc) cc.disabled = dis;
   }
   function inputsShow() {
     document.getElementById("ch-from").value = toLocalInput(range.from);
@@ -231,7 +241,7 @@
   }
   function stopFollow() {
     if (followTimer) { clearInterval(followTimer); followTimer = null; }
-    followActive = false; followControls(false); depthUI();
+    followActive = false; followSeq++; followControls(false); depthUI();
   }
   function setFollowOff() { var cb = document.getElementById("ch-follow"); if (cb) cb.checked = false; stopFollow(); }
   function followURL(extra) {
@@ -239,16 +249,21 @@
       "&fields=" + encodeURIComponent(fieldsFor(active.type).join(",")) + "&follow=1" + extra;
   }
   function followFull() {
+    var act = active, seq = ++followSeq;
     return api(followURL("&depth=" + followDepth)).then(function (j) {
+      if (!followActive || active !== act || seq !== followSeq || !j) return;
       followSeries = (j && j.series) || {}; followFrom = j.from; followTo = j.to;
       range = { from: followFrom, to: followTo };
       renderFromSeries(followSeries); inputsShow();
     });
   }
   function followTick() {
+    if (!followSeries) return Promise.resolve();
+    var act = active, seq = followSeq;
     var lastT = 0;
     Object.keys(followSeries || {}).forEach(function (k) { var a = followSeries[k]; if (a && a.length && a[a.length - 1][0] > lastT) lastT = a[a.length - 1][0]; });
     return api(followURL("&after=" + lastT)).then(function (j) {
+      if (!followActive || active !== act || seq !== followSeq || !j) return;
       var ns = (j && j.series) || {};
       Object.keys(ns).forEach(function (k) { var dst = followSeries[k] || (followSeries[k] = []); ns[k].forEach(function (p) { dst.push(p); }); });
       followTo = j.to; followFrom = followTo - followDepth * 60000;
@@ -260,6 +275,7 @@
   function startFollow() {
     stopFollow();
     followActive = true; followDepth = loadDepth();
+    followSeries = null; followFrom = followTo = 0;
     depthUI(); followControls(true);
     followFull().catch(function () {});
     followTimer = setInterval(function () { followTick().catch(function () {}); }, 1000);
@@ -289,9 +305,14 @@
       var b = document.createElement("button");
       b.className = "stats-tab" + (active === d ? " active" : "");
       b.textContent = devLabel(d);
-      b.addEventListener("click", function () { setFollowOff(); active = d; renderTabs(); loadCharts(); });
+      b.addEventListener("click", function () { setFollowOff(); active = d; if (compareCb) { compareCb.checked = false; } renderTabs(); loadCharts(); });
       tabsEl.appendChild(b);
     });
+    if (compareWrap) {
+      var isGrid = !!(active && active.type === "grid");
+      compareWrap.hidden = !isGrid;
+      if (!isGrid && compareCb) { compareCb.checked = false; }
+    }
   }
   function loadDevs() {
     // Фиксированный режим (страница устройства, напр. /bms): без списка/закладок —
@@ -306,13 +327,24 @@
       devs = (j && j.devices) || [];
       var vis = visibleDevs();
       if (vis.length) { active = vis[0]; renderTabs(); loadCharts(); }
-      else chartsEl.innerHTML = '<p class="muted">' + esc(T("stats.no_data")) + "</p>";
-    }).catch(function () {});
+      else showNoData();
+    }).catch(function () {
+      showNoData();
+    });
   }
 
   // --- Рендер карточек ---
   var CHARTS = {};
-  var chartsType = null; // тип устройства, под который построены карточки (in-place только для него)
+  var chartsType = null;
+  function clearCharts() {
+    Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].destroy(); } catch (e) {} delete CHARTS[id]; });
+    chartsType = null;
+    compareMode = false;
+  }
+  function showNoData() {
+    clearCharts();
+    chartsEl.innerHTML = '<p class="muted">' + esc(T("stats.no_data")) + "</p>";
+  } // тип устройства, под который построены карточки (in-place только для него)
   var hidden = {};   // type -> [keyStr] (скрытые линии; кэш из localStorage)
   var zoomWin = {};  // id -> {min,max}
   // Персист видимости линий: в разрезе ТИПА устройства, по стабильным ключам
@@ -329,7 +361,7 @@
     hidden[type] = arr;
     try { localStorage.setItem(hiddenKey(type), JSON.stringify(arr)); } catch (e) {}
   }
-  var orderKey = function () { return "statsChartOrder:" + (active ? active.type : ""); };
+  var orderKey = function () { return "statsChartOrder:" + (compareMode ? "grid-compare" : (active ? active.type : "")); };
 
   function applyOrder() {
     var ids = null;
@@ -386,7 +418,12 @@
     Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].update("none"); } catch (e) {} });
   }
   // Формат значения и времени для кастомного хинта.
-  function fmtVal(v) { if (v == null || !isFinite(v)) return "—"; var a = Math.abs(v); return v.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : 2); }
+  function fmtVal(v, dec) {
+    if (v == null || !isFinite(v)) return "—";
+    if (dec !== undefined && dec !== null) return v.toFixed(dec);
+    var a = Math.abs(v);
+    return v.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : 2);
+  }
   function fmtTime(t) {
     var d = new Date(t), p = function (x) { return (x < 10 ? "0" : "") + x; };
     return p(d.getDate()) + "." + p(d.getMonth() + 1) + "." + d.getFullYear() + " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
@@ -407,7 +444,7 @@
               var arr = ds[0].data, lo = 0, hi = arr.length - 1;
               while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid][0] < cursor.value) lo = mid + 1; else hi = mid; }
               var rows = [];
-              ds.forEach(function (d, i) { if (c.isDatasetVisible(i) && d.data[lo]) rows.push({ col: d.borderColor, s: d.label + ": " + fmtVal(d.data[lo][1]) }); });
+              ds.forEach(function (d, i) { if (c.isDatasetVisible(i) && d.data[lo]) rows.push({ col: d.borderColor, s: d.label + ": " + fmtVal(d.data[lo][1], d.dec) }); });
               var title = fmtTime(arr[lo][0]), pad = 5, lh = 13;
               var fontNormal = "11px system-ui, sans-serif", fontBold = "bold 11px system-ui, sans-serif";
               ctx.textBaseline = "top";
@@ -525,7 +562,7 @@
     var card = document.createElement("div");
     card.className = "stats-card";
     card.setAttribute("data-cid", cid);
-    card.innerHTML = orderBtns() + "<h2>" + esc(T(set.t)) + '</h2><div class="chart-toolbar"><span></span></div>' +
+    card.innerHTML = orderBtns() + "<h2>" + esc(T(set.t)) + (set.u ? " (" + esc(T(set.u)) + ")" : "") + '</h2><div class="chart-toolbar"><span></span></div>' +
       '<div class="lg-chips" id="' + cid + 'Lg"></div><div class="chart-wrap"><canvas id="' + cid + '"></canvas></div>';
     chartsEl.appendChild(card);
     var saved = zoomWin[cid];
@@ -626,10 +663,10 @@
       var data = ln.calc ? calcSeries(ln.calc, vals) : ((series && series[ln.k]) || []).map(function (p) { return [+p[0], +p[1]]; });
       if (ln.div && ln.div !== 1) { data = data.map(function (p) { return [p[0], p[1] / ln.div]; }); }
       if (!data.length) return;
-      var name = T(ln.n) + (ln.cell ? " " + ln.cell : "");
+      var name = T(ln.n) + (ln.cell ? " " + ln.cell : "") + (ln.u ? " (" + T(ln.u) + ")" : "");
       var keyStr = ln.n + (ln.cell ? ":" + ln.cell : ""); // стабильный ключ для персиста
       var pr = data.length < 3 ? 3 : 0; // редкие данные — точки видимы
-      datasets.push({ label: name, keyStr: keyStr, data: data, borderColor: COLORS[li % COLORS.length], backgroundColor: COLORS[li % COLORS.length], pointRadius: pr, pointHoverRadius: 3, pointBorderColor: COLORS[li % COLORS.length], borderWidth: 1.5, tension: .35, cubicInterpolationMode: "monotone", fill: false });
+      datasets.push({ label: name, keyStr: keyStr, data: data, unit: ln.u ? T(ln.u) : "", dec: ln.dec, borderColor: COLORS[li % COLORS.length], backgroundColor: COLORS[li % COLORS.length], pointRadius: pr, pointHoverRadius: 3, pointBorderColor: COLORS[li % COLORS.length], borderWidth: 1.5, tension: .35, cubicInterpolationMode: "monotone", fill: false });
     });
     return datasets;
   }
@@ -676,14 +713,121 @@
     applyOrder();
   }
 
+  function cmpDataset(label, data, idx, unit, dec) {
+    var nm = label + (unit ? " (" + T(unit) + ")" : "");
+    return { label: nm, keyStr: label, data: data, unit: T(unit || ""), dec: dec, borderColor: COLORS[idx % COLORS.length],
+      backgroundColor: COLORS[idx % COLORS.length], pointRadius: 0, pointHoverRadius: 3,
+      pointBorderColor: COLORS[idx % COLORS.length], borderWidth: 1.5, tension: .35,
+      cubicInterpolationMode: "monotone", fill: false };
+  }
+
+  function renderGridCompare() {
+    if (!range.to) { range = preset("24h"); }
+    if (active.type === "grid" && !range.from) { range = { from: range.to - 3600e3, to: range.to }; }
+    var act = active;
+    var seq = ++reqSeq;
+    var gd = devs.filter(function (d) { return d.type === "grid"; });
+    if (!gd.length) { showNoData(); return; }
+    var reqs = gd.map(function (d) {
+      var url = "/api/stats/series?type=grid&id=" + encodeURIComponent(d.id) +
+        "&fields=7,8&from=" + range.from + "&to=" + range.to;
+      return api(url).then(function (j) { return { d: d, j: j }; }).catch(function () { return { d: d, j: null }; });
+    });
+    Promise.all([api("/api/grid/status").catch(function () { return null; })].concat(reqs)).then(function (all) {
+      if (seq !== reqSeq || active !== act || !(compareCb && compareCb.checked)) return;
+      var st = all[0], results = all.slice(1);
+      var place = {};
+      ((st && st.inverters) || []).forEach(function (x) { place[x.serial] = x.placement || ""; });
+      var activeDS = [], reactiveDS = [], perDev = [], plSet = {};
+      results.forEach(function (r, di) {
+        var ser = (r.j && r.j.series) || {};
+        var a = (ser["7"] || []).map(function (p) { return [+p[0], +p[1]]; });
+        var q = (ser["8"] || []).map(function (p) { return [+p[0], +p[1]]; });
+        if (a.length) activeDS.push(cmpDataset(r.d.id, a, di, "home.grid.w", 0));
+        if (q.length) reactiveDS.push(cmpDataset(r.d.id, q, di, "home.grid.var", 0));
+        var pn = place[r.d.id] || "";
+        plSet[pn] = true;
+        perDev.push({ pn: pn, pts: a });
+      });
+      function nearest(pts, t, tol) {
+        if (!pts.length) return null;
+        var lo = 0, hi = pts.length - 1;
+        while (lo < hi) {
+          var mid = (lo + hi) >> 1;
+          if (pts[mid][0] < t) lo = mid + 1; else hi = mid;
+        }
+        var best = null, bd = Infinity;
+        [lo - 1, lo].forEach(function (i) {
+          if (i >= 0 && i < pts.length) {
+            var d = Math.abs(pts[i][0] - t);
+            if (d < bd) { bd = d; best = pts[i][1]; }
+          }
+        });
+        return bd <= tol ? best : null;
+      }
+      var times = [];
+      perDev.forEach(function (d) { d.pts.forEach(function (p) { times.push(p[0]); }); });
+      times.sort(function (a, b) { return a - b; });
+      var totalData = [], plData = {};
+      Object.keys(plSet).forEach(function (pn) { plData[pn] = []; });
+      if (times.length) {
+        var step = 30000, tol = 120000;
+        var startT = times[0], endT = times[times.length - 1];
+        for (var t = startT; t <= endT; t += step) {
+          var all = perDev.map(function (d) { return nearest(d.pts, t, tol); });
+          if (all.every(function (v) { return v !== null; })) {
+            var sum = 0;
+            all.forEach(function (v) { sum += v; });
+            totalData.push([t, sum]);
+          }
+          Object.keys(plData).forEach(function (pn) {
+            var vals = perDev.filter(function (d) { return d.pn === pn; }).map(function (d) { return nearest(d.pts, t, tol); });
+            if (vals.length && vals.every(function (v) { return v !== null; })) {
+              var s2 = 0;
+              vals.forEach(function (v) { s2 += v; });
+              plData[pn].push([t, s2]);
+            }
+          });
+        }
+      }
+      var totalDS = [];
+      if (totalData.length) totalDS.push(cmpDataset(T("grid.line.total"), totalData, 0, "home.grid.w", 0));
+      Object.keys(plData).sort().forEach(function (pn, i) {
+        if (plData[pn].length) totalDS.push(cmpDataset(pn || T("grid.no_placement"), plData[pn], i + 1, "home.grid.w", 0));
+      });
+      if (!activeDS.length && !reactiveDS.length && !totalDS.length) {
+        showNoData();
+        return;
+      }
+      Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].destroy(); } catch (e) {} delete CHARTS[id]; });
+      chartsEl.innerHTML = "";
+      compareMode = true;
+      renderCard({ t: "stats.cmp.active", u: "home.grid.w" }, "chcmp0", activeDS);
+      renderCard({ t: "stats.cmp.reactive", u: "home.grid.var" }, "chcmp1", reactiveDS);
+      renderCard({ t: "stats.cmp.total", u: "home.grid.w" }, "chcmp2", totalDS);
+      chartsType = "grid-compare";
+      applyOrder();
+      inputsShow();
+    });
+  }
+
   function loadCharts() {
     if (!active) return;
-    if (!range.from) { range = preset("24h"); }
-    var url = "/api/stats/series?type=" + encodeURIComponent(active.type) + "&id=" + encodeURIComponent(active.id) +
-      "&fields=" + encodeURIComponent(fieldsFor(active.type).join(",")) +
+    if (compareCb && compareCb.checked && active.type === "grid") { renderGridCompare(); return; }
+    compareMode = false;
+    if (!range.to) { range = preset("24h"); }
+    if (active.type === "grid" && !range.from) { range = { from: range.to - 3600e3, to: range.to }; }
+    var act = active;
+    var seq = ++reqSeq;
+    var url = "/api/stats/series?type=" + encodeURIComponent(act.type) + "&id=" + encodeURIComponent(act.id) +
+      "&fields=" + encodeURIComponent(fieldsFor(act.type).join(",")) +
       "&from=" + range.from + "&to=" + range.to;
     api(url).then(function (j) {
+      if (seq !== reqSeq || active !== act) return;
+      if (!j) { showNoData(); return; }
       var ser = (j && j.series) || {};
+      var any = Object.keys(ser).some(function (k) { return ser[k] && ser[k].length; });
+      if (!any) { showNoData(); return; }
       // Выравнивание окна по данным: правый край = конец данных (по всем полям),
       // левый — не левее начала данных (без пустот с обеих сторон).
       var gmax = 0, gmin = 0;
@@ -726,7 +870,10 @@
 
   // «Следовать за временем»: переключатель справа вверху.
   var followCb = document.getElementById("ch-follow");
-  if (followCb) followCb.addEventListener("change", function () { if (followCb.checked) startFollow(); else stopFollow(); });
+  if (followCb) followCb.addEventListener("change", function () {
+    if (followCb.checked) { if (compareCb) compareCb.checked = false; compareMode = false; startFollow(); }
+    else stopFollow();
+  });
   // Движок глубины окна follow (1..10 мин): значение персистентно; при смене —
   // полный перезапрос диапазона.
   var depthRange = document.getElementById("ch-depth");
@@ -747,8 +894,12 @@
     var vis = visibleDevs();
     if (active && vis.indexOf(active) >= 0) { renderTabs(); }
     else if (vis.length) { active = vis[0]; renderTabs(); loadCharts(); }
-    else { active = null; renderTabs(); chartsEl.innerHTML = '<p class="muted">' + esc(T("stats.no_data")) + "</p>"; }
+    else { active = null; renderTabs(); showNoData(); }
   });
 
+  if (compareCb) compareCb.addEventListener("change", function () {
+    if (compareCb.checked) setFollowOff();
+    loadCharts();
+  });
   loadDevs();
 })();
