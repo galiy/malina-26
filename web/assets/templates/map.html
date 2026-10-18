@@ -2,7 +2,6 @@
 <div class="map-head">
   <h1 class="map-title">{{.Title}}</h1>
   <div class="map-headctl">
-    <label class="map-hidedebug"><input type="checkbox" id="mapHideDebug"> {{index .T "map.hide_debug"}}</label>
     <label class="map-pause"><input type="checkbox" id="mapPause"> {{index .T "map.disable_update"}}</label>
   </div>
 </div>
@@ -16,18 +15,7 @@
 </div>
 
 <div class="map-tabpane" id="tab-monitor">
-  <h2 class="map-sec" id="secTarget">{{index .T "map.sec_target"}}</h2>
   <section class="mappanel" id="mpPanel"></section>
-
-  <h2 class="map-sec" id="secTransit">{{index .T "map.sec_transit"}}</h2>
-  <div class="map-isolated" id="panel2wrap">
-    <iframe class="legacy-frame" id="panel2frame" src="/static/legacy/panel2.html" title="{{index .T "map.panel2_title"}}" loading="lazy"></iframe>
-  </div>
-
-  <h2 class="map-sec" id="secLegacy">{{index .T "map.sec_legacy"}}</h2>
-  <div class="map-isolated" id="panel3wrap">
-    <iframe class="legacy-frame" id="panel3frame" src="/static/legacy/panel.html?id={{.ID}}" title="{{index .T "map.panel3_title"}}" loading="lazy"></iframe>
-  </div>
 </div>
 
 <div class="map-tabpane" id="tab-info" hidden>
@@ -39,8 +27,6 @@
   <div class="mi-pane" id="mi-system" hidden></div>
 </div>
 <div class="map-tabpane" id="tab-control" hidden></div>
-
-<pre class="map-json" id="mapJson"></pre>
 
 <script>
 window.I18N = {{json .T}};

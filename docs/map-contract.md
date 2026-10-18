@@ -43,10 +43,10 @@ web выкладывать **одним релизом** (иначе payload р�
   `web/internal/web/legacy_contract_test.go` (падает при расхождении).
 - Фронтенд: `assets/templates/map.html` (`window.MAP_FIELDS`), `assets/static/map.js`
   (декод payload по индексу), `assets/static/mapinfo.js`, `assets/static/control.js`
-  (`window.MAP_CONTROL.addr2fid`), панель 2 (`assets/static/legacy/panel2.js` — тот же
-  `MAP_FIELDS`), панель 3 (`assets/static/legacy_map.js` — через легаси-API).
+  (`window.MAP_CONTROL.addr2fid`).
 - Легаси-API: `read_json.php`/`read_memory.php`/`check_daemons.php` (через `legacy.go`)
-  — `read_memory` собирается из `mapCellAddr/Size`.
+  — `read_memory` собирается из `mapCellAddr/Size`. Используется внешними
+  потребителями (мастер-узел) и не связано с UI страницы МАП.
 - Генератор: `web/tools/gen_control.py` (читает `cells.go` → `addr2fid`).
 - Док: `docs/map-memory.md` (регионы).
 

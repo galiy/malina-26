@@ -1,5 +1,5 @@
 // Панель 1 (целевая). Свой стек: vanilla JS + SVG + CSS. Без jQuery/Raphael/kuma/bootstrap.
-// Вид/эргономика — по оригиналу (панель 2): стрелочные гейджи, скользящие значения
+// Вид/эргономика — по оригиналу: стрелочные гейджи, скользящие значения
 // на градиентных полосах, термометры, раскладка «приборной» страницы.
 // Данные — новый контракт (/api/map/raw).
 (function () {
@@ -8,21 +8,12 @@
   var FIELDS = window.MAP_FIELDS || [];
   var ID = window.MAP_ID;
   var SERIAL = window.MAP_SERIAL || "";
-  var pre = document.getElementById("mapJson");
   var panel = document.getElementById("mpPanel");
   var errBox = document.getElementById("mapErr");
   var pause = document.getElementById("mapPause");
-  var hideDebug = document.getElementById("mapHideDebug");
-  var hdTarget = document.getElementById("secTarget");
-  var hdTransit = document.getElementById("secTransit");
-  var wrap2 = document.getElementById("panel2wrap");
-  var hdLegacy = document.getElementById("secLegacy");
-  var wrap3 = document.getElementById("panel3wrap");
-  var f2 = document.getElementById("panel2frame");
-  var f3 = document.getElementById("panel3frame");
-  if (!pre || !panel || ID == null) { return; }
+  if (!panel || ID == null) { return; }
 
-  var INTERVAL = 1000, timer = null, inflight = null, lastP = null, infoActive = false, debugHidden = false;
+  var INTERVAL = 1000, timer = null, inflight = null, lastP = null, infoActive = false;
   var POWER_KW = [1.3, 1.5, 2, 3, 4.5, 6, 9, 12, 15, 20, 24, 36];
   var VOLTAGE = [12, 24, 48, 96];
   // Границы гейджей — из ячеек МАП, фиксируем при первой загрузке (в цикле не пересчитываем).
@@ -651,7 +642,7 @@
     inflight = new AbortController();
     fetch("api/map/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(window.MAP_GEN || 0), { cache: "no-store", signal: inflight.signal })
       .then(function (r) { if (r.status === 404) { throw { gone: true }; } if (r.status === 401) { throw { auth: true }; } if (!r.ok) { throw new Error("HTTP " + r.status); } return r.arrayBuffer(); })
-      .then(function (buf) { showErr(""); var p = parse(buf); lastP = p; renderPanel(p); if (infoActive) { renderInfo(p); } if (!debugHidden) { pre.textContent = JSON.stringify(p); postToPanel2(buf); } window.MAP_LAST_FIELDS = p.fields; window.MAP_GEN = p.gen; window.MAP_MODE = modeNum(p.fields); if (typeof window.mapControlRaw === "function") { try { window.mapControlRaw(p.fields, p.gen); } catch (e) { /* ignore */ } } })
+      .then(function (buf) { showErr(""); var p = parse(buf); lastP = p; renderPanel(p); if (infoActive) { renderInfo(p); } window.MAP_GEN = p.gen; if (typeof window.mapControlRaw === "function") { try { window.mapControlRaw(p.fields, p.gen); } catch (e) { /* ignore */ } } })
       .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { relocateMap(); return; } if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });
   }
   function start() { if (timer) { return; } tick(); timer = setInterval(tick, INTERVAL); }
@@ -678,44 +669,6 @@
   }
   initTabs();
   initSubTabs();
-
-  function postToPanel2(buf) {
-    var fr = document.getElementById("panel2frame");
-    if (!fr || !fr.contentWindow) { return; }
-    try { fr.contentWindow.postMessage({ type: "map-raw", id: ID, ts: Date.now(), buf: buf.slice(0) }, location.origin); } catch (err) { /* ignore */ }
-  }
-  function sizeFrames() {
-    Array.prototype.forEach.call(document.querySelectorAll(".legacy-frame"), function (fr) {
-      try { var d = fr.contentDocument; if (d && d.documentElement) { fr.style.height = Math.max(160, d.documentElement.scrollHeight) + "px"; } } catch (err) { /* ignore */ }
-    });
-  }
-  Array.prototype.forEach.call(document.querySelectorAll(".legacy-frame"), function (fr) { fr.addEventListener("load", sizeFrames); });
-  setInterval(sizeFrames, 1000);
-
-  // «Скрыть отладочные панели»: гасит панели 2/3 (вместе с заголовками),
-  // заголовок панели 1 и memo с JSON, останавливая их фоновую механику.
-  // Состояние хранится на клиенте; по умолчанию — включено.
-  var DBG_KEY = "malina.map.hideDebug";
-  var panel2Src = f2 ? f2.getAttribute("src") : "";
-  var panel3Src = f3 ? f3.getAttribute("src") : "";
-  function setDebugHidden(on) {
-    debugHidden = !!on;
-    [hdTarget, hdTransit, wrap2, hdLegacy, wrap3, pre].forEach(function (el) { if (el) { el.hidden = debugHidden; } });
-    // Полностью останавливаем фоновую механику панелей 2/3: разгружаем iframe
-    // (panel2 не пересчитывается — postToPanel2 не вызывается; panel3 не ходит в свой API).
-    if (f2) { f2.src = debugHidden ? "about:blank" : panel2Src; }
-    if (f3) { f3.src = debugHidden ? "about:blank" : panel3Src; }
-  }
-  if (hideDebug) {
-    var saved = null;
-    try { saved = window.localStorage.getItem(DBG_KEY); } catch (e) { /* ignore */ }
-    hideDebug.checked = (saved === null) ? true : (saved === "1");
-    setDebugHidden(hideDebug.checked);
-    hideDebug.addEventListener("change", function () {
-      setDebugHidden(hideDebug.checked);
-      try { window.localStorage.setItem(DBG_KEY, hideDebug.checked ? "1" : "0"); } catch (e) { /* ignore */ }
-    });
-  }
 
   window.MAP_FORCE_REFRESH = function () { tick(true); };
   start();
