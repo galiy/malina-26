@@ -175,7 +175,7 @@ func SplitFrames(raw []byte) []Frame {
 		}
 		f := Frame{
 			ControlCode: binary.LittleEndian.Uint16(raw[i+3 : i+5]),
-			Serial:      binary.BigEndian.Uint16(raw[i+5 : i+7]),
+			Serial:      binary.LittleEndian.Uint16(raw[i+5 : i+7]),
 			DeviceSN:    binary.LittleEndian.Uint32(raw[i+7 : i+11]),
 			Payload:     raw[i+framePrefixLen : i+framePrefixLen+plen : i+framePrefixLen+plen],
 		}

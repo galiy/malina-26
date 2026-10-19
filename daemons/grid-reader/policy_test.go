@@ -41,6 +41,22 @@ func TestBanLadder(t *testing.T) {
 	}
 }
 
+func TestSofarBadNoBan(t *testing.T) {
+	p := newPoller(nil, nil, logx.New("test: "))
+	p.states = make([]devState, 1)
+	p.types = []string{"sofar"}
+	for i := 0; i < 3; i++ {
+		p.fail(0, badErr(errors.New("no data")))
+	}
+	st := p.states[0]
+	if st.status != statusBad || !st.banUntil.IsZero() || st.banStatus != 0 {
+		t.Fatalf("Sofar не должен уходить в бан за плохой ответ: %+v", st)
+	}
+	if st.nextTry.Before(time.Now().Add(50 * time.Second)) {
+		t.Fatalf("ожидалась пауза 1 мин: %+v", st)
+	}
+}
+
 func TestBanNoRouteAndTimeout(t *testing.T) {
 	p := newPoller(nil, nil, logx.New("test: "))
 	p.states = make([]devState, 2)

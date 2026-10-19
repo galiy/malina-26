@@ -48,10 +48,28 @@ type Client struct {
 	MaxTotal time.Duration
 	// Done — необязательный предикат раннего завершения приёма.
 	Done func(raw []byte) bool
+	// Logf — необязательный приёмник подробного debug-лога обмена (TX/RX,
+	// тайминги, кадры). nil — без логирования.
+	Logf func(format string, args ...any)
+	// Persistent — держать одно TCP-соединение между Exchange (для логгеров,
+	// которые плохо переносят частые переподключения, например часть Sofar).
+	// При ошибке записи/соединения оно закрывается и открывается заново; при
+	// отсутствии ответа (ErrNoData) соединение сохраняется, а накопленные байты
+	// сбрасываются перед следующим запросом.
+	Persistent bool
 
 	// серийный номер кадра — инкрементируется на каждый запрос.
 	mu     sync.Mutex
 	serial uint16
+	// cmu защищает постоянное соединение (Persistent).
+	cmu  sync.Mutex
+	conn net.Conn
+}
+
+func (c *Client) logf(format string, args ...any) {
+	if c.Logf != nil {
+		c.Logf(format, args...)
+	}
 }
 
 // dial открывает свежее TCP-соединение без кэширования. Уважает ctx: при
@@ -76,6 +94,7 @@ func (c *Client) readAll(conn net.Conn) []byte {
 	var raw []byte
 	buf := make([]byte, 1024)
 	firstByte := true
+	start := time.Now()
 	// Общий дедлайн приёма ответа: «капающий» логгер (байт с интервалом <
 	// IdleWindow) не должен держать Exchange часами — после MaxTotal приём
 	// прекращается, даже если байты ещё приходят.
@@ -105,6 +124,7 @@ func (c *Client) readAll(conn net.Conn) []byte {
 		}
 		n, _ := conn.Read(buf)
 		if n > 0 {
+			c.logf("%s: rx chunk %d B (t+%s): %x", c.Address, n, time.Since(start).Round(time.Millisecond), buf[:n])
 			firstByte = false
 			raw = append(raw, buf[:n]...)
 			if c.Done != nil && c.Done(raw) {
@@ -129,16 +149,34 @@ func (c *Client) nextSerial() uint16 {
 	return c.serial
 }
 
+// Close закрывает постоянное соединение (Persistent).
+func (c *Client) Close() error {
+	c.cmu.Lock()
+	defer c.cmu.Unlock()
+	if c.conn == nil {
+		return nil
+	}
+	err := c.conn.Close()
+	c.conn = nil
+	return err
+}
+
 // Exchange отправляет один запрос через СВЕЖЕЕ соединение и собирает все кадры
 // ответа. Соединение гарантированно закрывается после чтения ответа или любой
 // ошибки. При отмене ctx (стоп сервиса) наблюдатель закрывает соединение, чтобы
 // блокирующий conn.Read в readAll мгновенно завершился — иначе опрос медленного
 // логгера (до ~15 c на первый байт) удерживал бы graceful-shutdown.
 func (c *Client) Exchange(ctx context.Context, req []byte) ([]Frame, error) {
+	if c.Persistent {
+		return c.exchangePersistent(ctx, req)
+	}
+	start := time.Now()
 	conn, err := c.dial(ctx)
 	if err != nil {
+		c.logf("%s: connect error за %s: %v", c.Address, time.Since(start).Round(time.Millisecond), err)
 		return nil, err
 	}
+	c.logf("%s: connect за %s", c.Address, time.Since(start).Round(time.Millisecond))
 	defer conn.Close()
 
 	// Наблюдатель: при отмене ctx закрывает сокет, чтобы блокирующий conn.Read
@@ -161,14 +199,89 @@ func (c *Client) Exchange(ctx context.Context, req []byte) ([]Frame, error) {
 	if err := conn.SetDeadline(time.Now().Add(rt)); err != nil {
 		return nil, fmt.Errorf("set deadline: %w", err)
 	}
+	c.logf("%s: tx %d B: %x", c.Address, len(req), req)
 	if _, err := conn.Write(req); err != nil {
+		c.logf("%s: write error: %v", c.Address, err)
 		return nil, fmt.Errorf("write: %w", err)
 	}
 	raw := c.readAll(conn)
+	c.logf("%s: rx total %d B за %s: %x", c.Address, len(raw), time.Since(start).Round(time.Millisecond), raw)
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("%w from %s", ErrNoData, c.Address)
 	}
-	return SplitFrames(raw), nil
+	frames := SplitFrames(raw)
+	c.logf("%s: кадров %d", c.Address, len(frames))
+	return frames, nil
+}
+
+// exchangePersistent — Exchange с переиспользованием одного TCP-соединения.
+func (c *Client) exchangePersistent(ctx context.Context, req []byte) ([]Frame, error) {
+	start := time.Now()
+	c.cmu.Lock()
+	defer c.cmu.Unlock()
+	if c.conn == nil {
+		conn, err := c.dial(ctx)
+		if err != nil {
+			c.logf("%s: connect error за %s: %v", c.Address, time.Since(start).Round(time.Millisecond), err)
+			return nil, err
+		}
+		c.conn = conn
+		c.logf("%s: connect (persistent) за %s", c.Address, time.Since(start).Round(time.Millisecond))
+	}
+	conn := c.conn
+	// Перед запросом выбрасываем запоздавшие кадры предыдущего ответа, чтобы
+	// они не были приняты за текущий (Sofar не повторяет serial запроса).
+	c.drain(conn)
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			conn.Close()
+		case <-done:
+		}
+	}()
+	rt := c.ReadTimeout
+	if rt == 0 {
+		rt = c.Timeout
+	}
+	if err := conn.SetDeadline(time.Now().Add(rt)); err != nil {
+		conn.Close()
+		c.conn = nil
+		return nil, fmt.Errorf("set deadline: %w", err)
+	}
+	c.logf("%s: tx %d B: %x", c.Address, len(req), req)
+	if _, err := conn.Write(req); err != nil {
+		c.logf("%s: write error (persistent): %v", c.Address, err)
+		conn.Close()
+		c.conn = nil
+		return nil, fmt.Errorf("write: %w", err)
+	}
+	raw := c.readAll(conn)
+	c.logf("%s: rx total %d B за %s: %x", c.Address, len(raw), time.Since(start).Round(time.Millisecond), raw)
+	if ctx.Err() != nil {
+		conn.Close()
+		c.conn = nil
+	}
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("%w from %s", ErrNoData, c.Address)
+	}
+	frames := SplitFrames(raw)
+	c.logf("%s: кадров %d", c.Address, len(frames))
+	return frames, nil
+}
+
+// drain быстро дочитывает и отбрасывает уже накопленные байты постоянного
+// соединения (2 мс на чтение).
+func (c *Client) drain(conn net.Conn) {
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Millisecond))
+	buf := make([]byte, 4096)
+	for {
+		n, err := conn.Read(buf)
+		if n == 0 || err != nil {
+			return
+		}
+	}
 }
 
 // ReadRegisters — запрос чтения startReg..startReg+regCount-1 (12-байтный
