@@ -378,6 +378,67 @@ curl -sI http://127.0.0.1/login | head -1
 
 Расчёт размера и команды — `docs/image-size.md`.
 
+### Практическая последовательность
+
+Актуальные адреса, логин и пароль VPS — в приватном `.kilo/vps-release.md`
+(в репозиторий не попадают). В командах ниже используются плейсхолдеры:
+`<VPS_IP>`, `<VPS_USER>`, `<VPS_PASSWORD>`, `<VPS_PATH>`.
+
+1. Собрать базовый образ (вариант 1) и ARM-бинарники:
+
+```bash
+image/build.sh
+make -C web arm
+for d in map-reader kes-reader bms-reader bms-proxy tsdb grid-reader; do
+  make -C daemons/$d arm
+done
+```
+
+2. Сделать копию базового образа и разложить p3 + артефакты текущего репозитория:
+
+```bash
+BASE=/opt/raspberry_tmp/pi-gen/deploy/2026-10-17-malina-lite.img
+IMG=/opt/raspberry_tmp/pi-gen/deploy/2026-10-19-malina-release.img
+sudo cp --sparse=always "$BASE" "$IMG"
+sudo chown "$USER:$USER" "$IMG"   # deploy-local делает truncate от своего имени
+MAL_P3_GB=3 deploy/local/deploy-local.sh "$IMG"
+```
+
+3. Проверить образ offline (скрипт печатает `[verify] ... ok`) и упаковать:
+
+```bash
+ls -l --block-size=1 "$IMG"       # ожидаемо 6 988 759 040
+sfdisk -d "$IMG"                  # p1 512M, p2 3G, p3 3G
+cd /opt/raspberry_tmp/pi-gen/deploy
+sudo zip -9 malina-2026.10.19-rpi3-8gb.img.zip 2026-10-19-malina-release.img
+sha256sum malina-2026.10.19-rpi3-8gb.img.zip \
+  > malina-2026.10.19-rpi3-8gb.img.zip.sha256
+```
+
+4. Выложить на VPS, заменив предыдущую версию (на VPS ~2,5 ГБ свободно,
+старые архивы не хранить):
+
+```bash
+export SSHPASS='<VPS_PASSWORD>'
+sshpass -e scp malina-2026.10.19-rpi3-8gb.img.zip \
+  malina-2026.10.19-rpi3-8gb.img.zip.sha256 \
+  <VPS_USER>@<VPS_IP>:<VPS_PATH>/
+
+sshpass -e ssh <VPS_USER>@<VPS_IP> \
+  'cd <VPS_PATH> && sha256sum -c malina-2026.10.19-rpi3-8gb.img.zip.sha256; df -h /'
+```
+
+Так как имя файла фиксировано, новый архив заменяет старый. Если появились
+файлы прошлых версий — удалить их и старые `.sha256` в `<VPS_PATH>`, затем
+проверить `df -h /`. Nginx отдаёт только два exact-URL (архив и `.sha256`),
+остальные пути — 404; при смене имени файла обновить
+`/etc/nginx/sites-enabled/malina-download` и перезагрузить nginx.
+
+5. Обновить публичный репозиторий `malina-26-public` (ветка `main`):
+в `README.md` — версия, размер архива, SHA256 и ссылки на скачивание; при
+изменении пользовательской документации — синхронизировать `manuals/`.
+Затем закоммитить и запушить.
+
 ## Быстрый прогон
 
 ```
