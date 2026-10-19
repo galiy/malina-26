@@ -10,7 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sync/atomic"
+	"sync"
 	"syscall"
 	"time"
 
@@ -106,44 +106,36 @@ outer:
 			}
 		}
 
-		lx.Infof("состояние: ВКЛЮЧЁН — опрос %d инверторов, период %d с", len(cfg.Inverters), cfg.PollPeriod)
-		var reloadPending atomic.Bool
-		for {
-			roundCtx, roundCancel := context.WithCancel(svcCtx)
-			roundDone := make(chan struct{})
-			go func() {
-				select {
-				case <-reload:
-					reloadPending.Store(true)
-					roundCancel()
-				case <-stop:
-					roundCancel()
-				case <-roundDone:
-				}
-			}()
-			round := p.pollOnce(roundCtx, cfg)
-			close(roundDone)
-			roundCancel()
-			if reloadPending.Swap(false) {
-				continue outer
+		lx.Infof("состояние: ВКЛЮЧЁН — опрос %d инверторов, период %d с (независимые пулеры: %s)",
+			len(cfg.Inverters), cfg.PollPeriod, groupsLabel(cfg.Inverters))
+		// Deye и Sofar опрашиваются независимыми циклами внутри одного сервиса.
+		groupCtx, groupCancel := context.WithCancel(svcCtx)
+		present := map[string]bool{}
+		for _, d := range cfg.Inverters {
+			if d.Valid {
+				present[d.Type] = true
 			}
-			select {
-			case <-stop:
-				break outer
-			default:
+		}
+		var wg sync.WaitGroup
+		for _, typ := range []string{"deye", "sofar"} {
+			if !present[typ] {
+				continue
 			}
-			period := time.Duration(cfg.PollPeriod) * time.Second
-			wait := period - round
-			if wait < 0 {
-				wait = 0
-			}
-			select {
-			case <-reload:
-				continue outer
-			case <-stop:
-				break outer
-			case <-time.After(wait):
-			}
+			wg.Add(1)
+			go func(typ string) {
+				defer wg.Done()
+				p.pollLoop(groupCtx, cfg, typ)
+			}(typ)
+		}
+		select {
+		case <-reload:
+			groupCancel()
+			wg.Wait()
+			continue outer
+		case <-stop:
+			groupCancel()
+			wg.Wait()
+			break outer
 		}
 	}
 	p.clear()
@@ -154,6 +146,26 @@ outer:
 		lx.Warnf("control не остановился за 3 с")
 	}
 	lx.Infof("stopped")
+}
+
+// groupsLabel перечисляет типы, для которых реально запускаются циклы.
+func groupsLabel(devs []inverter) string {
+	present := map[string]bool{}
+	order := make([]string, 0, 2)
+	for _, d := range devs {
+		if d.Valid && !present[d.Type] {
+			present[d.Type] = true
+			order = append(order, d.Type)
+		}
+	}
+	if len(order) == 0 {
+		return "нет"
+	}
+	out := order[0]
+	for _, typ := range order[1:] {
+		out += ", " + typ
+	}
+	return out
 }
 
 func applyLevel(level string, debug bool) {

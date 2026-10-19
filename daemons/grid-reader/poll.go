@@ -25,16 +25,31 @@ const (
 
 const (
 	connectTimeout = time.Second
-	deyeRead       = time.Second
-	sofarRead      = 3 * time.Second
+	deyeRead       = 2 * time.Second
+	sofarRead      = 5 * time.Second
 )
+
+func readTimeoutFor(typ string) time.Duration {
+	if typ == "sofar" {
+		return sofarRead
+	}
+	return deyeRead
+}
+
+func idleWindowFor(typ string) time.Duration {
+	if typ == "sofar" {
+		// Sofar может прислать несколько кадров подряд; ответ считаем
+		// завершённым после короткой тишины, не дожидаясь полного таймаута.
+		return 400 * time.Millisecond
+	}
+	return deyeRead
+}
 
 type pollErrKind int
 
 const (
 	errBad pollErrKind = iota + 1
 	errNoRoute
-	errTimeout
 	errOther
 )
 
@@ -62,19 +77,24 @@ type devState struct {
 
 type poller struct {
 	shm          *Shm
-	clients      []*solarman.Client
 	gen          uint64
 	states       []devState
 	types        []string
 	lastSeen     []string // известный inverter_sn по слоту
-	lastRound    time.Duration
 	energyWarned []bool
 	sink         *tsdbSink
 	lx           *logx.Logger
+	// neighbor — источник признака «жив на L2» после connect timeout
+	// (по умолчанию netlink-таблица соседей; в тестах подменяется).
+	neighbor neighborChecker
+	// Длительность последнего круга по группам: у Deye и Sofar независимые
+	// циклы опроса, каждый пишет своё поле.
+	lastRoundDeye  time.Duration
+	lastRoundSofar time.Duration
 }
 
 func newPoller(shm *Shm, sink *tsdbSink, lx *logx.Logger) *poller {
-	return &poller{shm: shm, sink: sink, lx: lx}
+	return &poller{shm: shm, sink: sink, lx: lx, neighbor: neighborReachable}
 }
 
 func (p *poller) logf() func(string, ...any) {
@@ -82,31 +102,6 @@ func (p *poller) logf() func(string, ...any) {
 		return nil
 	}
 	return p.lx.Debugf
-}
-
-// newClient создаёт клиента под тип инвертора. Sofar держит одно TCP-соединение
-// между опросами (часть логгеров плохо переносит частые переподключения); Deye
-// по-прежнему открывает свежее соединение на каждый запрос.
-func (p *poller) newClient(dev inverter) *solarman.Client {
-	readTimeout := deyeRead
-	cl := &solarman.Client{
-		Address:     net.JoinHostPort(dev.IP, itoa(dev.Port)),
-		DeviceSN:    dev.LoggerSN,
-		DialTimeout: connectTimeout,
-		Logf:        p.logf(),
-	}
-	if dev.Type == "sofar" {
-		readTimeout = sofarRead
-		cl.Persistent = true
-		cl.IdleWindow = 400 * time.Millisecond
-	}
-	cl.Timeout = readTimeout
-	cl.ReadTimeout = readTimeout
-	if cl.IdleWindow == 0 {
-		cl.IdleWindow = readTimeout
-	}
-	cl.MaxTotal = readTimeout
-	return cl
 }
 
 // fullRegsLast берёт последний корректный PDU из всех кадров ответа.
@@ -133,13 +128,6 @@ func fullRegsLast(frames []solarman.Frame, start, count uint16) (map[uint16]uint
 // готовит слоты. Устройства снова появятся в списке после первого полного опроса.
 func (p *poller) reset(cfg settings) {
 	p.gen++
-	for _, c := range p.clients {
-		c.Close()
-	}
-	p.clients = make([]*solarman.Client, len(cfg.Inverters))
-	for i, d := range cfg.Inverters {
-		p.clients[i] = p.newClient(d)
-	}
 	p.states = make([]devState, len(cfg.Inverters))
 	p.types = make([]string, len(cfg.Inverters))
 	for i, d := range cfg.Inverters {
@@ -147,7 +135,8 @@ func (p *poller) reset(cfg settings) {
 	}
 	p.lastSeen = make([]string, len(cfg.Inverters))
 	p.energyWarned = make([]bool, len(cfg.Inverters))
-	p.lastRound = 0
+	p.lastRoundDeye = 0
+	p.lastRoundSofar = 0
 	for i := 0; i < gridSlots; i++ {
 		p.shm.Item(i).Release()
 		p.shm.Slot(i).Release()
@@ -158,20 +147,20 @@ func (p *poller) reset(cfg settings) {
 }
 
 func (p *poller) clear() {
-	for _, c := range p.clients {
-		c.Close()
-	}
-	p.clients = nil
 	for i := 0; i < gridSlots; i++ {
 		p.shm.Item(i).Release()
 		p.shm.Slot(i).Release()
 	}
 }
 
-func (p *poller) staleThreshold(period time.Duration) time.Duration {
+func (p *poller) staleThreshold(typ string, period time.Duration) time.Duration {
 	base := period
-	if p.lastRound > base {
-		base = p.lastRound
+	lastRound := p.lastRoundDeye
+	if typ == "sofar" {
+		lastRound = p.lastRoundSofar
+	}
+	if lastRound > base {
+		base = lastRound
 	}
 	return base * 7 / 2 // 3,5 периода
 }
@@ -198,22 +187,26 @@ func (p *poller) currentStatus(i int, now time.Time, stale time.Duration) uint8 
 	return statusInit
 }
 
-// pollOnce — один последовательный круг. Возвращает длительность круга.
-func (p *poller) pollOnce(ctx context.Context, cfg settings) time.Duration {
+// pollOnce — один последовательный круг устройств одной группы (typ: deye или
+// sofar). Возвращает длительность круга.
+func (p *poller) pollOnce(ctx context.Context, cfg settings, typ string) time.Duration {
 	start := time.Now()
+	period := time.Duration(cfg.PollPeriod) * time.Second
+	count := 0
 	for i := range cfg.Inverters {
 		select {
 		case <-ctx.Done():
 			return time.Since(start)
 		default:
 		}
-		if !cfg.Inverters[i].Valid {
+		if !cfg.Inverters[i].Valid || cfg.Inverters[i].Type != typ {
 			continue
 		}
+		count++
 		st := &p.states[i]
 		now := time.Now()
 		if now.Before(st.banUntil) || now.Before(st.nextTry) {
-			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, now, p.staleThreshold(time.Duration(cfg.PollPeriod)*time.Second)))
+			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, now, p.staleThreshold(typ, period)))
 			continue
 		}
 		t, sn, err := p.pollDevice(ctx, i, cfg.Inverters[i], p.lastSeen[i])
@@ -228,24 +221,51 @@ func (p *poller) pollOnce(ctx context.Context, cfg settings) time.Duration {
 		}
 		if err != nil {
 			p.fail(i, err)
-			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, time.Now(), p.staleThreshold(time.Duration(cfg.PollPeriod)*time.Second)))
+			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, time.Now(), p.staleThreshold(typ, period)))
 			continue
 		}
 		p.success(i, t, sn)
 		p.publishList(i, cfg.Inverters[i], statusOK)
 	}
 	d := time.Since(start)
-	p.lx.Debugf("круг: %d устройств, %s", len(cfg.Inverters), d.Round(time.Millisecond))
-	p.lastRound = d
-	// обновить stale у уже опубликованных записей
+	if typ == "sofar" {
+		p.lastRoundSofar = d
+	} else {
+		p.lastRoundDeye = d
+	}
+	p.lx.Debugf("круг %s: %d устройств, %s", typ, count, d.Round(time.Millisecond))
+	// обновить stale у уже опубликованных записей этой группы
 	now := time.Now()
-	stale := p.staleThreshold(time.Duration(cfg.PollPeriod) * time.Second)
+	stale := p.staleThreshold(typ, period)
 	for i := range cfg.Inverters {
-		if p.states[i].listed {
+		if cfg.Inverters[i].Type == typ && p.states[i].listed {
 			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, now, stale))
 		}
 	}
 	return d
+}
+
+// pollLoop — независимый цикл опроса одной группы (deye или sofar): свой
+// период, свой круг. Группы не ждут друг друга.
+func (p *poller) pollLoop(ctx context.Context, cfg settings, typ string) {
+	period := time.Duration(cfg.PollPeriod) * time.Second
+	for {
+		round := p.pollOnce(ctx, cfg, typ)
+		if ctx.Err() != nil {
+			return
+		}
+		wait := period - round
+		if wait < 0 {
+			wait = 0
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
 }
 
 func (p *poller) success(i int, t telemetry, sn string) {
@@ -286,27 +306,17 @@ func (p *poller) fail(i int, err error) {
 		st.failCount = 0
 		p.lx.Warnf("инвертор #%d: нет связи (нет солнца/выключен) — бан 10 мин", i+1)
 		return
-	case errTimeout:
-		st.status = statusNoCon
-		st.banUntil = now.Add(5 * time.Minute)
-		st.banStatus = statusBan5
-		st.nextTry = st.banUntil
-		st.failCount = 0
-		p.lx.Warnf("инвертор #%d: таймаут connect — бан 5 мин", i+1)
-		return
 	case errBad:
+		// Плохой ответ (включая connect timeout при живом ARP и таймаут
+		// полного блока) — мягкий backoff для обоих типов: без бана, после
+		// двух промахов подряд пауза 1 минута.
 		st.status = statusBad
-		// Sofar периодически не отвечает на отдельные запросы (TCP при этом
-		// доступен). Не отправляем его в бан за «плохой ответ»: после двух
-		// промахов подряд делаем паузу 1 минуту и продолжаем попытки.
-		if i < len(p.types) && p.types[i] == "sofar" {
-			st.failCount++
-			if st.failCount >= 2 {
-				st.nextTry = now.Add(time.Minute)
-			}
-			p.lx.Warnf("инвертор #%d: плохой ответ Sofar (%v), подряд=%d — без бана, пауза", i+1, err, st.failCount)
-			return
+		st.failCount++
+		if st.failCount >= 2 {
+			st.nextTry = now.Add(time.Minute)
 		}
+		p.lx.Warnf("инвертор #%d: плохой ответ (%v), подряд=%d — мягкий backoff", i+1, err, st.failCount)
+		return
 	default:
 		st.status = statusNoCon
 	}
@@ -387,27 +397,18 @@ func kindCode(typ string) uint8 {
 }
 
 func (p *poller) pollDevice(ctx context.Context, i int, dev inverter, knownSN string) (telemetry, string, error) {
-	readTimeout := deyeRead
-	if dev.Type == "sofar" {
-		readTimeout = sofarRead
-	}
-	logf := p.logf()
-	var cl *solarman.Client
-	if i >= 0 && i < len(p.clients) && p.clients[i] != nil {
-		cl = p.clients[i]
-		logf = p.logf()
-		cl.Logf = logf
-	} else {
-		cl = &solarman.Client{
-			Address:     net.JoinHostPort(dev.IP, itoa(dev.Port)),
-			DeviceSN:    dev.LoggerSN,
-			Timeout:     readTimeout,
-			DialTimeout: connectTimeout,
-			ReadTimeout: readTimeout,
-			IdleWindow:  readTimeout,
-			MaxTotal:    readTimeout,
-			Logf:        logf,
-		}
+	readTimeout := readTimeoutFor(dev.Type)
+	idleWindow := idleWindowFor(dev.Type)
+	// Новое TCP-подключение на каждый запрос — для обоих типов.
+	cl := &solarman.Client{
+		Address:     net.JoinHostPort(dev.IP, itoa(dev.Port)),
+		DeviceSN:    dev.LoggerSN,
+		Timeout:     readTimeout,
+		DialTimeout: connectTimeout,
+		ReadTimeout: readTimeout,
+		IdleWindow:  idleWindow,
+		MaxTotal:    readTimeout,
+		Logf:        p.logf(),
 	}
 	var t telemetry
 	var sn string
@@ -417,7 +418,7 @@ func (p *poller) pollDevice(ctx context.Context, i int, dev inverter, knownSN st
 		pdus, frames, err := cl.ReadRegistersDeye(ctx, 0x3B, 0x3A, 1)
 		p.logExchange(i, dev, "deye main 0x3B+0x3A", pdus, frames, err)
 		if err != nil {
-			return t, "", classifyPoll(err)
+			return t, "", classifyPoll(ctx, err, net.ParseIP(dev.IP), p.checkNeighbor)
 		}
 		regs, ok := fullRegs(pdus, 0x3B, 0x3A)
 		if !ok {
@@ -450,7 +451,7 @@ func (p *poller) pollDevice(ctx context.Context, i int, dev inverter, knownSN st
 		pdus, frames, err := cl.ReadRegistersDeyeFn(ctx, 0x0000, 0x0028, 1, 0x03)
 		p.logExchange(i, dev, "sofar main 0x0000+0x0028 fn03", pdus, frames, err)
 		if err != nil {
-			return t, "", classifyPoll(err)
+			return t, "", classifyPoll(ctx, err, net.ParseIP(dev.IP), p.checkNeighbor)
 		}
 		regs, ok := fullRegsLast(frames, 0x0000, 0x0028)
 		if !ok {
@@ -523,9 +524,7 @@ func kindName(k pollErrKind) string {
 	case errBad:
 		return "плохой ответ"
 	case errNoRoute:
-		return "нет маршрута"
-	case errTimeout:
-		return "таймаут"
+		return "нет сети"
 	default:
 		return "ошибка связи"
 	}
@@ -558,13 +557,45 @@ func (p *poller) logExchange(i int, dev inverter, what string, pdus []solarman.M
 	}
 }
 
-func classifyPoll(err error) error {
-	var ne net.Error
-	if errors.As(err, &ne) && ne.Timeout() {
-		return &pollError{kind: errTimeout, err: err}
+// checkNeighbor возвращает признак «жив на L2» (netlink-таблица соседей).
+func (p *poller) checkNeighbor(ctx context.Context, ip net.IP) (bool, error) {
+	if p.neighbor != nil {
+		return p.neighbor(ctx, ip)
+	}
+	return neighborReachable(ctx, ip)
+}
+
+// isDialTimeout — именно таймаут установления TCP-соединения (dial), а не
+// произвольный сетевой таймаут. Только для него решает ARP-классификация.
+func isDialTimeout(err error) bool {
+	var oe *net.OpError
+	return errors.As(err, &oe) && oe.Op == "dial" && oe.Timeout()
+}
+
+// classifyPoll переводит ошибку обмена в вид политики. Для connect timeout
+// дополнительно смотрит таблицу соседей: NUD_REACHABLE → «в сети, но не
+// ответил» (мягкий backoff), иначе → «спит совсем / нет на L2» (бан 10 мин).
+// Ошибка/неоднозначность ARP трактуется как «нет в сети».
+func classifyPoll(ctx context.Context, err error, ip net.IP, check neighborChecker) error {
+	if isDialTimeout(err) {
+		reachable := false
+		if check != nil && ip != nil {
+			if ok, aerr := check(ctx, ip); aerr == nil {
+				reachable = ok
+			}
+		}
+		if reachable {
+			return &pollError{kind: errBad, err: err}
+		}
+		return &pollError{kind: errNoRoute, err: err}
 	}
 	if errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETUNREACH) {
 		return &pollError{kind: errNoRoute, err: err}
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		// Таймаут приёма (не dial) — плохой ответ, а не отдельный бан.
+		return badErr(err)
 	}
 	var oe *net.OpError
 	if errors.As(err, &oe) {

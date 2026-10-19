@@ -22,6 +22,7 @@ type fakeLogger struct {
 	count    uint16
 	emptySN  bool
 	accepted atomic.Int32
+	closed   atomic.Int32
 }
 
 func newFakeLogger(t *testing.T, kind string, start, count uint16) *fakeLogger {
@@ -53,7 +54,7 @@ func (f *fakeLogger) serve() {
 }
 
 func (f *fakeLogger) handle(c net.Conn) {
-	defer c.Close()
+	defer func() { _ = c.Close(); f.closed.Add(1) }()
 	buf := make([]byte, 4096)
 	for {
 		if _, err := io.ReadFull(c, buf[:36]); err != nil {
@@ -173,23 +174,46 @@ func TestFullRegsLastPicksLast(t *testing.T) {
 	}
 }
 
-func TestClientPersistentReuse(t *testing.T) {
+func TestClientNewConnectionEachRequest(t *testing.T) {
 	srv := newFakeLogger(t, "sofar", 0x0000, 0x0028)
 	ip, port := srv.addr()
 	cl := &solarman.Client{
 		Address: net.JoinHostPort(ip, strconv.Itoa(port)), DeviceSN: 123456,
 		Timeout: time.Second, DialTimeout: time.Second, ReadTimeout: time.Second,
-		IdleWindow: 200 * time.Millisecond, MaxTotal: time.Second, Persistent: true,
+		IdleWindow: 200 * time.Millisecond, MaxTotal: time.Second,
 	}
-	defer cl.Close()
 	for i := 0; i < 2; i++ {
 		_, frames, err := cl.ReadRegistersDeyeFn(context.Background(), 0x0000, 0x0028, 1, 0x03)
 		if err != nil || len(frames) == 0 {
 			t.Fatalf("запрос %d: err=%v frames=%d", i+1, err, len(frames))
 		}
 	}
-	if got := srv.accepted.Load(); got != 1 {
-		t.Fatalf("ожидалось одно TCP-соединение, получено %d", got)
+	if got := srv.accepted.Load(); got != 2 {
+		t.Fatalf("ожидалось новое TCP-соединение на каждый запрос: %d", got)
+	}
+	deadline := time.Now().Add(time.Second)
+	for srv.closed.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := srv.closed.Load(); got != 2 {
+		t.Fatalf("ожидалось закрытие соединения после каждого запроса: %d", got)
+	}
+}
+
+func TestPollDeviceNewConnectionEachCall(t *testing.T) {
+	srv := newFakeLogger(t, "deye", 0x3B, 0x3A)
+	ip, port := srv.addr()
+	dev := inverter{Name: "test", IP: ip, Port: port, Type: "deye", LoggerSN: 123456}
+	p := &poller{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for i := 0; i < 2; i++ {
+		if _, _, err := p.pollDevice(ctx, 0, dev, "SN12345678"); err != nil {
+			t.Fatalf("запрос %d: %v", i+1, err)
+		}
+	}
+	if got := srv.accepted.Load(); got != 2 {
+		t.Fatalf("pollDevice должен открывать новое соединение на вызов: %d", got)
 	}
 }
 
