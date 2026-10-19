@@ -10,6 +10,8 @@
 #
 #   IMG=… — образ для перезаливки (по умолчанию — последний *malina-lite.img в pi-gen).
 #   MAL_EXTRA_GB=5 — добавочный размер p3 у тест-образа (default 5).
+#   MAL_P3_GB=3   — точный размер p3 для файла-образа (для тиража на 8-ГБ карту);
+#                   задаёт итоговый размер образа, приоритетнее MAL_EXTRA_GB.
 #   WORK=…, SUDO=… — переопределения.
 #
 # ВНИМАНИЕ: для блочного устройства скрипт ПЕРЕЗАЛИВАЕТ карту (`dd` образа) —
@@ -27,6 +29,7 @@ WORK="${WORK:-/tmp/malina-ld}"
 ROOTM="$WORK/root"
 MALM="$WORK/malina"
 MAL_EXTRA_GB="${MAL_EXTRA_GB:-5}"
+MAL_P3_GB="${MAL_P3_GB:-}"
 SUDO="${SUDO:-sudo}"
 PIGEN_DEPLOY="/opt/raspberry_tmp/pi-gen/deploy"
 
@@ -69,8 +72,18 @@ else
 	[ -f "$TARGET" ] || die "нет файла $TARGET"
 	LOOP="$($SUDO losetup -Pf --show "$TARGET")"
 	if [ ! -b "${LOOP}p3" ]; then
-		log "увеличиваю образ на +${MAL_EXTRA_GB}G под p3"
-		truncate -s "+${MAL_EXTRA_GB}G" "$TARGET"
+		if [ -n "$MAL_P3_GB" ]; then
+			p2_start=$(cat "/sys/class/block/$(basename "${LOOP}p2")/start")
+			p2_size=$(cat "/sys/class/block/$(basename "${LOOP}p2")/size")
+			end2_bytes=$(( (p2_start + p2_size) * 512 ))
+			p3_bytes=$(( MAL_P3_GB * 1024 * 1024 * 1024 ))
+			total_bytes=$(( end2_bytes + p3_bytes + 1048576 ))
+			log "точный образ: p3=${MAL_P3_GB}G, итого $(( total_bytes / 1024 / 1024 / 1024 ))G"
+			truncate -s "$total_bytes" "$TARGET"
+		else
+			log "увеличиваю образ на +${MAL_EXTRA_GB}G под p3"
+			truncate -s "+${MAL_EXTRA_GB}G" "$TARGET"
+		fi
 		$SUDO losetup -d "$LOOP"; LOOP=""
 		LOOP="$($SUDO losetup -Pf --show "$TARGET")"
 	fi
@@ -87,9 +100,24 @@ if [ ! -b "$P3" ]; then
 	p2_size=$(cat "/sys/class/block/$(basename "$P2")/size")
 	start3=$(( p2_start + p2_size ))
 	start3=$(( ((start3 + 2047) / 2048) * 2048 ))   # выравнивание 1 МиБ
-	echo "start=${start3}, size=+, type=83" | $SUDO sfdisk --force --no-reread -N 3 "$BASE"
+	# Для loop-устройства sfdisk пишет таблицу в файл, а не в loop:
+	# иначе изменения не сохраняются. Для блочного устройства — прямо в него.
+	SFDISK_TARGET="$BASE"
+	[ -n "$LOOP" ] && SFDISK_TARGET="$TARGET"
+	# Для loop-устройства сначала отключаем его: sfdisk должен писать
+	# таблицу в файл, иначе изменения не сохраняются.
+	if [ -n "$LOOP" ]; then
+		$SUDO losetup -d "$LOOP" 2>/dev/null || true
+		LOOP=""
+	fi
+	echo "start=${start3}, size=+, type=83" | $SUDO sfdisk --force --no-reread -N 3 --append "$SFDISK_TARGET"
 	$SUDO partprobe "$BASE" 2>/dev/null || true
-	[ -n "$LOOP" ] && $SUDO losetup -c "$LOOP"
+	if [ -f "${TARGET:-}" ]; then
+		LOOP="$($SUDO losetup -Pf --show "$TARGET")"
+		BASE="$LOOP"
+		$SUDO udevadm settle 2>/dev/null || sleep 1
+		P3="$(PART 3)"
+	fi
 	$SUDO udevadm settle 2>/dev/null || sleep 1
 fi
 [ -b "$P3" ] || die "p3 не появился"
