@@ -126,7 +126,7 @@
   // Реле — запись по регистру E3D (используется кликом по значку реле на панели).
   function postRelay(val) {
     var data = ("0" + val.toString(16)).slice(-2);
-    fetch("api/kes/write", {
+    fetch("/api/kes/write", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: ID, gen: GEN, ops: [{ op: "reg", addr: "E3D", data: data }] })
     })
@@ -148,7 +148,7 @@
     var serial = (lastF && String(lastF.Serial)) || String(window.KES_SERIAL || "");
     var tries = 0, max = 60; // ~60 c: после старта устройства обнаруживаются не сразу
     (function attempt() {
-      fetch("api/kes/devices", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (list) {
+      fetch("/api/kes/devices", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (list) {
         var d = null; list = list || [];
         for (var i = 0; i < list.length; i++) { if (serial && String(list[i].serial) === serial) { d = list[i]; break; } }
         if (!d && list.length === 1) { d = list[0]; }
@@ -161,7 +161,7 @@
   function tick(force) {
     if (pause && pause.checked && !force) { return; }
     inflight = new AbortController();
-    fetch("api/kes/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(GEN), { cache: "no-store", signal: inflight.signal })
+    fetch("/api/kes/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(GEN), { cache: "no-store", signal: inflight.signal })
       .then(function (r) { if (r.status === 404) { throw { gone: true }; } if (r.status === 401) { throw { auth: true }; } if (!r.ok) { throw new Error("HTTP " + r.status); } return r.arrayBuffer(); })
       .then(function (buf) { showErr(""); lastF = parse(buf); render(); })
       .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { relocateKes(); return; } if (!(e && e.name === "AbortError")) { showErr(t("kes.connection_lost")); } });

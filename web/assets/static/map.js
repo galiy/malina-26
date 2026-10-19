@@ -629,7 +629,7 @@
     var serial = String(window.MAP_SERIAL || "");
     var tries = 0, max = 60; // ~60 c: после старта устройства обнаруживаются не сразу
     (function attempt() {
-      fetch("api/map/devices", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (list) {
+      fetch("/api/map/devices", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (list) {
         var d = null; list = list || [];
         for (var i = 0; i < list.length; i++) { if (serial && String(list[i].serial) === serial) { d = list[i]; break; } }
         if (!d && list.length === 1) { d = list[0]; }
@@ -642,7 +642,7 @@
   function tick(force) {
     if (pause && pause.checked && !force) { return; }
     inflight = new AbortController();
-    fetch("api/map/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(window.MAP_GEN || 0), { cache: "no-store", signal: inflight.signal })
+    fetch("/api/map/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(window.MAP_GEN || 0), { cache: "no-store", signal: inflight.signal })
       .then(function (r) { if (r.status === 404) { throw { gone: true }; } if (r.status === 401) { throw { auth: true }; } if (!r.ok) { throw new Error("HTTP " + r.status); } return r.arrayBuffer(); })
       .then(function (buf) { showErr(""); var p = parse(buf); lastP = p; renderPanel(p); if (infoActive) { renderInfo(p); } window.MAP_GEN = p.gen; if (typeof window.mapControlRaw === "function") { try { window.mapControlRaw(p.fields, p.gen); } catch (e) { /* ignore */ } } })
       .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { relocateMap(); return; } if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });

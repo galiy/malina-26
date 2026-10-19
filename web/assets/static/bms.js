@@ -160,7 +160,7 @@
   function relocate() {
     var tries = 0, max = 60;
     (function attempt() {
-      fetch("api/bms/devices", { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (list) {
+      fetch("/api/bms/devices", { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (list) {
         var d = null; list = list || [];
         for (var i = 0; i < list.length; i++) { if (SERIAL && String(list[i].serial) === SERIAL) { d = list[i]; break; } }
         // Никакого fallback на единственную живую BMS: это открыло бы чужое устройство.
@@ -173,7 +173,7 @@
     if (pause && pause.checked && !force) { return; }
     if (inflight) { inflight.abort(); }
     inflight = new AbortController();
-    fetch("api/bms/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(GEN), { cache: "no-store", credentials: "same-origin", signal: inflight.signal })
+    fetch("/api/bms/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(GEN), { cache: "no-store", credentials: "same-origin", signal: inflight.signal })
       .then(function (r) { if (r.status === 404) { throw { gone: true }; } if (r.status === 401) { throw { auth: true }; } if (!r.ok) { throw new Error("HTTP " + r.status); } return r.arrayBuffer(); })
       .then(function (buf) { showErr(""); render(decode(buf)); })
       .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { relocate(); return; } if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });

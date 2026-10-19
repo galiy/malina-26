@@ -1482,3 +1482,141 @@ body.help-open { overflow: hidden; }
   .help-modal { width: 100vw; height: 100vh; border-radius: 0; }
   .help-close { top: 8px; right: 8px; }
 }
+
+/* === Мобильные фиксы: главная плашки, КЭС, панель дат, процессы, шапка настроек === */
+/* Все правки — только внутри медиа, десктоп (>820px) не затрагивается. */
+
+/* 1) ГЛАВНАЯ: плашки GRID/BATTERY/LOAD — складываются без обрезания LOAD */
+@media (max-width: 520px) {
+  .home-wrap { padding: .5rem; }
+
+  /* Плитка не имеет жёсткого min-width, тянется по ширине */
+  .home-tile { min-width: 0; width: 100%; padding: .45rem .5rem; }
+
+  /* 3 колонки → 2 + 1 переносом */
+  .home-cols { display: flex; flex-wrap: wrap; }
+  .home-col { flex: 1 1 50%; min-width: 0; padding: .2rem .4rem; }
+  .home-col:nth-child(3) {
+    flex-basis: 100%;
+    border-left: 0;
+    border-top: 1px solid #000;
+    justify-content: flex-start;
+  }
+
+  /* Наименования переносятся, значения не обрезаются */
+  .home-cols-table td { white-space: normal; }
+  .home-cols-table .home-cell-l { white-space: normal; overflow-wrap: anywhere; }
+  .home-cell-v { font-size: .95rem; }
+
+  /* Сетка инверторов (grid-cols): отступы ужаты, чтобы влезть */
+  .grid-col:first-child { padding-right: 8px; }
+  .grid-col + .grid-col { padding-left: 8px; }
+}
+
+/* 2) КЭС-панель: верхняя строка и тело сетки — без вылезания */
+@media (max-width: 640px) {
+  .kesp-top { flex-wrap: wrap; gap: 6px; }
+  .kesp-top .kesp-pow { font-size: 16px; padding: 2px 12px; }
+  .kesp-top .kesp-time { font-size: 17px; }
+  .kesp-top .kesp-id { margin-left: 0; font-size: 16px; }
+  .kesp-body { grid-template-columns: 1fr; gap: 6px; }
+}
+@media (max-width: 520px) {
+  .kesp-body { grid-template-columns: 1fr; }
+  .kesp-set { flex-wrap: wrap; }
+  .kesp-val { font-size: 15px; padding: 1px 8px; }
+  .kesp-cell, .kesp-tint, .kesp-tbat, .kesp-st { min-height: 40px; padding: 6px 8px; }
+  .kesp-top .kesp-mode { font-size: 16px; padding: 2px 14px; }
+}
+
+/* 3) BMS/GRID/СТАТИСТИКА: панель дат — перенос полей и кнопки */
+@media (max-width: 820px) {
+  .stats-controls .stats-custom {
+    display: flex; flex-wrap: wrap; width: 100%; gap: 6px;
+  }
+  .stats-controls .stats-custom input[type="datetime-local"] {
+    flex: 1 1 140px; min-width: 0; max-width: 100%; box-sizing: border-box;
+  }
+  .stats-controls .stats-custom .btn { flex: 0 0 auto; }
+}
+
+/* 4) info ПРОЦЕССЫ / Wi-Fi CLIENTS: команды и Signal переносятся, без обрезания */
+@media (max-width: 820px) {
+  .procs-table { table-layout: auto; }
+  .conn-table { table-layout: auto; }
+  .procs-table th, .procs-table td,
+  .conn-table th, .conn-table td { white-space: normal; overflow-wrap: anywhere; }
+  .procs-table td.pcmd { white-space: normal; word-break: break-word; }
+  .procs-table th { white-space: normal; }
+  .conn-table th { white-space: normal; }
+  .conn-table td.mac, .conn-table td.mac code { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+}
+
+/* 5) НАСТРОЙКИ: шапка «DEVICE STATUS» (.nettable) — в столбик, читаемая */
+@media (max-width: 820px) {
+  .nettable thead { display: block; }
+  .nettable thead th {
+    display: block; white-space: normal;
+    color: var(--muted); font-weight: 600; text-align: left;
+  }
+}
+
+/* 6) GRID-панель инвертора (/grid): таблица «Параметр | Значение | Единица» —
+   на мобиле одна аккуратная строка на параметр, шапка не ломается */
+@media (max-width: 640px) {
+  .grid-params { display: block; width: 100%; }
+  .grid-params tbody, .grid-params tr, .grid-params td { display: block; width: 100%; }
+
+  /* В шапке — обычные заголовки, не растягиваются по строкам */
+  .grid-params thead { display: block; }
+  .grid-params thead th {
+    display: inline-block; white-space: normal;
+    color: var(--muted); font-weight: 600; text-align: left;
+  }
+
+  /* Строка параметра: название слева, значение+единица подряд справа */
+  .grid-params tr {
+    display: flex; justify-content: space-between;
+    gap: 12px; align-items: baseline;
+    padding: 4px 0; border-bottom: 1px solid #e2e8e4;
+  }
+  .grid-params td { border: 0; padding: 0; }
+  .grid-p-name { text-align: left; color: var(--muted); flex: 1 1 auto; min-width: 0; }
+  .grid-p-val { text-align: right; font-weight: 600; white-space: nowrap; }
+  .grid-p-unit { text-align: left; min-width: 34px; color: var(--muted); white-space: nowrap; }
+}
+
+/* 7) info ПРОЦЕССЫ: фиксированная раскладка в процентах вписывает таблицу
+   в карточку, Command получает достаточную ширину и переносится по словам. */
+@media (max-width: 820px) {
+  .procs-table { table-layout: fixed; display: table; width: 100%; overflow: visible; }
+  .procs-table th, .procs-table td {
+    white-space: normal; overflow-wrap: break-word; overflow: hidden;
+  }
+  .procs-table th:nth-child(1), .procs-table td:nth-child(1) { width: 12%; }
+  .procs-table th:nth-child(2), .procs-table td:nth-child(2) { width: 18%; }
+  .procs-table th:nth-child(3), .procs-table td:nth-child(3) { width: 12%; }
+  .procs-table th:nth-child(4), .procs-table td:nth-child(4) { width: 12%; }
+  .procs-table th:nth-child(5), .procs-table td:nth-child(5) { width: 14%; }
+  .procs-table th:nth-child(6), .procs-table td:nth-child(6) { width: 30%; }
+  .procs-table td.pcmd { width: 30%; min-width: 0; word-break: break-all; }
+}
+
+/* 8) BMS-карта ячеек на главной: влезает в границы, ничего не обрезано. */
+@media (max-width: 520px) {
+  .home-col-cells { min-width: 0; flex: 1 1 100%; }
+  .bms-cells-tbl { max-width: 100%; width: 100%; overflow-x: auto; display: block; }
+  .bms-cells-tbl td { min-width: 0; }
+}
+
+/* 9) НАСТРОЙКИ: таблица «DEVICE STATUS» на мобиле остаётся таблицей
+   (заголовки сопоставлены значениям), при нехватке ширины — горизонтальный скролл. */
+@media (max-width: 820px) {
+  #settingsStatus { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #settingsStatus .nettable { display: table; width: 100%; table-layout: auto; }
+  #settingsStatus .nettable thead { display: table-header-group; }
+  #settingsStatus .nettable tbody { display: table-row-group; }
+  #settingsStatus .nettable tr { display: table-row; }
+  #settingsStatus .nettable th,
+  #settingsStatus .nettable td { display: table-cell; white-space: nowrap; }
+}

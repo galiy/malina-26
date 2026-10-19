@@ -33,7 +33,7 @@
     box.innerHTML = html; // подпункты — перед статической «Настройкой» (она вне box)
   }
   function poll() {
-    [["map", "api/map/devices"], ["kes", "api/kes/devices"], ["bms", "api/bms/devices"]].forEach(function (p) {
+    [["map", "/api/map/devices"], ["kes", "/api/kes/devices"], ["bms", "/api/bms/devices"]].forEach(function (p) {
       fetch(p[1], { cache: "no-store", credentials: "same-origin" })
         .then(function (r) { if (!r.ok) { throw 0; } return r.json(); })
         .then(function (d) { render(boxes[p[0]], d, p[0]); })
