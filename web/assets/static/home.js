@@ -369,7 +369,7 @@
       // Ссылка на страницу устройства (МАП/КЭС/БМС) по id+gen, как пункты меню.
       // serial добавляем только если сервер его отдал (иначе параметр пустой).
       // URL пересчитываем на каждом обновлении: gen/serial могли измениться.
-      var url = mode + "?id=" + encodeURIComponent(d.id) +
+      var url = "/" + mode + "?id=" + encodeURIComponent(d.id) +
         "&gen=" + encodeURIComponent(d.gen || "");
       if (d.serial) { url += "&serial=" + encodeURIComponent(d.serial); }
       var el = tiles[key];
@@ -410,9 +410,9 @@
   }
 
   function tick() {
-    fetch("api/mainlist", { cache: "no-store", credentials: "same-origin" })
+    fetch("/api/mainlist", { cache: "no-store", credentials: "same-origin" })
       .then(function (r) {
-        if (r.status === 401) { window.location.href = "login"; return null; }
+        if (r.status === 401) { window.location.href = "/login"; return null; }
         if (!r.ok) { throw new Error("HTTP " + r.status); }
         return r.json();
       })

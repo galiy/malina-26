@@ -31,7 +31,8 @@
   Устаревшие скрипты — в `archive/` (вне git).
 - `web/` — Go-сервисы (`cmd/malina-web`, `cmd/malina-netd`, `internal/*`),
   статика/шаблоны/i18n, PAM-хелпер.
-- `tests/` — автотесты: UI smoke (Playwright, `run-smoke.js`) и API e2e
+- `tests/` — автотесты: UI smoke (Playwright, `run-smoke.js`), пулинг меню
+  (`run-nav-poll.js`: расписание, hidden, debounce, in-flight) и API e2e
   (`run-api-e2e.js`: авторизация cookie/Bearer, токены, запись, смена пароля).
 - `manuals/` — пользовательская документация.
 - `docs/` — техническая документация (МАП, карта памяти и т.п.).

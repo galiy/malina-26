@@ -66,7 +66,7 @@
 | `web/assets/templates/layout.html` | общий каркас, `{{.Active}}`, `{{.T}}`, подключаемые скрипты |
 | `web/assets/static/map.js` | панель 1 — **референс формул** (НЕ трогаем) |
 | `web/assets/static/masterpanel.js` | мастер-панель — **референс отрисовки плиток/статуса** |
-| `web/assets/static/nav.js` | динамическое меню **«МАП» и «КЭС»** (списки `/api/*/devices`, ссылки на страницу устройства) |
+| `web/assets/static/nav.js` | динамическое меню **«МАП», «КЭС» и «БМС»** (списки `/api/*/devices`, корневые абсолютные ссылки на страницу устройства; требования — `docs/ui-navigation.md`) |
 | `web/assets/i18n/{ru,be,zh,en,ka,kk,uz,tg}.json` | локали |
 
 ---
@@ -637,7 +637,7 @@ func kesModeString(f *kesFields) string {
 ### 10.2 `home.js` — логика клиента
 
 - `setInterval(tick, 1000)`; первый вызов сразу (`tick()`). Обновление раз в секунду.
-- `fetch("api/mainlist", { cache: "no-store", credentials: "same-origin" })`.
+- `fetch("/api/mainlist", { cache: "no-store", credentials: "same-origin" })`.
 - На `401` — перенаправить на `/login` (как панели).
 - По ответу:
   - `if (resp.maps.length === 0) hide(#homeMaps) else { show; renderTiles; }`
@@ -669,8 +669,10 @@ func kesModeString(f *kesFields) string {
   наименование (влево) | значение (вправо) | единицы (влево). Строки —
   `.home-cell-l` / `.home-cell-v-wrap` / `.home-cell-u`.
 - **Плашка кликабельна** (кроме тех, что в «тумане»): обёрнута в
-  `<a class="home-tile-link" href="<page>?id=<id>&gen=<gen>">`, где
-  `<page>` = `map`/`kes` по типу устройства. Пункты меню «МАП»/«КЭС» ведут туда же.
+  `<a class="home-tile-link" href="/<page>?id=<id>&gen=<gen>">`, где
+  `<page>` = `map`/`kes`/`bms` по типу устройства. Пункты меню «МАП»/«КЭС»/«БМС»
+  ведут туда же. Ссылка строится корневой абсолютной
+  (`docs/ui-navigation.md`, N1).
   В тумане (lost/stale) плашке добавляется класс `nolink` → `pointer-events:none`
   (плюс сам «туман» перекрывает клик).
 - Для каждой ячейки значение `v` + класс цвета по §8 (клиент сам выбирает ключ
@@ -688,6 +690,8 @@ func kesModeString(f *kesFields) string {
   устройства.
 - Подготовка: `baseData` отдаёт `Maps` и `Kes`; `handleIndex` ставит
   `Active="home"` (подсветка «ДОМОЙ»).
+- **Ссылки и обновление меню** — только корневые абсолютные URL; политика
+  опроса и кеша зафиксирована в `docs/ui-navigation.md` (N1–N5).
 
 ### 10.3 Вёрстка (конкретика)
 

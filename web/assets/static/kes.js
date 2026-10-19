@@ -152,7 +152,7 @@
         var d = null; list = list || [];
         for (var i = 0; i < list.length; i++) { if (serial && String(list[i].serial) === serial) { d = list[i]; break; } }
         if (!d && list.length === 1) { d = list[0]; }
-        if (d) { window.location.href = "kes?id=" + encodeURIComponent(d.id) + "&gen=" + encodeURIComponent(d.gen) + "&serial=" + encodeURIComponent(serial); return; }
+        if (d) { window.location.href = "/kes?id=" + encodeURIComponent(d.id) + "&gen=" + encodeURIComponent(d.gen) + "&serial=" + encodeURIComponent(serial); return; }
         if (++tries < max) { setTimeout(attempt, 1000); } else { window.location.href = "/"; }
       }).catch(function () { if (++tries < max) { setTimeout(attempt, 1000); } else { window.location.href = "/"; } });
     })();
@@ -164,7 +164,7 @@
     fetch("/api/kes/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(GEN), { cache: "no-store", signal: inflight.signal })
       .then(function (r) { if (r.status === 404) { throw { gone: true }; } if (r.status === 401) { throw { auth: true }; } if (!r.ok) { throw new Error("HTTP " + r.status); } return r.arrayBuffer(); })
       .then(function (buf) { showErr(""); lastF = parse(buf); render(); })
-      .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { relocateKes(); return; } if (!(e && e.name === "AbortError")) { showErr(t("kes.connection_lost")); } });
+      .catch(function (e) { if (e && e.auth) { window.location.href = "/login"; return; } if (e && e.gone) { relocateKes(); return; } if (!(e && e.name === "AbortError")) { showErr(t("kes.connection_lost")); } });
   }
 
   function initTabs() {

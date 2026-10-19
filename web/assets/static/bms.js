@@ -164,7 +164,7 @@
         var d = null; list = list || [];
         for (var i = 0; i < list.length; i++) { if (SERIAL && String(list[i].serial) === SERIAL) { d = list[i]; break; } }
         // Никакого fallback на единственную живую BMS: это открыло бы чужое устройство.
-        if (d) { window.location.href = "bms?id=" + encodeURIComponent(d.id) + "&gen=" + encodeURIComponent(d.gen) + "&serial=" + encodeURIComponent(d.serial); return; }
+        if (d) { window.location.href = "/bms?id=" + encodeURIComponent(d.id) + "&gen=" + encodeURIComponent(d.gen) + "&serial=" + encodeURIComponent(d.serial); return; }
         if (++tries < max) { setTimeout(attempt, 1000); } else { window.location.href = "/"; }
       }).catch(function () { if (++tries < max) { setTimeout(attempt, 1000); } else { window.location.href = "/"; } });
     })();
@@ -176,7 +176,7 @@
     fetch("/api/bms/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(GEN), { cache: "no-store", credentials: "same-origin", signal: inflight.signal })
       .then(function (r) { if (r.status === 404) { throw { gone: true }; } if (r.status === 401) { throw { auth: true }; } if (!r.ok) { throw new Error("HTTP " + r.status); } return r.arrayBuffer(); })
       .then(function (buf) { showErr(""); render(decode(buf)); })
-      .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { relocate(); return; } if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });
+      .catch(function (e) { if (e && e.auth) { window.location.href = "/login"; return; } if (e && e.gone) { relocate(); return; } if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });
   }
   var inflight = null;
   function start() { if (timer) { return; } tick(); timer = setInterval(tick, 1000); }

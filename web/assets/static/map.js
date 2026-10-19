@@ -633,7 +633,7 @@
         var d = null; list = list || [];
         for (var i = 0; i < list.length; i++) { if (serial && String(list[i].serial) === serial) { d = list[i]; break; } }
         if (!d && list.length === 1) { d = list[0]; }
-        if (d) { window.location.href = "map?id=" + encodeURIComponent(d.id) + "&gen=" + encodeURIComponent(d.gen) + "&serial=" + encodeURIComponent(serial); return; }
+        if (d) { window.location.href = "/map?id=" + encodeURIComponent(d.id) + "&gen=" + encodeURIComponent(d.gen) + "&serial=" + encodeURIComponent(serial); return; }
         if (++tries < max) { setTimeout(attempt, 1000); } else { window.location.href = "/"; }
       }).catch(function () { if (++tries < max) { setTimeout(attempt, 1000); } else { window.location.href = "/"; } });
     })();
@@ -645,7 +645,7 @@
     fetch("/api/map/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(window.MAP_GEN || 0), { cache: "no-store", signal: inflight.signal })
       .then(function (r) { if (r.status === 404) { throw { gone: true }; } if (r.status === 401) { throw { auth: true }; } if (!r.ok) { throw new Error("HTTP " + r.status); } return r.arrayBuffer(); })
       .then(function (buf) { showErr(""); var p = parse(buf); lastP = p; renderPanel(p); if (infoActive) { renderInfo(p); } window.MAP_GEN = p.gen; if (typeof window.mapControlRaw === "function") { try { window.mapControlRaw(p.fields, p.gen); } catch (e) { /* ignore */ } } })
-      .catch(function (e) { if (e && e.auth) { window.location.href = "login"; return; } if (e && e.gone) { relocateMap(); return; } if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });
+      .catch(function (e) { if (e && e.auth) { window.location.href = "/login"; return; } if (e && e.gone) { relocateMap(); return; } if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });
   }
   function start() { if (timer) { return; } tick(); timer = setInterval(tick, INTERVAL); }
   function stop() { if (timer) { clearInterval(timer); timer = null; } if (inflight) { inflight.abort(); inflight = null; } }

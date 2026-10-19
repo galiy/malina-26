@@ -1,7 +1,7 @@
 {{define "content"}}
 {{if .Ok}}<div class="flash ok">{{.Ok}}</div>{{end}}
 
-<form id="netform" method="post" action="network/save">
+<form id="netform" method="post" action="/network/save">
   <div class="page-head page-head-left">
     <h1>{{index .T "net.title"}}</h1>
     <div class="head-actions">

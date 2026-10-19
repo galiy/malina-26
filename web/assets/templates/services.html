@@ -5,7 +5,7 @@
 {{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
 
 <div class="svc-top">
-  <form method="post" action="system/reboot" id="rebootForm">
+  <form method="post" action="/system/reboot" id="rebootForm">
     <button type="submit" class="btn-danger">{{index .T "svc.reboot"}}</button>
   </form>
   <span class="muted">{{index .T "svc.reboot_hint"}}</span>

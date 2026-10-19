@@ -28,9 +28,9 @@
 
   async function loadTail(scrollBottom) {
     try {
-      var r = await fetch("api/log?file=" + encodeURIComponent(file) + "&lines=" + PAGE + "&offset=0",
+      var r = await fetch("/api/log?file=" + encodeURIComponent(file) + "&lines=" + PAGE + "&offset=0",
                           { cache: "no-store" });
-      if (r.status === 401) { location.href = "login"; return; }
+      if (r.status === 401) { location.href = "/login"; return; }
       if (!r.ok) { if (status) status.textContent = "HTTP " + r.status; return; }
       var d = await r.json();
       live = d.lines || [];
@@ -45,7 +45,7 @@
     loadingOlder = true;
     try {
       var offset = older.length + live.length;
-      var r = await fetch("api/log?file=" + encodeURIComponent(file) + "&lines=" + PAGE + "&offset=" + offset,
+      var r = await fetch("/api/log?file=" + encodeURIComponent(file) + "&lines=" + PAGE + "&offset=" + offset,
                           { cache: "no-store" });
       if (!r.ok) return;
       var d = await r.json();

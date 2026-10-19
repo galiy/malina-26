@@ -270,7 +270,7 @@
 
   function post(ops, done) {
     var body = { id: MAP_ID, gen: GEN, ops: ops };
-    fetch("api/map/write", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" })
+    fetch("/api/map/write", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" })
       .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
       .then(function (res) { done(res.j, res.s); })
       .catch(function () { done({ ok: false, error: "network" }, 0); });

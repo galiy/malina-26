@@ -149,13 +149,13 @@
     });
   }
   function fetchScan() {
-    fetch("api/scan", { cache: "no-store" }).then(function (r) { if (r.status === 401) { location.href = "login"; return; } return r.json(); }).then(renderScan).catch(function () { });
+    fetch("/api/scan", { cache: "no-store" }).then(function (r) { if (r.status === 401) { location.href = "/login"; return; } return r.json(); }).then(renderScan).catch(function () { });
   }
   function openModal() { modal.hidden = false; }
   function closeModal() { modal.hidden = true; if (poll) { clearInterval(poll); poll = null; } }
   $("#scanbtn").addEventListener("click", function () {
     openModal(); list.textContent = t("info.loading");
-    fetch("network/scan", { method: "POST" }).catch(function () { }).then(function () {
+    fetch("/network/scan", { method: "POST" }).catch(function () { }).then(function () {
       fetchScan();
       var n = 0; poll = setInterval(function () { fetchScan(); if (++n > 10) { clearInterval(poll); poll = null; } }, 2000);
     });
