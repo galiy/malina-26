@@ -283,6 +283,11 @@
 
   // --- Устройства/закладки ---
   var devs = [], active = null;
+  // Наименования сетевых инверторов из конфига grid-reader (по serial).
+  var gridNames = {};
+  function gridName(id) {
+    return gridNames[id] || id;
+  }
   // «Показать неактуальные устройства»: по умолчанию в закладках только устройства
   // с обновлением телеметрии за последний час. Флаг — в памяти модуля (не персистентен
   // при перезагрузке страницы, сохраняется при переходах между закладками).
@@ -290,7 +295,8 @@
   var STALE_MS = 3600 * 1000;
   var staleCb = document.getElementById("stats-show-stale");
   function devLabel(d) {
-    var name = d.type === "map" ? "МАП" : d.type === "kes" ? "КЭС" : d.type === "grid" ? T("grid.device") : "BMS";
+    if (d.type === "grid") return gridName(d.id);
+    var name = d.type === "map" ? "МАП" : d.type === "kes" ? "КЭС" : "BMS";
     return name + " " + d.id;
   }
   function visibleDevs() {
@@ -323,7 +329,14 @@
       loadCharts();
       return Promise.resolve();
     }
-    return api("/api/stats/devices").then(function (j) {
+    return Promise.all([
+      api("/api/stats/devices"),
+      api("/api/grid/status").catch(function () { return { inverters: [] }; })
+    ]).then(function (res) {
+      var j = res[0], st = res[1];
+      ((st && st.inverters) || []).forEach(function (x) {
+        if (x && x.serial && x.name) gridNames[x.serial] = x.name;
+      });
       devs = (j && j.devices) || [];
       var vis = visibleDevs();
       if (vis.length) { active = vis[0]; renderTabs(); loadCharts(); }
@@ -743,8 +756,8 @@
         var ser = (r.j && r.j.series) || {};
         var a = (ser["7"] || []).map(function (p) { return [+p[0], +p[1]]; });
         var q = (ser["8"] || []).map(function (p) { return [+p[0], +p[1]]; });
-        if (a.length) activeDS.push(cmpDataset(r.d.id, a, di, "home.grid.w", 0));
-        if (q.length) reactiveDS.push(cmpDataset(r.d.id, q, di, "home.grid.var", 0));
+        if (a.length) activeDS.push(cmpDataset(gridName(r.d.id), a, di, "home.grid.w", 0));
+        if (q.length) reactiveDS.push(cmpDataset(gridName(r.d.id), q, di, "home.grid.var", 0));
         var pn = place[r.d.id] || "";
         plSet[pn] = true;
         perDev.push({ pn: pn, pts: a });

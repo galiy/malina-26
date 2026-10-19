@@ -91,12 +91,20 @@
     return fmtTimeMS(mm[0]) + " … " + fmtTimeMS(mm[1]);
   }
 
+  // Наименования сетевых инверторов из конфига grid-reader (по serial).
+  var gridNames = {};
+  function gridName(id) {
+    return gridNames[id] || id;
+  }
+  function devLabel(d) {
+    return d.type === "grid" ? gridName(d.id) : d.type + " " + d.id;
+  }
   function renderTabs() {
     tabsEl.innerHTML = "";
     visibleDevs().forEach(function (d, i) {
       var b = document.createElement("button");
       b.className = "stats-tab" + (active === d ? " active" : "");
-      b.textContent = d.type + " " + d.id; // заголовок в одну строку
+      b.textContent = devLabel(d); // заголовок в одну строку
       b.onclick = function () { select(i); };
       tabsEl.appendChild(b);
     });
@@ -300,7 +308,14 @@
     select(visibleDevs().indexOf(active));
   };
 
-  api("/api/stats/devices").then(function (j) {
+  Promise.all([
+    api("/api/stats/devices"),
+    api("/api/grid/status").catch(function () { return { inverters: [] }; })
+  ]).then(function (res) {
+    var j = res[0], st = res[1];
+    ((st && st.inverters) || []).forEach(function (x) {
+      if (x && x.serial && x.name) gridNames[x.serial] = x.name;
+    });
     devs = j.devices || [];
     renderTabs();
     var vis = visibleDevs();

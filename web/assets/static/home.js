@@ -287,7 +287,7 @@
       '<td class="home-title">' + esc(d.name || d.serial) + "</td></tr>" +
       '<tr><td><div class="home-status"><span class="home-status-mode grid-status st' + d.status + '">' +
       esc(d.inverter_status_text || "") + '</span><span class="grid-sub">' +
-      esc((d.status_text || "") + " · " + (d.type === "sofar" ? "Sofar" : "Deye") + " " + (d.serial || "")) +
+      esc((d.status_text || "") + " · " + (d.type === "sofar" ? "Sofar" : "Deye")) +
       '<span class="grid-last-inline">' + esc(d.last_seen ? new Date(d.last_seen * 1000).toLocaleString() : t("home.nd")) + "</span></span></div></td></tr>" +
       "</tbody></table>" +
       '<div class="grid-big">' +
