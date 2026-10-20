@@ -506,6 +506,21 @@ meta_frame :=                  # мета-запрос: список устро�
   device_id    str             # cmd=2; для cmd=1 — ""
   crc32        u32
 
+offset_frame :=                # NEW: committed offset raw-сегмента
+  magic        u32   "MTSP"
+  mode         u8             # 0 = current, 1 = quiesce (финальный offset)
+  device_type  str
+  device_id    str
+  segment      str            # имя/номер сегмента
+  crc32        u32
+
+offset_reply :=                # NEW: ответ
+  magic        u32   "MTSQ"
+  code         u8             # 0 = ok
+  committed    u64            # все байты до offset записаны в файл tmpfs
+  final        u8             # 1 = после ответа новые записи не принимаются
+  crc32        u32
+
 meta_reply :=                  # ответ (cmd совпадает с запросом)
   magic        u32   "MTSO"
   cmd          u8
@@ -578,6 +593,8 @@ meta_reply :=                  # ответ (cmd совпадает с запр�
   `map` v1 / `kes` v1 / `mbms` v1..v32 (`docs/stat.md`) — `daemons/lib/tscontract`;
 - двоичные кадры `MTSW/MTSR/MTSA/MTSE` (+ ответ `MTSK`) и мета `MTSI`/`MTSO`
   (list/extremes), crc32, varint, `str` — `daemons/tsdb/wire.go`;
+- `MTSP/MTSQ` (quiesce/committed offset) — **проект, ещё не реализованы**;
+  требуются для `malina-arch`;
 - режимы чтения `direction`/`limit` (страницы) + разреженный индекс и row-режим —
   `daemons/tsdb/store.go`, `daemons/tsdb/row.go`;
 - прореживание чтения `bucket` (§1.4/§9/§10) — «ближайшая к границе мини-окна» по времени
@@ -600,6 +617,10 @@ meta_reply :=                  # ответ (cmd совпадает с запр�
 расшифровка кодов ошибок/статусов в таблицах.
 
 ## 14. Два уровня хранения: raw (tmpfs) + усреднённый (SD)
+
+> Требования к резервному копированию raw/avg и сервису `malina-arch` —
+> `docs/malina-arch.md`. Avg-backup копирует только запечатанные сегменты;
+> snapshot/export API для этого не требуется (§8 `malina-arch.md`).
 
 Два экземпляра `malina-tsdb` с **разными раскладками блока**:
 
