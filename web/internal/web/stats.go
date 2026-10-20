@@ -404,7 +404,7 @@ type seriesPoint struct {
 // у raw: avg берём лишь левее первой raw-точки, правее — raw. Сервер отдаёт только
 // значения полей контракта (в человеческих единицах); вычисляемые величины
 // (мощности, ток MPPT-сумма и т.п.) — на клиенте (§3.2).
-func (s *Server) statsSeries(typ, id string, from, to int64, fields []string, source string) map[string][]seriesPoint {
+func (s *Server) statsSeries(typ, id string, from, to int64, fields []string, source string) (map[string][]seriesPoint, int64) {
 	all := len(fields) == 0 // без fields — вернуть все поля ряда
 	want := map[string]bool{}
 	out := map[string][]seriesPoint{}
@@ -459,7 +459,11 @@ func (s *Server) statsSeries(typ, id string, from, to int64, fields []string, so
 	}
 	s.decodeRowsInto(typ, rowsAvg, addPt)
 	s.decodeRowsInto(typ, rowsRaw, addPt)
-	return out
+	if source != "" {
+		// В режимах «только raw/avg» сшива нет — линию не рисуем.
+		rawMin = 0
+	}
+	return out, rawMin
 }
 
 // accPeriodMin — период агрегации avg (мин) с кешем по mtime/size (горячий путь
@@ -588,15 +592,15 @@ func (s *Server) handleAPIStatsSeries(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	series := s.statsSeries(typ, id, from, to, fields, source)
+	series, rawFrom := s.statsSeries(typ, id, from, to, fields, source)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	writeSeriesJSON(w, series, from, to)
+	writeSeriesJSON(w, series, from, to, rawFrom)
 }
 
 // writeSeriesJSON стримит `{"from":F,"to":T,"series":{"<key>":[[t,v],…],…}}` прямо в ответ, без
 // промежуточного map[string]any и без полного буфера ответа (§производительность:
 // типизированные числа пишутся strconv, буферизация лишь chunk-ами).
-func writeSeriesJSON(w io.Writer, series map[string][]seriesPoint, from, to int64) {
+func writeSeriesJSON(w io.Writer, series map[string][]seriesPoint, from, to, rawFrom int64) {
 	bw := bufio.NewWriterSize(w, 64*1024)
 	_, _ = bw.WriteString(`{"from":`)
 	var num []byte
@@ -604,6 +608,9 @@ func writeSeriesJSON(w io.Writer, series map[string][]seriesPoint, from, to int6
 	_, _ = bw.Write(num)
 	_, _ = bw.WriteString(`,"to":`)
 	num = strconv.AppendInt(num[:0], to, 10)
+	_, _ = bw.Write(num)
+	_, _ = bw.WriteString(`,"raw_from":`)
+	num = strconv.AppendInt(num[:0], rawFrom, 10)
 	_, _ = bw.Write(num)
 	_, _ = bw.WriteString(`,"series":{`)
 	first := true

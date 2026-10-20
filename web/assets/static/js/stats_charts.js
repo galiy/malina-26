@@ -14,6 +14,7 @@
   var reqSeq = 0;
   var followSeq = 0;
   var compareMode = false;
+  var rawFromCur = 0; // время первой raw-точки (граница сшива raw/avg), 0 = нет
   var compareWrap = document.getElementById("ch-compare-wrap");
   var compareCb = document.getElementById("ch-compare");
   if (!chartsEl) return;
@@ -252,8 +253,9 @@
     var act = active, seq = ++followSeq;
     return api(followURL("&depth=" + followDepth)).then(function (j) {
       if (!followActive || active !== act || seq !== followSeq || !j) return;
-      followSeries = (j && j.series) || {}; followFrom = j.from; followTo = j.to;
+      followSeries = (j && j.series) || {}; followFrom = j.from; followTo = j.to; rawFromCur = 0;
       range = { from: followFrom, to: followTo };
+      rawFromCur = 0;
       renderFromSeries(followSeries); inputsShow();
     });
   }
@@ -269,6 +271,7 @@
       followTo = j.to; followFrom = followTo - followDepth * 60000;
       Object.keys(followSeries).forEach(function (k) { var a = followSeries[k]; while (a.length && a[0][0] < followFrom) a.shift(); });
       range = { from: followFrom, to: followTo };
+      rawFromCur = 0;
       renderFromSeries(followSeries); inputsShow();
     });
   }
@@ -491,6 +494,31 @@
       } catch (e) {}
     }
   };
+  // Граница сшива raw/avg: тонкая вертикальная линия. Активна только в режиме
+  // сшива (raw_from > 0), автоматически пересчитывается при зуме/панораме.
+  var rawSeamPlugin = {
+    id: "rawSeam",
+    afterDatasetsDraw: function (c) {
+      try {
+        var rf = c.$rawFrom;
+        if (!rf || !isFinite(rf)) return;
+        var x = c.scales.x;
+        if (!x || !isFinite(x.min) || !isFinite(x.max) || rf < x.min || rf > x.max) return;
+        var px = x.getPixelForValue(rf);
+        if (!isFinite(px)) return;
+        var ctx = c.ctx;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(px, c.chartArea.top);
+        ctx.lineTo(px, c.chartArea.bottom);
+        ctx.strokeStyle = "#d9534f";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        ctx.restore();
+      } catch (e) {}
+    }
+  };
   function chipsBuild(canvasId, chipsId, chart) {
     var row = document.getElementById(chipsId);
     // sync — только вид чипов (без записи настройки). Настройка обновляется
@@ -623,7 +651,8 @@
       }
     };
     if (saved) { opts.scales.x.min = saved.min; opts.scales.x.max = saved.max; }
-    var chart = new Chart(document.getElementById(cid), { type: "line", data: { datasets: datasets }, plugins: [syncPlugin], options: opts });
+    var chart = new Chart(document.getElementById(cid), { type: "line", data: { datasets: datasets }, plugins: [syncPlugin, rawSeamPlugin], options: opts });
+    chart.$rawFrom = rawFromCur;
     CHARTS[cid] = chart;
     var hid = hidden[active.type] || [];
     chart.data.datasets.forEach(function (d, i) { if (d.keyStr && hid.indexOf(d.keyStr) >= 0) chart.setDatasetVisibility(i, false); });
@@ -702,6 +731,7 @@
     chart.options.scales.x.min = range.from;
     chart.options.scales.x.max = range.to;
     chart.data.datasets.forEach(function (d, i) { chart.setDatasetVisibility(i, hid.indexOf(d.keyStr) < 0); });
+    chart.$rawFrom = rawFromCur;
     chart.update("none");
   }
 
@@ -815,6 +845,7 @@
       Object.keys(CHARTS).forEach(function (id) { try { CHARTS[id].destroy(); } catch (e) {} delete CHARTS[id]; });
       chartsEl.innerHTML = "";
       compareMode = true;
+      rawFromCur = 0;
       renderCard({ t: "stats.cmp.active", u: "home.grid.w" }, "chcmp0", activeDS);
       renderCard({ t: "stats.cmp.reactive", u: "home.grid.var" }, "chcmp1", reactiveDS);
       renderCard({ t: "stats.cmp.total", u: "home.grid.w" }, "chcmp2", totalDS);
@@ -841,6 +872,7 @@
       var ser = (j && j.series) || {};
       var any = Object.keys(ser).some(function (k) { return ser[k] && ser[k].length; });
       if (!any) { showNoData(); return; }
+      rawFromCur = +j.raw_from || 0;
       // Выравнивание окна по данным: правый край = конец данных (по всем полям),
       // левый — не левее начала данных (без пустот с обеих сторон).
       var gmax = 0, gmin = 0;
