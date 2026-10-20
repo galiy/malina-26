@@ -10,19 +10,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galiy/malina-26/daemons/lib/logx"
 	"github.com/galiy/malina-26/daemons/lib/solarman"
 )
 
 // fakeLogger — минимальный Solarman V5 TCP-сервер для смоука.
 type fakeLogger struct {
-	t        *testing.T
-	ln       net.Listener
-	kind     string
-	start    uint16
-	count    uint16
-	emptySN  bool
-	accepted atomic.Int32
-	closed   atomic.Int32
+	t          *testing.T
+	ln         net.Listener
+	kind       string
+	start      uint16
+	count      uint16
+	emptySN    bool
+	noResponse bool
+	badBlock   bool
+	accepted   atomic.Int32
+	closed     atomic.Int32
 }
 
 func newFakeLogger(t *testing.T, kind string, start, count uint16) *fakeLogger {
@@ -61,6 +64,9 @@ func (f *fakeLogger) handle(c net.Conn) {
 			return
 		}
 		req := buf[:36]
+		if f.noResponse {
+			return
+		}
 		// serial запроса (big-endian) и начало/число регистров из PDU.
 		serial := binary.LittleEndian.Uint16(req[5:7])
 		// datafield 15 + PDU offset; PDU: unit fn start count crc
@@ -97,6 +103,9 @@ func (f *fakeLogger) handle(c net.Conn) {
 		vals := make([]uint16, count)
 		for i := range vals {
 			vals[i] = uint16(i + 1)
+		}
+		if f.badBlock && len(vals) > 2 {
+			vals = vals[:len(vals)-2] // короткий PDU: нет полного блока
 		}
 		f.writeResp(c, serial, vals)
 	}
@@ -227,6 +236,55 @@ func TestPollDeviceNoSerialIsError(t *testing.T) {
 	defer cancel()
 	if _, _, err := p.pollDevice(ctx, 0, dev, ""); err == nil {
 		t.Fatal("ожидалась ошибка: серийник не получен")
+	}
+}
+
+func TestPollOnceNoRetryOnNoData(t *testing.T) {
+	srv1 := newFakeLogger(t, "sofar", 0x0000, 0x0028)
+	srv1.noResponse = true
+	ip1, port1 := srv1.addr()
+	srv2 := newFakeLogger(t, "sofar", 0x0000, 0x0028)
+	srv2.noResponse = true
+	ip2, port2 := srv2.addr()
+	dev1 := inverter{Name: "first", IP: ip1, Port: port1, Type: "sofar", LoggerSN: 123456, Valid: true}
+	dev2 := inverter{Name: "second", IP: ip2, Port: port2, Type: "sofar", LoggerSN: 654321, Valid: true}
+	p := newPoller(nil, nil, logx.New("test: "))
+	p.states = make([]devState, 2)
+	p.types = []string{"sofar", "sofar"}
+	p.lastSeen = make([]string, 2)
+	p.energyWarned = make([]bool, 2)
+	cfg := settings{PollPeriod: 10, Inverters: []inverter{dev1, dev2}}
+	p.pollOnce(context.Background(), cfg, "sofar")
+	if got := srv1.accepted.Load(); got != 1 {
+		t.Fatalf("no data не должен повторяться: соединений=%d, ожидалось 1", got)
+	}
+	if got := srv2.accepted.Load(); got != 1 {
+		t.Fatalf("после отказа от повтора должен опрашиваться следующий инвертор: соединений=%d, ожидалось 1", got)
+	}
+	for i := range p.states {
+		if p.states[i].status != statusBad || p.states[i].failCount != 1 || p.states[i].timeouts != 1 {
+			t.Fatalf("состояние #%d после no data: %+v", i+1, p.states[i])
+		}
+	}
+}
+
+func TestPollOnceRetriesBadBlock(t *testing.T) {
+	srv := newFakeLogger(t, "sofar", 0x0000, 0x0028)
+	srv.badBlock = true
+	ip, port := srv.addr()
+	dev := inverter{Name: "test", IP: ip, Port: port, Type: "sofar", LoggerSN: 123456, Valid: true}
+	p := newPoller(nil, nil, logx.New("test: "))
+	p.states = make([]devState, 1)
+	p.types = []string{"sofar"}
+	p.lastSeen = make([]string, 1)
+	p.energyWarned = make([]bool, 1)
+	cfg := settings{PollPeriod: 10, Inverters: []inverter{dev}}
+	p.pollOnce(context.Background(), cfg, "sofar")
+	if got := srv.accepted.Load(); got != 2 {
+		t.Fatalf("битый PDU должен повторяться: соединений=%d, ожидалось 2", got)
+	}
+	if p.states[0].status != statusBad || p.states[0].failCount != 1 {
+		t.Fatalf("после двух битых ответов: %+v", p.states[0])
 	}
 }
 

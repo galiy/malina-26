@@ -26,12 +26,27 @@ const (
 const (
 	connectTimeout = time.Second
 	deyeRead       = 2 * time.Second
-	sofarRead      = 5 * time.Second
+	// Sofar иногда отдаёт первый байт не сразу: по замеру 2026-10-20
+	// (grid-reader остановлен) поздние ответы приходили через 8,8–14,8 с.
+	// 14 с ловит 10 из 11 таких ответов, 5 с — ни одного.
+	sofarFirstByte = 14 * time.Second
+	// Полный ответ Sofar ограничен отдельно: нельзя обрезать кадр, который
+	// начался на 14-й секунде.
+	sofarTotal = 20 * time.Second
 )
 
+// readTimeoutFor — ожидание первого байта ответа.
 func readTimeoutFor(typ string) time.Duration {
 	if typ == "sofar" {
-		return sofarRead
+		return sofarFirstByte
+	}
+	return deyeRead
+}
+
+// totalTimeoutFor — общий лимит приёма ответа (первый байт + кадр).
+func totalTimeoutFor(typ string) time.Duration {
+	if typ == "sofar" {
+		return sofarTotal
 	}
 	return deyeRead
 }
@@ -214,8 +229,9 @@ func (p *poller) pollOnce(ctx context.Context, cfg settings, typ string) time.Du
 			if ctx.Err() != nil {
 				return time.Since(start)
 			}
-			if pe, ok := err.(*pollError); ok && pe.kind == errBad {
-				// однократный повтор для плохого ответа
+			if retryableBad(err) {
+				// повторяем нулевой/битый PDU и dial timeout с живым ARP;
+				// чистый no data не повторяем — сразу следующий инвертор.
 				t, sn, err = p.pollDevice(ctx, i, cfg.Inverters[i], p.lastSeen[i])
 			}
 		}
@@ -398,16 +414,17 @@ func kindCode(typ string) uint8 {
 
 func (p *poller) pollDevice(ctx context.Context, i int, dev inverter, knownSN string) (telemetry, string, error) {
 	readTimeout := readTimeoutFor(dev.Type)
+	totalTimeout := totalTimeoutFor(dev.Type)
 	idleWindow := idleWindowFor(dev.Type)
 	// Новое TCP-подключение на каждый запрос — для обоих типов.
 	cl := &solarman.Client{
 		Address:     net.JoinHostPort(dev.IP, itoa(dev.Port)),
 		DeviceSN:    dev.LoggerSN,
-		Timeout:     readTimeout,
+		Timeout:     totalTimeout,
 		DialTimeout: connectTimeout,
 		ReadTimeout: readTimeout,
 		IdleWindow:  idleWindow,
-		MaxTotal:    readTimeout,
+		MaxTotal:    totalTimeout,
 		Logf:        p.logf(),
 	}
 	var t telemetry
@@ -517,6 +534,15 @@ func fullRegs(pdus []solarman.ModbusPDU, start, count uint16) (map[uint16]uint16
 
 func badErr(err error) error {
 	return &pollError{kind: errBad, err: err, readTimeout: errors.Is(err, solarman.ErrNoData)}
+}
+
+// retryableBad — нужен ли однократный повтор. Чистый no data (за отведённое
+// время не пришло ни байта) не повторяется: это пропуск тика и переход к
+// следующему инвертору. Нулевой/битый PDU и dial timeout при живом ARP
+// повторяются.
+func retryableBad(err error) bool {
+	pe, ok := err.(*pollError)
+	return ok && pe.kind == errBad && !pe.readTimeout
 }
 
 func kindName(k pollErrKind) string {

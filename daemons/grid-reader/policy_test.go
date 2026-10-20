@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/galiy/malina-26/daemons/lib/logx"
+	"github.com/galiy/malina-26/daemons/lib/solarman"
 )
 
 func TestBanLadder(t *testing.T) {
@@ -49,7 +50,7 @@ func TestBadSoftBackoffBothTypes(t *testing.T) {
 		p.states = make([]devState, 1)
 		p.types = []string{typ}
 		for i := 0; i < 3; i++ {
-			p.fail(0, badErr(errors.New("no data")))
+			p.fail(0, badErr(solarman.ErrNoData))
 		}
 		st := p.states[0]
 		if st.status != statusBad || !st.banUntil.IsZero() || st.banStatus != 0 {
@@ -85,9 +86,14 @@ func TestClassifyTimeoutByARP(t *testing.T) {
 	}
 	for _, tc := range cases {
 		check := func(context.Context, net.IP) (bool, error) { return tc.reachable, tc.arpErr }
-		pe, ok := classifyPoll(context.Background(), timeout, ip, check).(*pollError)
+		err := classifyPoll(context.Background(), timeout, ip, check)
+		pe, ok := err.(*pollError)
 		if !ok || pe.kind != tc.want {
 			t.Fatalf("%s: получено %+v, ожидалось %v", tc.name, pe, tc.want)
+		}
+		// dial timeout при живом ARP должен повторяться, иначе — нет.
+		if got := retryableBad(err); got != (tc.want == errBad) {
+			t.Fatalf("%s: retryableBad=%v, want %v", tc.name, got, tc.want == errBad)
 		}
 	}
 }
@@ -133,11 +139,11 @@ func TestTimeoutChainToBan(t *testing.T) {
 func TestSoftBackoffBoundary(t *testing.T) {
 	p := newPoller(nil, nil, logx.New("test: "))
 	p.states = make([]devState, 1)
-	p.fail(0, badErr(errors.New("no data")))
+	p.fail(0, badErr(solarman.ErrNoData))
 	if !p.states[0].nextTry.IsZero() || !p.states[0].banUntil.IsZero() {
 		t.Fatalf("после 1 промаха паузы быть не должно: %+v", p.states[0])
 	}
-	p.fail(0, badErr(errors.New("no data")))
+	p.fail(0, badErr(solarman.ErrNoData))
 	if p.states[0].nextTry.Before(time.Now().Add(50*time.Second)) || !p.states[0].banUntil.IsZero() {
 		t.Fatalf("после 2 промахов ожидалась пауза 1 мин без бана: %+v", p.states[0])
 	}
@@ -159,6 +165,24 @@ func TestStatusAfterBanExpires(t *testing.T) {
 	}
 }
 
+func TestRetryableBad(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"no data", badErr(solarman.ErrNoData), false},
+		{"неполный блок", badErr(errors.New("неполный блок Sofar")), true},
+		{"dial timeout при живом ARP", &pollError{kind: errBad, err: errors.New("dial timeout")}, true},
+		{"ошибка connect", &pollError{kind: errOther, err: errors.New("refused")}, false},
+	}
+	for _, c := range cases {
+		if got := retryableBad(c.err); got != c.want {
+			t.Errorf("%s: retryableBad=%v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestTimeoutsForType(t *testing.T) {
 	if connectTimeout != time.Second {
 		t.Fatalf("connectTimeout=%v", connectTimeout)
@@ -166,8 +190,14 @@ func TestTimeoutsForType(t *testing.T) {
 	if got := readTimeoutFor("deye"); got != 2*time.Second {
 		t.Fatalf("deye read=%v", got)
 	}
-	if got := readTimeoutFor("sofar"); got != 5*time.Second {
-		t.Fatalf("sofar read=%v", got)
+	if got := readTimeoutFor("sofar"); got != 14*time.Second {
+		t.Fatalf("sofar first byte=%v", got)
+	}
+	if got := totalTimeoutFor("sofar"); got != 20*time.Second {
+		t.Fatalf("sofar total=%v", got)
+	}
+	if got := totalTimeoutFor("deye"); got != 2*time.Second {
+		t.Fatalf("deye total=%v", got)
 	}
 	if got := idleWindowFor("deye"); got != 2*time.Second {
 		t.Fatalf("deye idle=%v", got)
