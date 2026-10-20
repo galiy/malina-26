@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"time"
 )
 
 // Server — транспортный слой поверх хранилища.
@@ -184,8 +183,5 @@ func (srv *Server) doQuery(buf []byte, bw *bufio.Writer) error {
 			status, q.Mode, q.Type, len(q.IDs), len(q.Metrics), err)
 		return writeFrame(bw, encodeReadReply(status, nil))
 	}
-	log.Printf("query: mode=%d type=%s ids=%d metrics=%d период %s..%s → %d строк",
-		q.Mode, q.Type, len(q.IDs), len(q.Metrics),
-		time.UnixMilli(q.From).Format(time.RFC3339), time.UnixMilli(q.To).Format(time.RFC3339), len(rows))
 	return writeFrame(bw, encodeReadReply(statusOK, rows))
 }
