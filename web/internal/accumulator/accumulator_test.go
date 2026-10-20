@@ -113,3 +113,65 @@ func TestConfigPeriod(t *testing.T) {
 		}
 	}
 }
+
+// TestAverageMapZeroMajority — для напряжений и частот МАП нулевые снимки не
+// участвуют в среднем, а решение принимается по большинству.
+func TestAverageMapZeroMajority(t *testing.T) {
+	mk := func(u, f int64) Sample {
+		return Sample{Vals: mkVals(map[uint16]tscontract.Value{
+			1: {ID: 1, Type: tscontract.FTU8, Int: u},
+			7: {ID: 7, Type: tscontract.FTU8, Int: f},
+		})}
+	}
+	check := func(name string, samples []Sample, wantU, wantF int64) {
+		t.Helper()
+		res, ok := Average("map", 3, samples)
+		if !ok {
+			t.Fatalf("%s: Average ok=false", name)
+		}
+		c, _ := tscontract.NewDefaultRegistry().Get("map", 3)
+		vals, err := c.Decode(res.Payload)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		got := map[uint16]int64{}
+		for _, v := range vals {
+			got[v.ID] = v.Int
+		}
+		if got[1] != wantU || got[7] != wantF {
+			t.Fatalf("%s: UNET=%d TFNET=%d, ожидалось %d/%d", name, got[1], got[7], wantU, wantF)
+		}
+	}
+	check("валидных больше", []Sample{mk(120, 125), mk(122, 125), mk(0, 0)}, 121, 125)
+	check("нулей больше", []Sample{mk(120, 125), mk(0, 0), mk(0, 0)}, 0, 0)
+	check("равенство", []Sample{mk(120, 125), mk(0, 0)}, 0, 0)
+	check("все нули", []Sample{mk(0, 0), mk(0, 0)}, 0, 0)
+	check("все валидные", []Sample{mk(120, 125), mk(122, 125)}, 121, 125)
+	check("частота в Гц", []Sample{mk(120, 125), mk(120, 100), mk(0, 0)}, 120, 111)
+}
+
+// TestAverageMapZeroMajorityOut — те же правила для UOUTmed (6) и ThFMAP (28).
+func TestAverageMapZeroMajorityOut(t *testing.T) {
+	mk := func(uo, tf int64) Sample {
+		return Sample{Vals: mkVals(map[uint16]tscontract.Value{
+			6:  {ID: 6, Type: tscontract.FTU8, Int: uo},
+			28: {ID: 28, Type: tscontract.FTU8, Int: tf},
+		})}
+	}
+	res, ok := Average("map", 3, []Sample{mk(120, 125), mk(122, 100), mk(0, 0)})
+	if !ok {
+		t.Fatal("Average ok=false")
+	}
+	c, _ := tscontract.NewDefaultRegistry().Get("map", 3)
+	vals, err := c.Decode(res.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[uint16]int64{}
+	for _, v := range vals {
+		got[v.ID] = v.Int
+	}
+	if got[6] != 121 || got[28] != 111 {
+		t.Fatalf("UOUTmed=%d ThFMAP=%d, ожидалось 121/111", got[6], got[28])
+	}
+}

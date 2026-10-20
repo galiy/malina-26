@@ -83,16 +83,18 @@ const (
 	rLast                    // последнее значение
 	rLastNonZero             // последнее ненулевое
 	rUnet2                   // flagUnet2: если был активен 2-й вход → 2-й
+	rFreqZeroMaj             // частота: 0 — нет данных, среднее только по валидным при большинстве
+	rVoltZeroMaj             // напряжение: 0 — нет данных, среднее только по валидным при большинстве
 )
 
 // mapRules — правила для полей контракта map v1 (id → rule).
 var mapRules = map[uint16]rule{
-	1: rAvg, 2: rAvg, 3: rAvg, 4: rAvg, 5: rAvg, 6: rAvg, 7: rAvg, 8: rAvg,
+	1: rVoltZeroMaj, 2: rAvg, 3: rAvg, 4: rAvg, 5: rAvg, 6: rVoltZeroMaj, 7: rFreqZeroMaj, 8: rAvg,
 	9: rAvg, 10: rAvg, 11: rLast, 12: rOr, 13: rAvg, 14: rAvg, 15: rAvg,
 	16: rAvg, 17: rOr, 18: rAvg, 19: rLast, 20: rLast, 21: rOr, 22: rOr,
 	23: rOr, 24: rOr, 25: rOr, 26: rUnet2,
-	27: rOr,                                                     // Relay (map v2): битовая маска → ИЛИ
-	28: rAvg, 29: rAvg, 30: rAvg, 31: rAvg, 32: rAvg, 33: rLast, // ThFMAP + MPPT0..3 + PNET_Sign_P (map v3)
+	27: rOr,                                                             // Relay (map v2): битовая маска → ИЛИ
+	28: rFreqZeroMaj, 29: rAvg, 30: rAvg, 31: rAvg, 32: rAvg, 33: rLast, // ThFMAP + MPPT0..3 + PNET_Sign_P (map v3)
 }
 
 // kesRules — правила для полей контракта kes v1.
@@ -204,6 +206,10 @@ func Average(typ string, version uint16, samples []Sample) (Result, bool) {
 		case rUnet2:
 			v = unet2(vals)
 			v.ID = id
+		case rFreqZeroMaj:
+			v.Int = avgFreqMajority(vals)
+		case rVoltZeroMaj:
+			v.Int = avgVoltMajority(vals)
 		default: // rAvg
 			if typField == tscontract.FTFloat {
 				var sum float64
@@ -226,6 +232,51 @@ func Average(typ string, version uint16, samples []Sample) (Result, bool) {
 		return Result{}, false
 	}
 	return Result{Time: last.Time, Payload: payload}, true
+}
+
+// avgFreqMajority — частота (период 6250/x): 0 — нет данных. Нулевые снимки
+// не участвуют в среднем; решение по большинству: нулей больше или столько же
+// → 0, иначе среднее по Гц валидных снимков, обратно в период.
+func avgFreqMajority(vals []tscontract.Value) int64 {
+	var zero, valid int
+	var sumHz float64
+	for _, x := range vals {
+		if x.Int == 0 {
+			zero++
+			continue
+		}
+		valid++
+		sumHz += 6250 / float64(x.Int)
+	}
+	if valid == 0 || zero >= valid {
+		return 0
+	}
+	hz := sumHz / float64(valid)
+	period := int64(6250/hz + 0.5)
+	if period < 1 {
+		period = 1
+	}
+	return period
+}
+
+// avgVoltMajority — напряжение сети/выхода МАП: 0 — нет напряжения. Нулевые
+// снимки не участвуют в среднем; решение по большинству. Среднее по сырым
+// значениям эквивалентно mean(raw+100)−100, поэтому сохраняется как есть.
+func avgVoltMajority(vals []tscontract.Value) int64 {
+	var zero, valid int
+	var sum int64
+	for _, x := range vals {
+		if x.Int == 0 {
+			zero++
+			continue
+		}
+		valid++
+		sum += x.Int
+	}
+	if valid == 0 || zero >= valid {
+		return 0
+	}
+	return (sum + int64(valid)/2) / int64(valid)
 }
 
 func fieldTypeOf(fields []tscontract.Field, id uint16) tscontract.FieldType {
