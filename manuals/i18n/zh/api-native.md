@@ -304,9 +304,11 @@ API 处理器（例如 `/api/mainlist`）用无正文的「裸」`401` 响应 �
 | `GET /api/map/devices` | `[{"type":"map","id","gen","serial","label"}]` |
 | `GET /api/kes/devices` | `[{"type":"kes","id","gen","serial","label"}]` |
 | `GET /api/bms/devices` | `[{"type":"bms","id","gen","serial","base","bms_type","bms_type_label","source","framing","last_seen"}]` |
-| `GET /api/grid/status` | `{"updated":...,"inverters":[{"id","gen","serial","addr","kind","status","last_seen","name","placement"}]}` |
+| `GET /api/grid/status` | `{"updated":...,"inverters":[{"id","gen","serial","addr","kind","status","last_seen","name","placement","logger_sn"}]}` |
 | `GET /api/settings/status?type=map\|kes\|bms` | `{"type","updated","rows":[...]}` |
 | `GET /api/stats/devices` | `{"devices":[{"type","id","last"}]}` |
+
+`logger_sn` 是配置的记录器序列号（uint32，十进制），不是存储键；0 — 未设置（无配置或 shm 仍为旧配置）。
 
 `/api/map/devices` 示例：
 

@@ -52,7 +52,7 @@ History appears only after successful polls. There are no charts for energy, sta
 - **The inverter is not in the menu or on the main page** — check the settings: whether polling is enabled, whether the inverter is added, and whether the logger SN is filled in.
 - **No data, status “not polled”** — after the first full poll the factory serial number needs to be read. Wait for a poll cycle.
 - **“No connection”** — the inverter is off, asleep at night, unreachable over the network, or its IP has changed. Check the power and the address stability.
-- **“Bad response”** — the inverter answered with an incomplete frame; the poll retries on its own. If it keeps repeating, check the inverter type and network.
+- **“Bad response”** — the inverter answered with an incomplete or corrupted frame; such a poll is retried. If there is no response at all (timeout), the tick is skipped without a retry. If the error keeps repeating, check the inverter type and network.
 - **“Ban 1/5/10 min”** — a temporary restriction after a series of failures. Usually no action is needed; polling will resume on its own.
 - **A dash instead of temperature** — this model has no such sensor; this is not an error.
 - **No charts** — there have been no successful polls for the inverter in the selected period yet.

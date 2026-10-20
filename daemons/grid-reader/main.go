@@ -106,27 +106,34 @@ outer:
 			}
 		}
 
-		lx.Infof("состояние: ВКЛЮЧЁН — опрос %d инверторов, период %d с (независимые пулеры: %s)",
-			len(cfg.Inverters), cfg.PollPeriod, groupsLabel(cfg.Inverters))
-		// Deye и Sofar опрашиваются независимыми циклами внутри одного сервиса.
+		valid := 0
+		for i := range cfg.Inverters {
+			if cfg.Inverters[i].Valid {
+				valid++
+			}
+		}
+		if valid == 0 {
+			lx.Infof("состояние: ВКЛЮЧЁН, но нет валидных инверторов — жду reload/stop")
+			select {
+			case <-reload:
+				continue outer
+			case <-stop:
+				break outer
+			}
+		}
+		lx.Infof("состояние: ВКЛЮЧЁН — опрос %d инверторов, период %d с (по горутине на инвертор)",
+			valid, cfg.PollPeriod)
+		// Один общий оркестратор; внутри — по одной рабочей горутине на
+		// инвертор. Один писатель на слот shm.
 		groupCtx, groupCancel := context.WithCancel(svcCtx)
-		present := map[string]bool{}
-		for _, d := range cfg.Inverters {
-			if d.Valid {
-				present[d.Type] = true
-			}
-		}
 		var wg sync.WaitGroup
-		for _, typ := range []string{"deye", "sofar"} {
-			if !present[typ] {
-				continue
-			}
-			wg.Add(1)
-			go func(typ string) {
-				defer wg.Done()
-				p.pollLoop(groupCtx, cfg, typ)
-			}(typ)
-		}
+		orchDone := make(chan struct{})
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p.runInverters(groupCtx, cfg)
+			close(orchDone)
+		}()
 		select {
 		case <-reload:
 			groupCancel()
@@ -136,6 +143,19 @@ outer:
 			groupCancel()
 			wg.Wait()
 			break outer
+		case <-orchDone:
+			groupCancel()
+			wg.Wait()
+			if svcCtx.Err() != nil {
+				break outer
+			}
+			lx.Errorf("оркестратор завершился неожиданно — жду reload/stop")
+			select {
+			case <-reload:
+				continue outer
+			case <-stop:
+				break outer
+			}
 		}
 	}
 	p.clear()
@@ -146,26 +166,6 @@ outer:
 		lx.Warnf("control не остановился за 3 с")
 	}
 	lx.Infof("stopped")
-}
-
-// groupsLabel перечисляет типы, для которых реально запускаются циклы.
-func groupsLabel(devs []inverter) string {
-	present := map[string]bool{}
-	order := make([]string, 0, 2)
-	for _, d := range devs {
-		if d.Valid && !present[d.Type] {
-			present[d.Type] = true
-			order = append(order, d.Type)
-		}
-	}
-	if len(order) == 0 {
-		return "нет"
-	}
-	out := order[0]
-	for _, typ := range order[1:] {
-		out += ", " + typ
-	}
-	return out
 }
 
 func applyLevel(level string, debug bool) {

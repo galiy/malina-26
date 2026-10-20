@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"syscall"
 	"time"
 
@@ -78,23 +79,23 @@ func (e *pollError) Error() string { return e.err.Error() }
 func (e *pollError) Unwrap() error { return e.err }
 
 type devState struct {
-	lastSeen    int64
-	status      uint8 // последний результат (1/3/4), не бан
-	failCount   int
-	banUntil    time.Time
-	banStatus   uint8
-	nextTry     time.Time
-	listed      bool
-	attempts    int
-	timeouts    int
-	windowStart time.Time
+	lastSeen     int64
+	status       uint8 // последний результат (1/3/4), не бан
+	failCount    int
+	banUntil     time.Time
+	banStatus    uint8
+	nextTry      time.Time
+	listed       bool
+	attempts     int
+	timeouts     int
+	windowStart  time.Time
+	lastDuration time.Duration
 }
 
 type poller struct {
 	shm          *Shm
 	gen          uint64
 	states       []devState
-	types        []string
 	lastSeen     []string // известный inverter_sn по слоту
 	energyWarned []bool
 	sink         *tsdbSink
@@ -102,10 +103,6 @@ type poller struct {
 	// neighbor — источник признака «жив на L2» после connect timeout
 	// (по умолчанию netlink-таблица соседей; в тестах подменяется).
 	neighbor neighborChecker
-	// Длительность последнего круга по группам: у Deye и Sofar независимые
-	// циклы опроса, каждый пишет своё поле.
-	lastRoundDeye  time.Duration
-	lastRoundSofar time.Duration
 }
 
 func newPoller(shm *Shm, sink *tsdbSink, lx *logx.Logger) *poller {
@@ -144,14 +141,8 @@ func fullRegsLast(frames []solarman.Frame, start, count uint16) (map[uint16]uint
 func (p *poller) reset(cfg settings) {
 	p.gen++
 	p.states = make([]devState, len(cfg.Inverters))
-	p.types = make([]string, len(cfg.Inverters))
-	for i, d := range cfg.Inverters {
-		p.types[i] = d.Type
-	}
 	p.lastSeen = make([]string, len(cfg.Inverters))
 	p.energyWarned = make([]bool, len(cfg.Inverters))
-	p.lastRoundDeye = 0
-	p.lastRoundSofar = 0
 	for i := 0; i < gridSlots; i++ {
 		p.shm.Item(i).Release()
 		p.shm.Slot(i).Release()
@@ -168,16 +159,12 @@ func (p *poller) clear() {
 	}
 }
 
-func (p *poller) staleThreshold(typ string, period time.Duration) time.Duration {
+func (p *poller) staleThreshold(i int, period time.Duration) time.Duration {
 	base := period
-	lastRound := p.lastRoundDeye
-	if typ == "sofar" {
-		lastRound = p.lastRoundSofar
+	if d := p.states[i].lastDuration; d > base {
+		base = d
 	}
-	if lastRound > base {
-		base = lastRound
-	}
-	return base * 7 / 2 // 3,5 периода
+	return base * 7 / 2 // 3,5 периода/последнего опроса
 }
 
 func (p *poller) currentStatus(i int, now time.Time, stale time.Duration) uint8 {
@@ -202,85 +189,212 @@ func (p *poller) currentStatus(i int, now time.Time, stale time.Duration) uint8 
 	return statusInit
 }
 
-// pollOnce — один последовательный круг устройств одной группы (typ: deye или
-// sofar). Возвращает длительность круга.
+// longBan — активный бан 5/10 мин, после которого worker должен завершиться.
+func longBan(st *devState, now time.Time) bool {
+	return st.banUntil.After(now) && (st.banStatus == statusBan5 || st.banStatus == statusBan10)
+}
+
+// pollOne — один опрос одного инвертора. Возвращает banUntil, если инвертор
+// отправлен в длинный бан 5/10 мин: в этом случае worker должен завершиться.
+func (p *poller) pollOne(ctx context.Context, cfg settings, i int) (time.Time, bool) {
+	dev := cfg.Inverters[i]
+	period := time.Duration(cfg.PollPeriod) * time.Second
+	st := &p.states[i]
+	now := time.Now()
+	if now.Before(st.banUntil) || now.Before(st.nextTry) {
+		p.publishList(i, dev, p.currentStatus(i, now, p.staleThreshold(i, period)))
+		return time.Time{}, false
+	}
+	start := time.Now()
+	t, sn, err := p.pollDevice(ctx, i, dev, p.lastSeen[i])
+	if err != nil {
+		if ctx.Err() != nil {
+			return time.Time{}, false
+		}
+		if retryableBad(err) {
+			// повторяем нулевой/битый PDU и dial timeout с живым ARP;
+			// чистый no data не повторяем.
+			t, sn, err = p.pollDevice(ctx, i, dev, p.lastSeen[i])
+		}
+	}
+	st.lastDuration = time.Since(start)
+	if err != nil {
+		if ctx.Err() != nil {
+			return time.Time{}, false
+		}
+		p.fail(i, err)
+		p.publishList(i, dev, p.currentStatus(i, time.Now(), p.staleThreshold(i, period)))
+		if longBan(st, time.Now()) {
+			return st.banUntil, true
+		}
+		return time.Time{}, false
+	}
+	p.success(i, t, sn)
+	p.publishList(i, dev, statusOK)
+	return time.Time{}, false
+}
+
+// pollOnce — один проход по устройствам одной группы. Оставлен для тестов;
+// боевой цикл — pollInverter (своя горутина на инвертор).
 func (p *poller) pollOnce(ctx context.Context, cfg settings, typ string) time.Duration {
 	start := time.Now()
-	period := time.Duration(cfg.PollPeriod) * time.Second
-	count := 0
 	for i := range cfg.Inverters {
-		select {
-		case <-ctx.Done():
-			return time.Since(start)
-		default:
-		}
 		if !cfg.Inverters[i].Valid || cfg.Inverters[i].Type != typ {
 			continue
 		}
-		count++
-		st := &p.states[i]
-		now := time.Now()
-		if now.Before(st.banUntil) || now.Before(st.nextTry) {
-			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, now, p.staleThreshold(typ, period)))
-			continue
-		}
-		t, sn, err := p.pollDevice(ctx, i, cfg.Inverters[i], p.lastSeen[i])
-		if err != nil {
-			if ctx.Err() != nil {
-				return time.Since(start)
-			}
-			if retryableBad(err) {
-				// повторяем нулевой/битый PDU и dial timeout с живым ARP;
-				// чистый no data не повторяем — сразу следующий инвертор.
-				t, sn, err = p.pollDevice(ctx, i, cfg.Inverters[i], p.lastSeen[i])
-			}
-		}
-		if err != nil {
-			p.fail(i, err)
-			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, time.Now(), p.staleThreshold(typ, period)))
-			continue
-		}
-		p.success(i, t, sn)
-		p.publishList(i, cfg.Inverters[i], statusOK)
+		p.pollOne(ctx, cfg, i)
 	}
-	d := time.Since(start)
-	if typ == "sofar" {
-		p.lastRoundSofar = d
-	} else {
-		p.lastRoundDeye = d
-	}
-	p.lx.Debugf("круг %s: %d устройств, %s", typ, count, d.Round(time.Millisecond))
-	// обновить stale у уже опубликованных записей этой группы
-	now := time.Now()
-	stale := p.staleThreshold(typ, period)
-	for i := range cfg.Inverters {
-		if cfg.Inverters[i].Type == typ && p.states[i].listed {
-			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, now, stale))
-		}
-	}
-	return d
+	return time.Since(start)
 }
 
-// pollLoop — независимый цикл опроса одной группы (deye или sofar): свой
-// период, свой круг. Группы не ждут друг друга.
-func (p *poller) pollLoop(ctx context.Context, cfg settings, typ string) {
+// pollInverter — рабочий цикл одного инвертора: свой период, свой backoff.
+// При длинном бане 5/10 мин возвращает banUntil и завершается.
+func (p *poller) pollInverter(ctx context.Context, cfg settings, i int) time.Time {
 	period := time.Duration(cfg.PollPeriod) * time.Second
 	for {
-		round := p.pollOnce(ctx, cfg, typ)
 		if ctx.Err() != nil {
-			return
+			return time.Time{}
 		}
-		wait := period - round
+		st := &p.states[i]
+		now := time.Now()
+		if longBan(st, now) {
+			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, now, p.staleThreshold(i, period)))
+			return st.banUntil
+		}
+		if now.Before(st.banUntil) {
+			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, now, p.staleThreshold(i, period)))
+			if !waitUntil(ctx, st.banUntil) {
+				return time.Time{}
+			}
+			continue
+		}
+		if now.Before(st.nextTry) {
+			p.publishList(i, cfg.Inverters[i], p.currentStatus(i, now, p.staleThreshold(i, period)))
+			if !waitUntil(ctx, st.nextTry) {
+				return time.Time{}
+			}
+			continue
+		}
+		banUntil, stop := p.pollOne(ctx, cfg, i)
+		if stop {
+			return banUntil
+		}
+		if ctx.Err() != nil {
+			return time.Time{}
+		}
+		wait := period - st.lastDuration
 		if wait < 0 {
 			wait = 0
 		}
-		timer := time.NewTimer(wait)
+		if !waitUntil(ctx, time.Now().Add(wait)) {
+			return time.Time{}
+		}
+	}
+}
+
+type workerDone struct {
+	i        int
+	banUntil time.Time
+}
+
+// runInverters — единственный общий оркестратор. Он запускает по одной
+// рабочей горутине на каждый валидный инвертор, принимает их завершение по
+// длинному бану 5/10 мин и запускает нового worker после banUntil. В любой
+// момент каждый слот shm пишет не более одной горутины.
+func (p *poller) runInverters(ctx context.Context, cfg settings) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var wg sync.WaitGroup
+	done := make(chan workerDone, len(cfg.Inverters))
+	start := func(i int) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			done <- workerDone{i: i, banUntil: p.pollInverter(ctx, cfg, i)}
+		}()
+	}
+	active := 0
+	for i := range cfg.Inverters {
+		if cfg.Inverters[i].Valid {
+			active++
+			start(i)
+		}
+	}
+	restart := make(map[int]time.Time)
+	timer := time.NewTimer(time.Hour)
+	if !timer.Stop() {
+		<-timer.C
+	}
+	defer timer.Stop()
+	for active > 0 || len(restart) > 0 {
+		var next time.Time
+		for _, at := range restart {
+			if next.IsZero() || at.Before(next) {
+				next = at
+			}
+		}
+		var timerC <-chan time.Time
+		if !next.IsZero() {
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			d := time.Until(next)
+			if d < 0 {
+				d = 0
+			}
+			timer.Reset(d)
+			timerC = timer.C
+		}
 		select {
 		case <-ctx.Done():
-			timer.Stop()
+			cancel()
+			wg.Wait()
 			return
-		case <-timer.C:
+		case r := <-done:
+			active--
+			if ctx.Err() != nil {
+				cancel()
+				wg.Wait()
+				return
+			}
+			if r.banUntil.IsZero() {
+				p.lx.Errorf("инвертор #%d: worker завершился без бана — перезапуск через 1 с", r.i+1)
+				restart[r.i] = time.Now().Add(time.Second)
+				continue
+			}
+			if !r.banUntil.After(time.Now()) {
+				r.banUntil = time.Now().Add(time.Second)
+			}
+			restart[r.i] = r.banUntil
+		case <-timerC:
+			now := time.Now()
+			for i, at := range restart {
+				if !now.Before(at) {
+					delete(restart, i)
+					active++
+					start(i)
+				}
+			}
 		}
+	}
+	wg.Wait()
+}
+
+func waitUntil(ctx context.Context, t time.Time) bool {
+	d := time.Until(t)
+	if d <= 0 {
+		return true
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 
@@ -291,6 +405,7 @@ func (p *poller) success(i int, t telemetry, sn string) {
 	st.status = statusOK
 	st.failCount = 0
 	st.banUntil = time.Time{}
+	st.banStatus = 0
 	st.nextTry = time.Time{}
 	st.lastSeen = time.Now().Unix()
 	st.listed = true
@@ -302,6 +417,7 @@ func (p *poller) success(i int, t telemetry, sn string) {
 func (p *poller) fail(i int, err error) {
 	st := &p.states[i]
 	now := time.Now()
+	st.banStatus = 0 // статус бана выставляется только вместе с banUntil
 	kind := errOther
 	readTimeout := false
 	if pe, ok := err.(*pollError); ok {

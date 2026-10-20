@@ -305,9 +305,11 @@ API-хендлеров (например, `/api/mainlist`) отвечает «г
 | `GET /api/map/devices` | `[{"type":"map","id","gen","serial","label"}]` |
 | `GET /api/kes/devices` | `[{"type":"kes","id","gen","serial","label"}]` |
 | `GET /api/bms/devices` | `[{"type":"bms","id","gen","serial","base","bms_type","bms_type_label","source","framing","last_seen"}]` |
-| `GET /api/grid/status` | `{"updated":...,"inverters":[{"id","gen","serial","addr","kind","status","last_seen","name","placement"}]}` |
+| `GET /api/grid/status` | `{"updated":...,"inverters":[{"id","gen","serial","addr","kind","status","last_seen","name","placement","logger_sn"}]}` |
 | `GET /api/settings/status?type=map\|kes\|bms` | `{"type","updated","rows":[...]}` |
 | `GET /api/stats/devices` | `{"devices":[{"type","id","last"}]}` |
+
+`logger_sn` — настроенный серийный номер логгера (uint32, decimal); не ключ хранения; 0 — не задано (нет конфига или shm от старой конфигурации).
 
 Пример `/api/map/devices`:
 

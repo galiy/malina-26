@@ -290,6 +290,7 @@ type gridStatusItem struct {
 	LastSeen  int64  `json:"last_seen"`
 	Name      string `json:"name"`
 	Placement string `json:"placement"`
+	LoggerSN  uint32 `json:"logger_sn"`
 }
 
 func (s *Server) requireAPI(w http.ResponseWriter, r *http.Request) bool {
@@ -320,6 +321,17 @@ func (s *Server) handleAPIGridStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		it.Name = d.Name
 		it.Placement = d.Placement
+		// Не подставляем SN чужому слоту в переходный период после смены
+		// настроек: адрес shm должен совпадать с текущей записью конфига.
+		ip := strings.TrimSpace(d.IP)
+		port := d.Port
+		if port == 0 {
+			port = 8899
+		}
+		addr := net.JoinHostPort(ip, strconv.Itoa(port))
+		if !ok || it.Addr == "" || it.Addr == addr {
+			it.LoggerSN = d.LoggerSN
+		}
 		items = append(items, it)
 	}
 	// Если конфига нет, но shm что-то содержит — показываем shm как есть.

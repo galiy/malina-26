@@ -305,9 +305,11 @@ HTML-გვერდებისთვის 401-ის ნაცვლად �
 | `GET /api/map/devices` | `[{"type":"map","id","gen","serial","label"}]` |
 | `GET /api/kes/devices` | `[{"type":"kes","id","gen","serial","label"}]` |
 | `GET /api/bms/devices` | `[{"type":"bms","id","gen","serial","base","bms_type","bms_type_label","source","framing","last_seen"}]` |
-| `GET /api/grid/status` | `{"updated":...,"inverters":[{"id","gen","serial","addr","kind","status","last_seen","name","placement"}]}` |
+| `GET /api/grid/status` | `{"updated":...,"inverters":[{"id","gen","serial","addr","kind","status","last_seen","name","placement","logger_sn"}]}` |
 | `GET /api/settings/status?type=map\|kes\|bms` | `{"type","updated","rows":[...]}` |
 | `GET /api/stats/devices` | `{"devices":[{"type","id","last"}]}` |
+
+`logger_sn` — კონფიგურირებული ლოგერის სერიული ნომერი (uint32, decimal); არა შენახვის გასაღები; 0 — არ არის დაყენებული (კონფიგურაცია არ არის ან shm ძველი კონფიგურაციიდან).
 
 მაგალითი `/api/map/devices`:
 

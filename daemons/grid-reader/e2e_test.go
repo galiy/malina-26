@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"path/filepath"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,6 +24,7 @@ type fakeLogger struct {
 	start      uint16
 	count      uint16
 	emptySN    bool
+	snText     string
 	noResponse bool
 	badBlock   bool
 	accepted   atomic.Int32
@@ -33,7 +36,7 @@ func newFakeLogger(t *testing.T, kind string, start, count uint16) *fakeLogger {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fakeLogger{t: t, ln: ln, kind: kind, start: start, count: count}
+	f := &fakeLogger{t: t, ln: ln, kind: kind, start: start, count: count, snText: "SA3ES000000001"}
 	go f.serve()
 	t.Cleanup(func() { ln.Close() })
 	return f
@@ -90,7 +93,7 @@ func (f *fakeLogger) handle(c net.Conn) {
 			for i := range vals {
 				vals[i] = 'V'<<8 | '0'
 			}
-			sn := []byte("SA3ES127LC1055")
+			sn := []byte(f.snText)
 			for i := 0; i+1 < len(sn); i += 2 {
 				reg := i/2 + 1
 				if reg < len(vals) {
@@ -250,7 +253,6 @@ func TestPollOnceNoRetryOnNoData(t *testing.T) {
 	dev2 := inverter{Name: "second", IP: ip2, Port: port2, Type: "sofar", LoggerSN: 654321, Valid: true}
 	p := newPoller(nil, nil, logx.New("test: "))
 	p.states = make([]devState, 2)
-	p.types = []string{"sofar", "sofar"}
 	p.lastSeen = make([]string, 2)
 	p.energyWarned = make([]bool, 2)
 	cfg := settings{PollPeriod: 10, Inverters: []inverter{dev1, dev2}}
@@ -275,7 +277,6 @@ func TestPollOnceRetriesBadBlock(t *testing.T) {
 	dev := inverter{Name: "test", IP: ip, Port: port, Type: "sofar", LoggerSN: 123456, Valid: true}
 	p := newPoller(nil, nil, logx.New("test: "))
 	p.states = make([]devState, 1)
-	p.types = []string{"sofar"}
 	p.lastSeen = make([]string, 1)
 	p.energyWarned = make([]bool, 1)
 	cfg := settings{PollPeriod: 10, Inverters: []inverter{dev}}
@@ -299,7 +300,7 @@ func TestPollDeviceSofarSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sn != "SA3ES127LC1055" {
+	if sn != "SA3ES000000001" {
 		t.Fatalf("sn=%q", sn)
 	}
 }
@@ -321,5 +322,127 @@ func TestPollDeviceDeyeSmoke(t *testing.T) {
 	// fake отдаёт значения 1..58 по порядку адресов 0x3B..0x74.
 	if tm.vals[0] != 0x6D-0x3B+1 || tm.vals[17] != 1 {
 		t.Fatalf("vals: %+v", tm.vals[:20])
+	}
+}
+
+func TestParallelInverterWritesSeparateSHMSlots(t *testing.T) {
+	dir := t.TempDir()
+	shm, err := shmOpen(filepath.Join(dir, "grid-state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shm.Close()
+	srv1 := newFakeLogger(t, "sofar", 0x0000, 0x0028)
+	srv1.snText = "SA3ES111"
+	srv2 := newFakeLogger(t, "sofar", 0x0000, 0x0028)
+	srv2.snText = "SA3ES222"
+	ip1, port1 := srv1.addr()
+	ip2, port2 := srv2.addr()
+	cfg := settings{PollPeriod: 10, Inverters: []inverter{
+		{Name: "one", IP: ip1, Port: port1, Type: "sofar", LoggerSN: 1, Valid: true},
+		{Name: "two", IP: ip2, Port: port2, Type: "sofar", LoggerSN: 2, Valid: true},
+	}}
+	p := newPoller(shm, nil, logx.New("test: "))
+	p.reset(cfg)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			p.pollOne(context.Background(), cfg, i)
+		}(i)
+	}
+	wg.Wait()
+	doc := listDoc(shm)
+	if len(doc.Inverters) != 2 {
+		t.Fatalf("shm list: %+v", doc)
+	}
+	byID := map[int]GridView{}
+	for _, it := range doc.Inverters {
+		byID[it.ID] = it
+	}
+	if byID[0].Serial != "SA3ES111" || byID[1].Serial != "SA3ES222" {
+		t.Fatalf("serial попал не в свой слот: %+v", doc.Inverters)
+	}
+	if byID[0].Addr != net.JoinHostPort(ip1, strconv.Itoa(port1)) ||
+		byID[1].Addr != net.JoinHostPort(ip2, strconv.Itoa(port2)) {
+		t.Fatalf("addr/слот: %+v", doc.Inverters)
+	}
+	if byID[0].Status != statusOK || byID[1].Status != statusOK {
+		t.Fatalf("statuses: %+v", doc.Inverters)
+	}
+}
+
+func TestPollInverterExitsOnLongBan(t *testing.T) {
+	p := newPoller(nil, nil, logx.New("test: "))
+	p.states = make([]devState, 1)
+	p.lastSeen = make([]string, 1)
+	st := &p.states[0]
+	st.banStatus = statusBan5
+	st.banUntil = time.Now().Add(time.Minute)
+	cfg := settings{PollPeriod: 10, Inverters: []inverter{{Name: "x", Type: "sofar", Valid: true}}}
+	ban := p.pollInverter(context.Background(), cfg, 0)
+	if ban.IsZero() || !ban.Equal(st.banUntil) {
+		t.Fatalf("ожидалось завершение worker по бану: %v", ban)
+	}
+}
+
+func TestRunInvertersRestartsWorkerAfterLongBan(t *testing.T) {
+	srv := newFakeLogger(t, "sofar", 0x0000, 0x0028)
+	ip, port := srv.addr()
+	shm, err := shmOpen(filepath.Join(t.TempDir(), "grid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shm.Close()
+	cfg := settings{PollPeriod: 30, Inverters: []inverter{
+		{Name: "x", IP: ip, Port: port, Type: "sofar", LoggerSN: 1, Valid: true},
+	}}
+	p := newPoller(shm, nil, logx.New("test: "))
+	p.reset(cfg)
+	st := &p.states[0]
+	st.banStatus = statusBan5
+	st.banUntil = time.Now().Add(50 * time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		p.runInverters(ctx, cfg)
+		close(done)
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for srv.accepted.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if srv.accepted.Load() < 2 {
+		cancel()
+		<-done
+		t.Fatalf("после бана worker не продолжил опрос: соединений=%d", srv.accepted.Load())
+	}
+	deadline = time.Now().Add(2 * time.Second)
+	var doc StateDoc
+	for time.Now().Before(deadline) {
+		doc = listDoc(shm)
+		if len(doc.Inverters) == 1 && doc.Inverters[0].Status == statusOK {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(doc.Inverters) != 1 || doc.Inverters[0].Status != statusOK {
+		cancel()
+		<-done
+		t.Fatalf("shm после перезапуска: %+v", doc.Inverters)
+	}
+	n := srv.accepted.Load()
+	time.Sleep(300 * time.Millisecond)
+	if got := srv.accepted.Load(); got > n {
+		cancel()
+		<-done
+		t.Fatalf("hot loop после бана: соединений=%d -> %d", n, got)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("оркестратор не остановился")
 	}
 }

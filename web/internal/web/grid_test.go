@@ -223,8 +223,91 @@ func TestAPIGridStatusAuthAndMapping(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatal(err)
 	}
-	if len(resp.Inverters) != 1 || resp.Inverters[0].Name != "Deye" || resp.Inverters[0].Placement != "Дом" {
+	if len(resp.Inverters) != 1 || resp.Inverters[0].Name != "Deye" || resp.Inverters[0].Placement != "Дом" || resp.Inverters[0].LoggerSN != 1 {
 		t.Fatalf("resp: %+v", resp)
+	}
+	if !strings.Contains(w.Body.String(), `"logger_sn":1`) {
+		t.Fatalf("literal logger_sn отсутствует: %s", w.Body.String())
+	}
+}
+
+func TestAPIGridStatusLoggerSNByConfigIndex(t *testing.T) {
+	dir := t.TempDir()
+	shmPath := filepath.Join(dir, "grid")
+	cfgPath := filepath.Join(dir, "grid.json")
+	b := make([]byte, gridSHMHeader+gridMaxInverters*gridSHMItemSize)
+	binary.LittleEndian.PutUint32(b[0:4], 0x31445247)
+	binary.LittleEndian.PutUint32(b[4:8], 1)
+	binary.LittleEndian.PutUint32(b[8:12], 32+64)
+	binary.LittleEndian.PutUint32(b[12:16], gridMaxInverters)
+	// Запись только для второго слота: id=1 должен взять logger_sn второй
+	// записи конфига, а не первой.
+	it := b[gridSHMHeader+gridSHMItemSize : gridSHMHeader+2*gridSHMItemSize]
+	binary.LittleEndian.PutUint32(it[0:4], 1)
+	copy(it[16:66], "SN222")
+	copy(it[66:130], "192.0.2.11:8899")
+	binary.LittleEndian.PutUint64(it[136:144], 1)
+	binary.LittleEndian.PutUint64(it[144:152], uint64(time.Now().Unix()))
+	if err := os.WriteFile(shmPath, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"enabled":true,"poll_period":10,"placements":["Дом"],"inverters":[` +
+		`{"name":"A","ip":"192.0.2.10","port":8899,"type":"deye","placement":"Дом","logger_sn":111},` +
+		`{"name":"B","ip":"192.0.2.11","type":"deye","placement":"Дом","logger_sn":222}]}`
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{opts: Options{GridSHMPath: shmPath, GridConfigPath: cfgPath}}
+	w := httptest.NewRecorder()
+	s.handleAPIGridStatus(w, authedReq("GET", "/api/grid/status", ""))
+	if w.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Inverters []gridStatusItem `json:"inverters"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Inverters) != 2 {
+		t.Fatalf("len=%d resp=%+v", len(resp.Inverters), resp.Inverters)
+	}
+	if resp.Inverters[0].ID != 0 || resp.Inverters[0].LoggerSN != 111 {
+		t.Fatalf("id=0: %+v", resp.Inverters[0])
+	}
+	if resp.Inverters[1].ID != 1 || resp.Inverters[1].LoggerSN != 222 {
+		t.Fatalf("id=1: %+v", resp.Inverters[1])
+	}
+
+	// Переходный период после смены настроек: адрес shm не совпадает с
+	// конфигом — SN чужой записи подставлять нельзя.
+	copy(it[66:130], "192.0.2.99:8899")
+	if err := os.WriteFile(shmPath, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	s.handleAPIGridStatus(w, authedReq("GET", "/api/grid/status", ""))
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Inverters[1].LoggerSN != 0 {
+		t.Fatalf("stale shm addr: %+v", resp.Inverters[1])
+	}
+
+	// Пустой конфиг: работает fallback на shm, logger_sn остаётся нулевым.
+	if err := os.WriteFile(cfgPath, []byte(`{"enabled":true,"poll_period":10,"inverters":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	s.handleAPIGridStatus(w, authedReq("GET", "/api/grid/status", ""))
+	if w.Code != http.StatusOK {
+		t.Fatalf("fallback code=%d body=%s", w.Code, w.Body.String())
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Inverters) != 1 || resp.Inverters[0].ID != 1 || resp.Inverters[0].LoggerSN != 0 {
+		t.Fatalf("fallback: %+v", resp.Inverters)
 	}
 }
 

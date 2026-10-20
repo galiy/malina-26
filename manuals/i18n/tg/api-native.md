@@ -308,9 +308,11 @@ handler-ҳои кӯҳнаи API (масалан, `/api/mainlist`) бо `401`-и 
 | `GET /api/map/devices` | `[{"type":"map","id","gen","serial","label"}]` |
 | `GET /api/kes/devices` | `[{"type":"kes","id","gen","serial","label"}]` |
 | `GET /api/bms/devices` | `[{"type":"bms","id","gen","serial","base","bms_type","bms_type_label","source","framing","last_seen"}]` |
-| `GET /api/grid/status` | `{"updated":...,"inverters":[{"id","gen","serial","addr","kind","status","last_seen","name","placement"}]}` |
+| `GET /api/grid/status` | `{"updated":...,"inverters":[{"id","gen","serial","addr","kind","status","last_seen","name","placement","logger_sn"}]}` |
 | `GET /api/settings/status?type=map\|kes\|bms` | `{"type","updated","rows":[...]}` |
 | `GET /api/stats/devices` | `{"devices":[{"type","id","last"}]}` |
+
+`logger_sn` — рақами серияи логгери танзимшуда (uint32, decimal); калиди нигоҳдорӣ нест; 0 — муқаррар нашудааст (танзим нест ё shm аз конфигуратсияи кӯҳна).
 
 Мисоли `/api/map/devices`:
 

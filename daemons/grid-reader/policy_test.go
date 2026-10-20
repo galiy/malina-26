@@ -48,7 +48,6 @@ func TestBadSoftBackoffBothTypes(t *testing.T) {
 	for _, typ := range []string{"deye", "sofar"} {
 		p := newPoller(nil, nil, logx.New("test: "))
 		p.states = make([]devState, 1)
-		p.types = []string{typ}
 		for i := 0; i < 3; i++ {
 			p.fail(0, badErr(solarman.ErrNoData))
 		}
@@ -237,5 +236,55 @@ func TestLoadSettings16AndInvalidSlots(t *testing.T) {
 	}
 	if len(warns) == 0 {
 		t.Fatal("ожидались предупреждения")
+	}
+}
+
+func TestLongBanRequiresActiveBan(t *testing.T) {
+	st := &devState{banStatus: statusBan5}
+	if longBan(st, time.Now()) {
+		t.Fatal("banStatus без banUntil не должен считаться активным баном")
+	}
+	st.banUntil = time.Now().Add(-time.Second)
+	if longBan(st, time.Now()) {
+		t.Fatal("истёкший бан не должен считаться активным")
+	}
+	st.banUntil = time.Now().Add(time.Minute)
+	if !longBan(st, time.Now()) {
+		t.Fatal("активный бан 5 мин должен считаться длинным")
+	}
+}
+
+func TestSuccessAndFailClearBanStatus(t *testing.T) {
+	shm, err := shmOpen(filepath.Join(t.TempDir(), "grid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shm.Close()
+	p := newPoller(shm, nil, logx.New("test: "))
+	p.reset(settings{Inverters: []inverter{{Name: "x", Type: "sofar", Valid: true}}})
+	st := &p.states[0]
+	st.banStatus = statusBan5
+	p.success(0, telemetry{}, "SN")
+	if st.banStatus != 0 || !st.banUntil.IsZero() {
+		t.Fatalf("после успеха остался статус бана: %+v", st)
+	}
+	st.banStatus = statusBan10
+	st.banUntil = time.Time{}
+	p.fail(0, badErr(solarman.ErrNoData))
+	if st.banStatus != 0 {
+		t.Fatalf("после errBad остался статус бана: %+v", st)
+	}
+}
+
+func TestStaleThresholdPerInverter(t *testing.T) {
+	p := newPoller(nil, nil, logx.New("test: "))
+	p.states = make([]devState, 2)
+	p.states[0].lastDuration = 30 * time.Second
+	p.states[1].lastDuration = 2 * time.Second
+	if got, want := p.staleThreshold(0, 10*time.Second), 105*time.Second; got != want {
+		t.Fatalf("stale slot 0=%v, want %v", got, want)
+	}
+	if got, want := p.staleThreshold(1, 10*time.Second), 35*time.Second; got != want {
+		t.Fatalf("stale slot 1=%v, want %v", got, want)
 	}
 }
