@@ -35,6 +35,7 @@ var helpDocs = map[string]string{
 	"pages/events":          "pages/events.md",
 	"pages/stats-charts":    "pages/stats-charts.md",
 	"pages/stats-tables":    "pages/stats-tables.md",
+	"pages/stats-settings":  "pages/stats-settings.md",
 	"pages/master":          "pages/master.md",
 	"pages/master-settings": "pages/master-settings.md",
 	"api-legacy":            "api-legacy.md",
@@ -82,6 +83,8 @@ func helpDocFor(urlPath string) string {
 		return "pages/stats-charts"
 	case "/stats/tables":
 		return "pages/stats-tables"
+	case "/stats/settings":
+		return "pages/stats-settings"
 	case "/master":
 		return "pages/master"
 	case "/master/settings":

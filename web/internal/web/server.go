@@ -69,6 +69,9 @@ type Options struct {
 	GridConfigPath      string        // путь к grid-reader.json
 	GridControlSock     string        // control-сокет grid-reader
 	GridSHMPath         string        // shm-список grid-reader
+	ArchConfigPath      string        // malina-arch.json
+	ArchKeyPath         string        // arch.key
+	ArchControlSock     string        // control-сокет malina-arch
 }
 
 // Server — HTTP-сервер.
@@ -166,6 +169,15 @@ func New(o Options) (*Server, error) {
 	}
 	if o.GridSHMPath == "" {
 		o.GridSHMPath = "/dev/shm/malina-grid-state"
+	}
+	if o.ArchConfigPath == "" {
+		o.ArchConfigPath = "/malina/etc/malina/malina-arch.json"
+	}
+	if o.ArchKeyPath == "" {
+		o.ArchKeyPath = "/malina/etc/malina/arch.key"
+	}
+	if o.ArchControlSock == "" {
+		o.ArchControlSock = "/run/malina-arch/control.sock"
 	}
 	if o.BasicCacheTTL == 0 {
 		o.BasicCacheTTL = 5 * time.Minute
@@ -290,6 +302,7 @@ func New(o Options) (*Server, error) {
 		"events":          "events.html",
 		"stats_charts":    "stats_charts.html",
 		"stats_tables":    "stats_tables.html",
+		"stats_settings":  "stats_settings.html",
 	} {
 		t, err := template.New("").Funcs(funcs).
 			ParseFiles(layout, filepath.Join(tplDir, page))
@@ -419,6 +432,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/system/accumulator", s.handleSystemAccumulator)
 	mux.HandleFunc("/stats/charts", s.handleStatsCharts)
 	mux.HandleFunc("/stats/tables", s.handleStatsTables)
+	mux.HandleFunc("/stats/settings", s.handleStatsSettings)
 	mux.HandleFunc("/api/stats/devices", s.handleAPIStatsDevices)
 	mux.HandleFunc("/api/stats/extremes", s.handleAPIStatsExtremes)
 	mux.HandleFunc("/api/stats/table", s.handleAPIStatsTable)

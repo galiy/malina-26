@@ -63,3 +63,5 @@
   контракты, запись и статистика.
 - [Legacy API](api-legacy.md) — весь старый API: `read_json.php`, `read_memory.php`,
   `check_daemons.php`, `read_bms.php`, `read_sec.php`, запись через `write_*`.
+
+- [Настройки резервного копирования](pages/stats-settings.md)

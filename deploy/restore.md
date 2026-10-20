@@ -62,7 +62,7 @@
 
 `deploy/deploy.sh --first-run` включает только базовые: `dhclient-eth0`,
 `malina-web`, `malina-net`, `malina-net-fallback.timer`, `malina-logrotate.timer`,
-`map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`, `grid-reader`,
+`map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`, `grid-reader`, `malina-arch`,
 `malina-tsdb-raw`.
 
 Юниты режимов/сети (`malina-hostapd`, `malina-dnsmasq`, `malina-wpa`,

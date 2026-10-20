@@ -62,3 +62,4 @@ BMS билан аккумулятор батареялари ва тармоқ �
   контрактлар, ёзиш ва статистика.
 - [Legacy API](api-legacy.md) — бутун эски API: `read_json.php`, `read_memory.php`,
   `check_daemons.php`, `read_bms.php`, `read_sec.php`, `write_*` орқали ёзиш.
+- [Резерв нусхалаш созламалари](pages/stats-settings.md)

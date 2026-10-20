@@ -61,3 +61,4 @@
   келісімшарттар, жазу және статистика.
 - [Legacy API](api-legacy.md) — барлық ескі API: `read_json.php`, `read_memory.php`,
   `check_daemons.php`, `read_bms.php`, `read_sec.php`, `write_*` арқылы жазу.
+- [Резервтік көшіру параметрлері](pages/stats-settings.md)

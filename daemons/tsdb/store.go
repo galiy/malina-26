@@ -102,6 +102,11 @@ type Store struct {
 	mu     sync.RWMutex
 	series map[seriesKey]*series
 
+	qmu       sync.Mutex
+	qcond     *sync.Cond
+	quiescing bool
+	inflight  int
+
 	wch  chan writeOp
 	stop chan struct{}
 	wg   sync.WaitGroup
@@ -163,6 +168,7 @@ func NewStore(root string, opt Options, reg *tscontract.Registry) (*Store, error
 	if err := s.scan(); err != nil {
 		return nil, err
 	}
+	s.qcond = sync.NewCond(&s.qmu)
 	s.wg.Add(1)
 	go s.writerLoop()
 	if s.retention > 0 || s.limitBytes > 0 {
@@ -179,14 +185,103 @@ func NewStore(root string, opt Options, reg *tscontract.Registry) (*Store, error
 // --- запись (единая writer-горутина) ---
 
 // Write кладёт батч в очередь writer'а и сразу возвращает число принятых строк —
-// клиент не блокируется на диск (§7).
+// клиент не блокируется на диск (§7). Во время quiesce новые записи ждут
+// снятия блокировки: иначе финальный committed offset не был бы финальным.
 func (s *Store) Write(rows []Row) int {
+	s.qmu.Lock()
+	for s.quiescing {
+		select {
+		case <-s.stop:
+			s.qmu.Unlock()
+			return 0
+		default:
+		}
+		s.qcond.Wait()
+	}
+	// inflight означает «запись прошла шлагбаум, но могла ещё не попасть в
+	// канал». BeginQuiesce ждёт inflight==0, поэтому ни одна такая запись не
+	// окажется в очереди после барьера Wait().
+	s.inflight++
+	s.qmu.Unlock()
+
+	var n int
 	select {
 	case s.wch <- writeOp{rows: rows}:
-		return len(rows)
+		n = len(rows)
 	case <-s.stop:
-		return 0
+		n = 0
 	}
+
+	s.qmu.Lock()
+	s.inflight--
+	if s.inflight == 0 {
+		s.qcond.Broadcast()
+	}
+	s.qmu.Unlock()
+	return n
+}
+
+// BeginQuiesce переводит хранилище в quiesce: новые Write блокируются, уже
+// принятые — попадают в очередь, затем очередь сливается. Возвращённая функция
+// снимает блокировку (вызывается при закрытии клиентского соединения или
+// остановке процесса).
+func (s *Store) BeginQuiesce() func() {
+	s.qmu.Lock()
+	s.quiescing = true
+	for s.inflight > 0 {
+		s.qcond.Wait()
+	}
+	s.qmu.Unlock()
+	s.Wait()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.qmu.Lock()
+			s.quiescing = false
+			s.qcond.Broadcast()
+			s.qmu.Unlock()
+		})
+	}
+}
+
+// CommittedOffset возвращает размер активного сегмента (все байты до offset
+// записаны в файл tmpfs). quiesce=true сначала дожидается обработки очереди
+// writer'а; новые записи при этом не блокируются — вызывающий обязан сам
+// остановить producers.
+func (s *Store) CommittedOffset(typ, id, segment string, quiesce bool) (uint64, bool) {
+	if quiesce {
+		s.Wait()
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ser := s.series[seriesKey{typ: typ, id: id}]
+	if ser == nil {
+		return 0, false
+	}
+	if ser.active != nil {
+		if segment == "" || segment == filepath.Base(ser.active.ref.path) || segment == ser.active.ref.path {
+			return uint64(ser.active.size), true
+		}
+	}
+	if segment == "" && len(ser.sealed) > 0 {
+		// Активный сегмент успел запечататься: отдаём последний sealed.
+		ref := ser.sealed[len(ser.sealed)-1]
+		st, err := os.Stat(ref.path)
+		if err != nil {
+			return 0, false
+		}
+		return uint64(st.Size()), true
+	}
+	for _, ref := range ser.sealed {
+		if segment == filepath.Base(ref.path) || segment == ref.path {
+			st, err := os.Stat(ref.path)
+			if err != nil {
+				return 0, false
+			}
+			return uint64(st.Size()), true
+		}
+	}
+	return 0, false
 }
 
 // Wait — барьер: дождаться обработки всего, что уже в очереди (для тестов/чтения).
@@ -1053,6 +1148,10 @@ func (s *Store) Sync() error {
 
 func (s *Store) Close() error {
 	close(s.stop)
+	s.qmu.Lock()
+	s.quiescing = false
+	s.qcond.Broadcast()
+	s.qmu.Unlock()
 	s.wg.Wait()
 	s.mu.Lock()
 	defer s.mu.Unlock()

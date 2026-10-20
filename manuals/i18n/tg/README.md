@@ -61,3 +61,4 @@
   хом, навиштан ва омор.
 - [Legacy API](api-legacy.md) — тамоми API-и кӯҳна: `read_json.php`, `read_memory.php`,
   `check_daemons.php`, `read_bms.php`, `read_sec.php`, навиштан тавассути `write_*`.
+- [Танзимоти нусхабардории эҳтиётӣ](pages/stats-settings.md)

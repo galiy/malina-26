@@ -62,3 +62,4 @@ BMS-ით აკუმულატორის ბატარეები დ�
   კონტრაქტები, ჩაწერა და სტატისტიკა.
 - [Legacy API](api-legacy.md) — მთელი ძველი API: `read_json.php`, `read_memory.php`,
   `check_daemons.php`, `read_bms.php`, `read_sec.php`, ჩაწერა `write_*`.
+- [სარეზერვო ასლის პარამეტრები](pages/stats-settings.md)

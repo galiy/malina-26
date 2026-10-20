@@ -106,6 +106,7 @@ make -C daemons/bms-reader arm
 make -C daemons/grid-reader arm
 make -C daemons/bms-proxy arm
 make -C daemons/tsdb arm
+make -C daemons/malina-arch arm
 ```
 Определить SD (`lsblk -o NAME,SIZE,TYPE,LABEL,MOUNTPOINT`), **отключить авто-монтирование**
 (udisks может подхватить разделы и помешать). Не путать целевой диск с системными.
@@ -177,6 +178,7 @@ install -D -o root -g root -m0755 daemons/bms-reader/dist/bms-reader-armv7  $ROO
 install -D -o root -g root -m0755 daemons/grid-reader/dist/grid-reader-armv7 $ROOT/usr/local/sbin/grid-reader
 install -D -o root -g root -m0755 daemons/bms-proxy/dist/bms-proxy-armv7  $ROOT/usr/local/sbin/bms-proxy
 install -D -o root -g root -m0755 daemons/tsdb/dist/malina-tsdb-armv7        $ROOT/usr/local/sbin/malina-tsdb
+install -D -o root -g root -m0755 daemons/malina-arch/dist/malina-arch-armv7  $ROOT/usr/local/sbin/malina-arch
 ```
 
 **2.9. Веб-ассеты и manuals (на /malina, root:root):**
@@ -213,7 +215,7 @@ rm -f $ROOT/tmp/malina-pamcheck $ROOT/usr/bin/qemu-arm-static
 
 **2.12. Юниты offline (включение/маски/отключение):**
 ```
-for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-grid-reader; do
+for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-tsdb malina-tsdb-raw malina-grid-reader malina-arch; do
   systemctl --root=$ROOT enable "$u" || true
 done
 # mask/disable по system/provision/{masked,disabled}.txt
@@ -494,7 +496,7 @@ runtime-маска снимается, но reader остаётся disabled; п
 деплой не запускается** (правило: на `.68` — только изменённые сервисы); `--all` — весь
 скрипт; `netd` никогда не перезапускается; при `--first-run` `--only` игнорируется.
 Полный деплой выкладывает бинарники (`malina-web`,
-`malina-netd`, `map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`, `grid-reader`) + веб-ассеты и обновляет
+`malina-netd`, `map-reader`, `kes-reader`, `bms-reader`, `bms-proxy`, `malina-tsdb`, `grid-reader`, `malina-arch`) + веб-ассеты и обновляет
 **unit-файлы сервисов** — `malina-tsdb`, `malina-tsdb-raw`, `map-reader`,
 `kes-reader`, `malina-bms-reader`, `malina-bms-proxy`, `malina-grid-reader` (коротким rw-окном под `/etc`).
 При `--only map,kes,bmsr,bmsp` также устанавливается

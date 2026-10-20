@@ -1,0 +1,19 @@
+[Unit]
+Description=Malina remote archive (raw/avg backup, restore)
+Documentation=file:/malina/usr/local/share/malina/docs/malina-arch.md
+After=local-fs.target
+Before=malina-tsdb-raw.service malina-tsdb.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=notify
+TimeoutStartSec=infinity
+TimeoutStopSec=30s
+ExecStartPre=-/malina/usr/local/sbin/malina-arch -keygen
+ExecStart=/malina/usr/local/sbin/malina-arch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

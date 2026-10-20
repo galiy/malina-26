@@ -1,0 +1,20 @@
+{
+  "enabled": false,
+  "target": "network",
+  "avg_scan_min": 5,
+  "log_level": "info",
+  "network": {
+    "protocol": "sftp",
+    "host": "",
+    "port": 22,
+    "path": "",
+    "user": "",
+    "password_enc": "",
+    "domain": "",
+    "host_key": "",
+    "access_timeout_sec": 10
+  },
+  "flash": {
+    "uuid": ""
+  }
+}

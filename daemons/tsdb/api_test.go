@@ -213,3 +213,47 @@ func TestAPIReadTooWide(t *testing.T) {
 		t.Fatalf("статус = %d, ожидался statusTooWide", st)
 	}
 }
+
+func TestAPIQuiesceBlocksWritesUntilClose(t *testing.T) {
+	srv, st := newTestServer(t)
+	cli, srvC := net.Pipe()
+	go srv.serveConn(srvC)
+	cli.SetDeadline(time.Now().Add(5 * time.Second))
+
+	writeFrameConn(t, cli, encodeWriteReqForTest([]Row{rowT(t, "map", "5", 1000, sample(1)...)}))
+	readFrameConn(t, cli) // ack
+
+	writeFrameConn(t, cli, encodeOffsetReqForTest("map", "5", "", 1))
+	rep := readFrameConn(t, cli)
+	if binary.LittleEndian.Uint32(rep[0:4]) != magicOffsetReply || rep[13] != 1 {
+		t.Fatalf("ответ offset: % x", rep)
+	}
+
+	done := make(chan int, 1)
+	go func() { done <- st.Write([]Row{rowT(t, "map", "5", 2000, sample(2)...)}) }()
+	select {
+	case <-done:
+		t.Fatal("Write не заблокирован во время quiesce")
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	cli.Close()
+	select {
+	case n := <-done:
+		if n != 1 {
+			t.Fatalf("Write вернул %d", n)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Write не разблокирован после закрытия соединения")
+	}
+}
+
+func encodeOffsetReqForTest(typ, id, seg string, mode byte) []byte {
+	b := binary.LittleEndian.AppendUint32(nil, magicOffsetReq)
+	b = append(b, mode)
+	for _, s := range []string{typ, id, seg} {
+		b = append(b, byte(len(s)))
+		b = append(b, s...)
+	}
+	return finish(b)
+}

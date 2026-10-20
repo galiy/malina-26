@@ -30,6 +30,12 @@ func (srv *Server) Serve(ln net.Listener) error {
 
 func (srv *Server) serveConn(c net.Conn) {
 	defer c.Close()
+	var release func()
+	defer func() {
+		if release != nil {
+			release()
+		}
+	}()
 	br := bufio.NewReaderSize(c, 64*1024)
 	bw := bufio.NewWriterSize(c, 64*1024)
 	for {
@@ -44,7 +50,14 @@ func (srv *Server) serveConn(c net.Conn) {
 		if _, err := io.ReadFull(br, buf); err != nil {
 			return
 		}
-		if err := srv.handle(buf, bw); err != nil {
+		r, err := srv.handle(buf, bw)
+		if r != nil && release == nil {
+			// quiesce держится до закрытия соединения: пока клиент не
+			// отпустил raw, новых записей быть не должно. Повторный
+			// MTSP mode=1 на том же соединении новый release не создаёт.
+			release = r
+		}
+		if err != nil {
 			return
 		}
 		if err := bw.Flush(); err != nil {
@@ -53,20 +66,47 @@ func (srv *Server) serveConn(c net.Conn) {
 	}
 }
 
-func (srv *Server) handle(buf []byte, bw *bufio.Writer) error {
+func (srv *Server) handle(buf []byte, bw *bufio.Writer) (func(), error) {
 	if len(buf) < 4 {
-		return errWireFrame
+		return nil, errWireFrame
 	}
 	switch binary.LittleEndian.Uint32(buf[0:4]) {
 	case magicWriteReq:
-		return srv.doWrite(buf, bw)
+		return nil, srv.doWrite(buf, bw)
 	case magicReadReq:
-		return srv.doQuery(buf, bw)
+		return nil, srv.doQuery(buf, bw)
 	case magicMetaReq:
-		return srv.doMeta(buf, bw)
+		return nil, srv.doMeta(buf, bw)
+	case magicOffsetReq:
+		return srv.doOffset(buf, bw)
 	default:
-		return errWireFrame
+		return nil, errWireFrame
 	}
+}
+
+// doOffset — committed offset/quiesce активного raw-сегмента.
+func (srv *Server) doOffset(buf []byte, bw *bufio.Writer) (func(), error) {
+	q, err := decodeOffsetReq(buf)
+	if err != nil {
+		return nil, err
+	}
+	var release func()
+	final := q.Mode == 1
+	if final {
+		release = srv.store.BeginQuiesce()
+	}
+	committed, ok := srv.store.CommittedOffset(q.Type, q.ID, q.Segment, false)
+	code := uint8(0)
+	if !ok {
+		code = 1
+	}
+	if err := writeFrame(bw, encodeOffsetReply(code, committed, final)); err != nil {
+		if release != nil {
+			release()
+		}
+		return nil, err
+	}
+	return release, nil
 }
 
 // doMeta — мета-запросы: список устройств и крайние точки (из памяти, без чтения

@@ -57,6 +57,7 @@
 `/api/<type>/...` (`map` — МАП; будущие `kes` и др.).
 
 - `POST /api/token` `{password}` → `{token, expires}`; `DELETE /api/token` — отзыв.
+- `GET/POST /stats/settings` — «Статистика → Настройки»: резервное копирование raw/avg (`malina-arch`), тест target, восстановление/сброс архива.
 - `GET /api/grid/status` — список сетевых инверторов: `id, gen, serial, addr, kind, status, last_seen, name, placement, logger_sn`; `logger_sn` — настроенный SN логгера (uint32, decimal), не ключ хранения; `0` — не задано (нет конфига или shm от старой конфигурации).
 - `GET /api/map/devices` — список устройств типа «map» (JSON `[{type,id,gen,label}]`, для меню).
 - `GET /api/map/raw?id=<id>&gen=<gen>` — бинарный контракт МАП (`application/octet-stream`);

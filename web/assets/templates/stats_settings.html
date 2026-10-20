@@ -1,0 +1,90 @@
+{{define "content"}}
+<div class="page-head page-head-left"><h1>{{index .T "stats.settings_title"}}</h1></div>
+
+<section class="card">
+  <h2>{{index .T "arch.title"}}</h2>
+  <form method="post" action="/stats/settings">
+    <input type="hidden" name="action" value="save">
+    <table class="nettable"><tbody>
+      <tr><td>{{index .T "arch.enabled"}}</td><td><b>{{if .Cfg.Enabled}}{{index .T "arch.yes"}}{{else}}{{index .T "arch.no"}}{{end}}</b></td></tr>
+      <tr><td><label for="arch_target">{{index .T "arch.target"}}</label></td><td>
+        <select id="arch_target" name="target">
+          <option value="network"{{if eq .Cfg.Target "network"}} selected{{end}}>{{index .T "arch.target_network"}}</option>
+          <option value="flash"{{if eq .Cfg.Target "flash"}} selected{{end}}>{{index .T "arch.target_flash"}}</option>
+        </select></td></tr>
+      <tr><td><label for="arch_avg_period">{{index .T "arch.avg_period"}}</label></td><td><input id="arch_avg_period" name="avg_scan_min" type="number" min="1" max="1440" value="{{.Cfg.AvgScanMin}}"></td></tr>
+      <tr><td><label for="arch_log_level">{{index .T "arch.log_level"}}</label></td><td><select id="arch_log_level" name="log_level"><option value="debug"{{if eq .Cfg.LogLevel "debug"}} selected{{end}}>debug</option><option value="info"{{if eq .Cfg.LogLevel "info"}} selected{{end}}>info</option><option value="warn"{{if eq .Cfg.LogLevel "warn"}} selected{{end}}>warn</option><option value="error"{{if eq .Cfg.LogLevel "error"}} selected{{end}}>error</option></select></td></tr>
+    </tbody></table>
+
+    <p class="hint">{{index .T "arch.save_hint"}}</p>
+
+    <div class="arch-net">
+      <h3>{{index .T "arch.network"}}</h3>
+      <table class="nettable"><tbody>
+        <tr><td><label for="arch_protocol">{{index .T "arch.protocol"}}</label></td><td><select id="arch_protocol" name="protocol"><option value="sftp"{{if eq .Cfg.Network.Protocol "sftp"}} selected{{end}}>SFTP</option><option value="smb2"{{if eq .Cfg.Network.Protocol "smb2"}} selected{{end}}>SMB2</option></select></td></tr>
+        <tr><td><label for="arch_host">{{index .T "arch.host"}}</label></td><td><input id="arch_host" name="host" value="{{.Cfg.Network.Host}}"></td></tr>
+        <tr><td><label for="arch_port">{{index .T "arch.port"}}</label></td><td><input id="arch_port" name="port" type="number" value="{{.Cfg.Network.Port}}"></td></tr>
+        <tr><td><label for="arch_path">{{index .T "arch.path"}}</label></td><td><input id="arch_path" name="path" value="{{.Cfg.Network.Path}}"></td></tr>
+        <tr><td><label for="arch_user">{{index .T "arch.user"}}</label></td><td><input id="arch_user" name="user" value="{{.Cfg.Network.User}}" autocomplete="username"></td></tr>
+        <tr><td><label for="arch_password">{{index .T "arch.password"}}</label></td><td><span class="pw"><input id="arch_password" name="password" type="password" value="" autocomplete="new-password" placeholder="{{index .T "arch.password_keep"}}"><button type="button" class="eye" title="{{index .T "ui.show_password"}}" aria-label="{{index .T "ui.show_password"}}">👁</button></span></td></tr>
+        <tr class="arch-smb"><td><label for="arch_domain">{{index .T "arch.domain"}}</label></td><td><input id="arch_domain" name="domain" value="{{.Cfg.Network.Domain}}"></td></tr>
+        <tr class="arch-sftp"><td><label for="arch_hostkey">{{index .T "arch.host_key"}}</label></td><td><input id="arch_hostkey" name="host_key" value="{{.Cfg.Network.HostKey}}"></td></tr>
+        <tr><td><label for="arch_timeout">{{index .T "arch.timeout"}}</label></td><td><input id="arch_timeout" name="access_timeout_sec" type="number" value="{{.Cfg.Network.AccessSec}}"></td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="arch-flash">
+      <h3>{{index .T "arch.flash"}}</h3>
+      <table class="nettable"><tbody>
+        <tr><td><label for="arch_flash_uuid">{{index .T "arch.flash_uuid"}}</label></td><td>
+          <select id="arch_flash_uuid" name="flash_uuid">
+            <option value="">{{index .T "arch.flash_none"}}</option>
+            {{range .FlashCandidates}}<option value="{{.UUID}}"{{if eq $.Cfg.Flash.UUID .UUID}} selected{{end}}>{{.UUID}} — {{.Size}} {{.Model}}</option>{{end}}
+          </select>
+        </td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="head-actions end">
+      <button type="submit">{{index .T "sys.save"}}</button>
+    </div>
+  </form>
+</section>
+
+{{if .Ok}}<div class="flash ok">{{if eq .Ok "test"}}{{index .T "arch.test_ok"}}: raw — {{if .RawArchive}}{{index .T "arch.yes"}}{{else}}{{index .T "arch.no"}}{{end}}, avg — {{if .AvgArchive}}{{index .T "arch.yes"}}{{else}}{{index .T "arch.no"}}{{end}}{{else if eq .Ok "save"}}{{index .T "stats.settings_saved"}}{{else if eq .Ok "enabled"}}{{index .T "arch.enabled_ok"}}{{else if eq .Ok "continued"}}{{index .T "arch.enabled_continued"}}{{else if eq .Ok "need_restore"}}{{index .T "arch.need_restore"}}{{else}}{{index .T "arch.action_done"}}{{end}}</div>{{end}}
+{{if .Err}}<div class="flash err">{{if eq .Err "test"}}{{index .T "arch.test_error"}}{{if .ErrText}}: {{.ErrText}}{{end}}{{else if eq .Err "protocol_password"}}{{index .T "arch.protocol_password"}}{{else if eq .Err "ctrl"}}{{index .T "stats.settings_error"}}{{if .ErrText}}: {{.ErrText}}{{end}}{{else}}{{index .T "stats.settings_error"}}{{$v := .ErrText}}{{if $v}}: {{$v}}{{end}}{{end}}</div>{{end}}
+
+<section class="card">
+  <h2>{{index .T "arch.status"}}</h2>
+  <p>{{index .T "arch.state"}}: <b>{{index .Status "state"}}</b> · {{index .T "arch.phase"}}: {{index .Status "phase"}} · run_id: {{index .Status "run_id"}}</p>
+  <p>{{index .T "arch.last_raw"}}: {{index .Status "last_raw"}} · {{index .T "arch.last_avg"}}: {{index .Status "last_avg"}} · {{index .T "arch.progress"}}: {{index .Status "progress"}}</p>
+  <p>{{index .T "arch.last_error"}}: {{index .Status "last_error"}}</p>
+  <p>{{index .T "arch.log_level"}}: <b>{{index .Status "log_level"}}</b></p>
+  {{$st := index .Status "state"}}
+  <div class="head-actions">
+    <form method="post" action="/stats/settings"><input type="hidden" name="action" value="test"><button type="submit">{{index .T "arch.test"}}</button></form>
+    {{if index .Status "enabled"}}
+      <form method="post" action="/stats/settings"><input type="hidden" name="action" value="disable"><button type="submit">{{index .T "arch.disable"}}</button></form>
+    {{else if eq $st "restore_required"}}
+      <form method="post" action="/stats/settings" onsubmit="return confirm('{{index .T "arch.confirm_restore"}}')"><input type="hidden" name="action" value="enable_restore"><button type="submit" class="btn-danger">{{index .T "arch.restore"}}</button></form>
+      <form method="post" action="/stats/settings" onsubmit="return confirm('{{index .T "arch.confirm_reset"}}')"><input type="hidden" name="action" value="enable_reset"><button type="submit" class="btn-danger">{{index .T "arch.reset"}}</button></form>
+      <form method="post" action="/stats/settings"><input type="hidden" name="action" value="disable"><button type="submit">{{index .T "arch.leave_disabled"}}</button></form>
+    {{else if eq $st "restoring"}}
+      <form method="post" action="/stats/settings"><input type="hidden" name="action" value="cancel"><button type="submit">{{index .T "arch.cancel"}}</button></form>
+    {{else if eq $st "restore_failed"}}
+      <form method="post" action="/stats/settings" onsubmit="return confirm('{{index .T "arch.confirm_restore"}}')"><input type="hidden" name="action" value="enable_restore"><button type="submit" class="btn-danger">{{index .T "arch.restore"}}</button></form>
+      <form method="post" action="/stats/settings" onsubmit="return confirm('{{index .T "arch.confirm_reset"}}')"><input type="hidden" name="action" value="enable_reset"><button type="submit" class="btn-danger">{{index .T "arch.reset"}}</button></form>
+    {{else}}
+      <form method="post" action="/stats/settings"><input type="hidden" name="action" value="enable_auto"><button type="submit">{{index .T "arch.enable"}}</button></form>
+    {{end}}
+  </div>
+  {{if index .Status "enabled"}}
+  <details class="arch-manual-restore">
+    <summary>{{index .T "arch.manual_restore"}}</summary>
+    <p class="hint">{{index .T "arch.manual_restore_hint"}}</p>
+    <form method="post" action="/stats/settings" onsubmit="return confirm('{{index .T "arch.confirm_restore"}}')"><input type="hidden" name="action" value="enable_restore"><button type="submit" class="btn-danger">{{index .T "arch.restore"}}</button></form>
+  </details>
+  {{end}}
+</section>
+<script src="{{asset "arch_settings.js"}}"></script>
+{{end}}

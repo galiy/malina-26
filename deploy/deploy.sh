@@ -27,13 +27,14 @@
 #
 #   --grid-config PATH — установить конфиг grid-reader (иначе не трогаем).
 # Сервисы: malina-web, malina-netd, map-reader, kes-reader, bms-reader (bmsr),
-# bms-proxy (bmsp), malina-tsdb (avg), malina-tsdb-raw, grid-reader (grid).
+# bms-proxy (bmsp), malina-tsdb (avg), malina-tsdb-raw, grid-reader (grid),
+# malina-arch (arch).
 # `malina-netd` НЕ перезапускается.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-ALL_SERVICES="web netd map kes bmsr bmsp tsdb grid"
+ALL_SERVICES="web netd map kes bmsr bmsp tsdb grid arch"
 
 BUILD=0 FIRST=0 ALL=0 PURGE=0 HOSTARG="" ONLY="" GRIDCONFIG=""
 parse() {
@@ -111,6 +112,7 @@ if [ "$BUILD" = 1 ]; then
   has bmsp && make -C "$ROOT/daemons/bms-proxy" arm
   has tsdb && make -C "$ROOT/daemons/tsdb" arm
   has grid && make -C "$ROOT/daemons/grid-reader" arm
+  has arch && make -C "$ROOT/daemons/malina-arch" arm
 fi
 # netd собирается вместе с web (один модуль web)
 if [ "$BUILD" = 1 ] && has netd && ! has web; then
@@ -125,6 +127,7 @@ BIN_BMSR="$ROOT/daemons/bms-reader/dist/bms-reader-armv7"
 BIN_BMSP="$ROOT/daemons/bms-proxy/dist/bms-proxy-armv7"
 BIN_TSDB="$ROOT/daemons/tsdb/dist/malina-tsdb-armv7"
 BIN_GRID="$ROOT/daemons/grid-reader/dist/grid-reader-armv7"
+BIN_ARCH="$ROOT/daemons/malina-arch/dist/malina-arch-armv7"
 
 req() { [ -f "$1" ] || { echo "нет $1 (собери: $0 --build --only $2)"; exit 1; }; }
 has web  && { req "$BIN_WEB"  web; }
@@ -135,6 +138,7 @@ has bmsr && { req "$BIN_BMSR" bmsr; }
 has bmsp && { req "$BIN_BMSP" bmsp; }
 has tsdb && { req "$BIN_TSDB" tsdb; }
 has grid && { req "$BIN_GRID" grid; }
+has arch && { req "$BIN_ARCH" arch; }
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
@@ -146,6 +150,7 @@ has bmsr && cp "$BIN_BMSR" "$STAGE/bms-reader"
 has bmsp && cp "$BIN_BMSP" "$STAGE/bms-proxy"
 has tsdb && cp "$BIN_TSDB" "$STAGE/malina-tsdb"
 has grid && cp "$BIN_GRID" "$STAGE/grid-reader"
+has arch && cp "$BIN_ARCH" "$STAGE/malina-arch"
 
 # --- сборка списка файлов для передачи ---
 FILES=( )
@@ -157,6 +162,7 @@ has bmsr && FILES+=( "$STAGE/bms-reader" )
 has bmsp && FILES+=( "$STAGE/bms-proxy" )
 has tsdb && FILES+=( "$STAGE/malina-tsdb" )
 has grid && FILES+=( "$STAGE/grid-reader" )
+has arch && FILES+=( "$STAGE/malina-arch" )
 
 if [ "$FIRST" = 1 ]; then
   # --- первичное развёртывание (полное) ---
@@ -186,6 +192,8 @@ else
   has tsdb && { cp "$ROOT/daemons/tsdb/tsdb.service"                 "$STAGE/malina-tsdb.service";       UNITS+=( "$STAGE/malina-tsdb.service" ); }
   has grid && { cp "$ROOT/daemons/grid-reader/grid-reader.service"   "$STAGE/malina-grid-reader.service"; UNITS+=( "$STAGE/malina-grid-reader.service" ); }
   has tsdb && { cp "$ROOT/system/systemd/malina-tsdb-raw.service"    "$STAGE/malina-tsdb-raw.service";   UNITS+=( "$STAGE/malina-tsdb-raw.service" ); }
+  has arch && { cp "$ROOT/system/systemd/malina-arch.service"        "$STAGE/malina-arch.service";       UNITS+=( "$STAGE/malina-arch.service" ); }
+  has arch && { cp "$ROOT/system/malina-arch.json"                    "$STAGE/malina-arch.json";          UNITS+=( "$STAGE/malina-arch.json" ); }
   # udev latency_timer — при обновлении любого serial-демона
   if has map || has kes || has bmsr || has bmsp; then
     cp "$ROOT/system/udev/60-usb-serial-latency.rules" "$STAGE/60-usb-serial-latency.rules"
@@ -221,6 +229,7 @@ echo "install: $(ls -1 2>/dev/null | tr '\n' ' ')"
 [ -f bms-proxy ]     && { sudo install -D -m0755 bms-proxy     /malina/usr/local/sbin/bms-proxy;   echo "inst bms-proxy"; }
 [ -f malina-tsdb ]   && { sudo install -D -m0755 malina-tsdb   /malina/usr/local/sbin/malina-tsdb; echo "inst malina-tsdb"; }
 [ -f grid-reader ]   && { sudo install -D -m0755 grid-reader   /malina/usr/local/sbin/grid-reader; echo "inst grid-reader"; }
+[ -f malina-arch ]   && { sudo install -D -m0755 malina-arch   /malina/usr/local/sbin/malina-arch; echo "inst malina-arch"; }
 [ -f grid-reader.json ] && { sudo install -D -m0600 grid-reader.json /malina/etc/malina/grid-reader.json; echo "inst grid-reader.json"; }
 
 # веб-ассеты — только если уезжали (обновление web/first-run)
@@ -267,6 +276,14 @@ if [ "${FIRST:-0}" = 1 ]; then
 		apply "$src" "$dest" "$mode" "$pol"
 	done < deploy/manifest.tsv
 
+	if [ ! -f /malina/etc/malina/arch.key ]; then
+		sudo install -d -m0755 /malina/etc/malina
+		sudo sh -c 'umask 077; head -c 32 /dev/urandom > /malina/etc/malina/arch.key'
+		sudo chown root:root /malina/etc/malina/arch.key
+		sudo chmod 0600 /malina/etc/malina/arch.key
+		echo "inst  /malina/etc/malina/arch.key"
+	fi
+
 	if command -v gcc >/dev/null 2>&1; then
 		sudo gcc -O2 -o /tmp/malina-pamcheck pamcheck.c -ldl
 		sudo install -D -m0755 /tmp/malina-pamcheck /malina/usr/local/libexec/malina-pamcheck
@@ -290,12 +307,12 @@ if [ "${FIRST:-0}" = 1 ]; then
 	sudo mkdir -p /run/malina-ts-raw
 	sudo mountpoint -q /run/malina-ts-raw || sudo mount /run/malina-ts-raw 2>/dev/null || true
 
-	for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-tsdb malina-tsdb-raw malina-grid-reader; do
+	for u in dhclient-eth0 malina-web malina-net malina-net-fallback.timer malina-logrotate.timer map-reader kes-reader malina-bms-reader malina-bms-proxy malina-tsdb malina-tsdb-raw malina-grid-reader malina-arch; do
 		sudo systemctl enable "$u" >/dev/null 2>&1 || true
 	done
 else
 	# --- точечное обновление: unit-файлы выбранных сервисов (rw-окно под /etc) ---
-	if [ -f malina-tsdb.service ] || [ -f malina-tsdb-raw.service ] || [ -f map-reader.service ] || [ -f kes-reader.service ] || [ -f malina-bms-reader.service ] || [ -f malina-bms-proxy.service ] || [ -f malina-grid-reader.service ] || [ -f 60-usb-serial-latency.rules ]; then
+	if [ -f malina-tsdb.service ] || [ -f malina-tsdb-raw.service ] || [ -f map-reader.service ] || [ -f kes-reader.service ] || [ -f malina-bms-reader.service ] || [ -f malina-bms-proxy.service ] || [ -f malina-grid-reader.service ] || [ -f malina-arch.service ] || [ -f 60-usb-serial-latency.rules ]; then
 		sudo mount -o remount,rw /
 		[ -f malina-tsdb.service ]       && sudo install -m0644 malina-tsdb.service       /etc/systemd/system/malina-tsdb.service
 		[ -f malina-tsdb-raw.service ]   && sudo install -m0644 malina-tsdb-raw.service   /etc/systemd/system/malina-tsdb-raw.service
@@ -304,6 +321,19 @@ else
 		[ -f malina-bms-reader.service ] && sudo install -m0644 malina-bms-reader.service /etc/systemd/system/malina-bms-reader.service
 		[ -f malina-bms-proxy.service ]  && sudo install -m0644 malina-bms-proxy.service  /etc/systemd/system/malina-bms-proxy.service
 		[ -f malina-grid-reader.service ] && sudo install -m0644 malina-grid-reader.service /etc/systemd/system/malina-grid-reader.service
+		[ -f malina-arch.service ] && sudo install -m0644 malina-arch.service /etc/systemd/system/malina-arch.service
+		[ -f malina-arch.service ] && sudo systemctl enable malina-arch >/dev/null 2>&1 || true
+		if [ -f malina-arch.json ] && [ ! -e /malina/etc/malina/malina-arch.json ]; then
+			sudo install -D -m0600 malina-arch.json /malina/etc/malina/malina-arch.json
+			echo "inst /malina/etc/malina/malina-arch.json"
+		fi
+		if [ -f malina-arch.service ] && [ ! -f /malina/etc/malina/arch.key ]; then
+			sudo install -d -m0755 /malina/etc/malina
+			sudo sh -c 'umask 077; head -c 32 /dev/urandom > /malina/etc/malina/arch.key'
+			sudo chown root:root /malina/etc/malina/arch.key
+			sudo chmod 0600 /malina/etc/malina/arch.key
+			echo "inst /malina/etc/malina/arch.key"
+		fi
 		[ -f 60-usb-serial-latency.rules ] && sudo install -m0644 60-usb-serial-latency.rules /etc/udev/rules.d/60-usb-serial-latency.rules
 		sudo systemctl daemon-reload
 		sync
@@ -487,6 +517,7 @@ has bmsr && add_restart malina-bms-reader
 has bmsp && add_restart malina-bms-proxy
 has tsdb && { add_restart malina-tsdb; add_restart malina-tsdb-raw; }
 has grid && add_restart malina-grid-reader
+has arch && add_restart malina-arch
 for u in $RESTART; do
 	[ -n "$u" ] || continue
 	sudo systemctl restart "$u" 2>/dev/null && echo "restart $u" || echo "skip   $u (не активен/не установлен)"
@@ -496,6 +527,10 @@ echo "--- status ---"
 for u in $RESTART; do
 	[ -n "$u" ] || continue
 	printf '%-18s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
+done
+for u in $RESTART; do
+	[ "$u" = "malina-netd" ] && continue
+	if ! systemctl is-active --quiet "$u"; then echo "ОШИБКА: $u не активен" >&2; exit 1; fi
 done
 if [ "$PURGE" = 1 ]; then
 	for u in $RESTART; do

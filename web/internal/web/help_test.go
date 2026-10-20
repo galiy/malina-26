@@ -31,6 +31,7 @@ func TestHelpDocFor(t *testing.T) {
 		"/services":        "pages/services",
 		"/stats/charts":    "pages/stats-charts",
 		"/stats/tables":    "pages/stats-tables",
+		"/stats/settings":  "pages/stats-settings",
 		"/master":          "pages/master",
 		"/master/settings": "pages/master-settings",
 		"/unknown":         "",

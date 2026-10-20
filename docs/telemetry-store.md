@@ -506,7 +506,7 @@ meta_frame :=                  # мета-запрос: список устро�
   device_id    str             # cmd=2; для cmd=1 — ""
   crc32        u32
 
-offset_frame :=                # NEW: committed offset raw-сегмента
+offset_frame :=                # committed offset raw-сегмента
   magic        u32   "MTSP"
   mode         u8             # 0 = current, 1 = quiesce (финальный offset)
   device_type  str
@@ -514,9 +514,9 @@ offset_frame :=                # NEW: committed offset raw-сегмента
   segment      str            # имя/номер сегмента
   crc32        u32
 
-offset_reply :=                # NEW: ответ
+offset_reply :=                # ответ
   magic        u32   "MTSQ"
-  code         u8             # 0 = ok
+  code         u8             # 0 = ok; 1 = серия/сегмент не найдены
   committed    u64            # все байты до offset записаны в файл tmpfs
   final        u8             # 1 = после ответа новые записи не принимаются
   crc32        u32
@@ -528,6 +528,12 @@ meta_reply :=                  # ответ (cmd совпадает с запр�
   # cmd=2 (extremes):  found u8 | min i64 | max i64
   crc32        u32
 ```
+
+`mode=1` (quiesce) сначала блокирует новые `Write`, затем сливает очередь
+writer'а и только после этого возвращает `committed` с `final=1`. Блокировка
+держится до закрытия клиентского соединения: клиент обязан остановить raw
+(или закрыть соединение), после чего записи возобновляются. Если raw не
+остановлен, producers ждут — это и есть смысл quiesce.
 
 Мета-запросы читаются **из памяти** (по загруженным сегментам `Store.series`), без
 открытия и сканирования файлов: `list` — устройства с непустыми данными (пустые,
@@ -593,8 +599,9 @@ meta_reply :=                  # ответ (cmd совпадает с запр�
   `map` v1 / `kes` v1 / `mbms` v1..v32 (`docs/stat.md`) — `daemons/lib/tscontract`;
 - двоичные кадры `MTSW/MTSR/MTSA/MTSE` (+ ответ `MTSK`) и мета `MTSI`/`MTSO`
   (list/extremes), crc32, varint, `str` — `daemons/tsdb/wire.go`;
-- `MTSP/MTSQ` (quiesce/committed offset) — **проект, ещё не реализованы**;
-  требуются для `malina-arch`;
+- `MTSP/MTSQ` (quiesce/committed offset) — сервер и клиент реализованы;
+  `malina-arch` использует `mode=0` при живой записи и размер файла после
+  остановки raw;
 - режимы чтения `direction`/`limit` (страницы) + разреженный индекс и row-режим —
   `daemons/tsdb/store.go`, `daemons/tsdb/row.go`;
 - прореживание чтения `bucket` (§1.4/§9/§10) — «ближайшая к границе мини-окна» по времени

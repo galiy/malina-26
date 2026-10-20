@@ -18,6 +18,9 @@ const (
 	magicMetaReq   = 0x4953544D // "MTSI" — мета-запрос (list/extremes)
 	magicMetaReply = 0x4F53544D // "MTSO" — мета-ответ
 
+	magicOffsetReq   = 0x5053544D // "MTSP" — committed offset / quiesce
+	magicOffsetReply = 0x5153544D // "MTSQ" — ответ
+
 	maxFrame = 64 << 20
 )
 
@@ -169,6 +172,58 @@ func decodeReadReq(b []byte) (queryReq, error) {
 	q.Limit = binary.LittleEndian.Uint32(body[pos+1 : pos+5])
 	q.Bucket = binary.LittleEndian.Uint32(body[pos+5 : pos+9])
 	return q, nil
+}
+
+// --- committed offset / quiesce ---
+
+type offsetReq struct {
+	Mode    uint8 // 0 = current, 1 = quiesce (финальный)
+	Type    string
+	ID      string
+	Segment string
+}
+
+// offset_frame := magic u32 | mode u8 | type str | id str | segment str | crc32
+func decodeOffsetReq(b []byte) (offsetReq, error) {
+	var q offsetReq
+	if len(b) < 4+1+4 || binary.LittleEndian.Uint32(b[0:4]) != magicOffsetReq || !checkCRC(b) {
+		return q, errWire
+	}
+	body := b[:len(b)-4]
+	pos := 4
+	q.Mode = body[pos]
+	pos++
+	var err error
+	if q.Type, pos, err = readStrAt(body, pos); err != nil {
+		return q, errWire
+	}
+	if q.ID, pos, err = readStrAt(body, pos); err != nil {
+		return q, errWire
+	}
+	if q.Segment, pos, err = readStrAt(body, pos); err != nil {
+		return q, errWire
+	}
+	if pos != len(body) {
+		return q, errWire
+	}
+	if q.Mode > 1 {
+		return q, errWire
+	}
+	return q, nil
+}
+
+// offset_reply := magic u32 | code u8 | committed u64 | final u8 | crc32
+func encodeOffsetReply(code uint8, committed uint64, final bool) []byte {
+	b := make([]byte, 0, 18)
+	b = binary.LittleEndian.AppendUint32(b, magicOffsetReply)
+	b = append(b, code)
+	b = binary.LittleEndian.AppendUint64(b, committed)
+	if final {
+		b = append(b, 1)
+	} else {
+		b = append(b, 0)
+	}
+	return finish(b)
 }
 
 // --- мета (list / extremes) ---

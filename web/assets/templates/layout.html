@@ -47,11 +47,12 @@
           <a href="/grid/settings" class="{{if eq .Active "grid_settings"}}active{{end}}">{{index .T "menu.grid_settings"}}</a>
         </div>
       </div>
-      <div class="navitem dropdown {{if eq .Active "stats"}}active{{end}}">
+      <div class="navitem dropdown {{if or (eq .Active "stats") (eq .Active "stats_settings")}}active{{end}}">
         <span class="navlink">{{index .T "menu.stats"}} <span class="caret">▾</span></span>
         <div class="dropdown-menu">
           <a href="/stats/charts">{{index .T "menu.charts"}}</a>
           <a href="/stats/tables">{{index .T "menu.agg"}}</a>
+          <a href="/stats/settings" class="{{if eq .Active "stats_settings"}}active{{end}}">{{index .T "menu.stats_settings"}}</a>
         </div>
       </div>
       <div class="navitem dropdown {{if or (eq .Active "master") (eq .Active "master_settings")}}active{{end}}">

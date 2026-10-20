@@ -1620,3 +1620,6 @@ body.help-open { overflow: hidden; }
   #settingsStatus .nettable th,
   #settingsStatus .nettable td { display: table-cell; white-space: nowrap; }
 }
+
+/* Настройки резервного копирования: скрытые target/протокол-блоки. */
+.arch-net[hidden], .arch-flash[hidden], tr.arch-sftp[hidden], tr.arch-smb[hidden] { display: none !important; }

@@ -47,3 +47,4 @@
 
 - [Native API：lists, raws](api-native.md) — 令牌、设备列表、原始数据、写入与统计。
 - [Legacy API](api-legacy.md) — 全部旧 API：`read_json.php`、`read_memory.php`、`check_daemons.php`、`read_bms.php`、`read_sec.php`，通过 `write_*` 写入。
+- [备份设置](pages/stats-settings.md)
