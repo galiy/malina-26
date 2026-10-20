@@ -205,13 +205,20 @@ $SUDO install -D -o root -g root -m0755 "$SRC/daemons/bms-reader/dist/bms-reader
 $SUDO install -D -o root -g root -m0755 "$SRC/daemons/bms-proxy/dist/bms-proxy-armv7" "$MALM/usr/local/sbin/bms-proxy"
 $SUDO install -D -o root -g root -m0755 "$SRC/daemons/grid-reader/dist/grid-reader-armv7" "$MALM/usr/local/sbin/grid-reader"
 
-# --- 2.9 веб-ассеты (на /malina) ---
-log "веб-ассеты"
+# --- 2.9 веб-ассеты и manuals (на /malina) ---
+log "веб-ассеты и manuals"
 $SUDO rm -rf "$MALM/usr/local/share/malina/web"
 $SUDO mkdir -p "$MALM/usr/local/share/malina/web"
 $SUDO cp -a "$SRC/web/assets/templates" "$SRC/web/assets/static" "$SRC/web/assets/i18n" "$MALM/usr/local/share/malina/web/"
 $SUDO find "$MALM/usr/local/share/malina/web" -type d -exec chmod 0755 {} +
 $SUDO find "$MALM/usr/local/share/malina/web" -type f -exec chmod 0644 {} +
+# Без manuals кнопка «?» отдаёт 404: это не веб-ассеты, а отдельный
+# каталог документации, который web ищет в /malina/usr/local/share/malina/manuals.
+$SUDO rm -rf "$MALM/usr/local/share/malina/manuals"
+$SUDO install -d -m0755 "$MALM/usr/local/share/malina/manuals"
+$SUDO cp -a "$SRC/manuals/." "$MALM/usr/local/share/malina/manuals/"
+$SUDO find "$MALM/usr/local/share/malina/manuals" -type d -exec chmod 0755 {} +
+$SUDO find "$MALM/usr/local/share/malina/manuals" -type f -exec chmod 0644 {} +
 
 # --- 2.10 pamcheck (chroot+qemu, gcc из образа) ---
 log "сборка pamcheck (armhf, chroot+qemu)"
@@ -286,6 +293,7 @@ echo "[verify] fstab: malina=$(grep -c 'LABEL=malina' "$ROOTM/etc/fstab") dhcp=$
 echo "[verify] /malina binaries: $(ls "$MALM/usr/local/bin" "$MALM/usr/local/sbin" 2>/dev/null | grep -cE 'malina-web|malina-netd|map-reader|kes-reader|bms-reader|bms-proxy|malina-tsdb|grid-reader')/8"
 echo "[verify] rootfs /usr/local пусто: $(find "$ROOTM/usr/local/bin" "$ROOTM/usr/local/sbin" -type f 2>/dev/null | wc -l)"
 echo "[verify] assets: $(find "$MALM/usr/local/share/malina/web" -type f 2>/dev/null | wc -l)"
+echo "[verify] manuals: $(find "$MALM/usr/local/share/malina/manuals" -type f 2>/dev/null | wc -l) files, help=$([ -f "$MALM/usr/local/share/malina/manuals/pages/grid.md" ] && echo ok || echo MISSING)"
 $SUDO umount "$MALM" "$ROOTM"
 [ -n "$LOOP" ] && { $SUDO losetup -d "$LOOP"; LOOP=""; }
 

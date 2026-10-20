@@ -29,7 +29,8 @@
    - установка артефактов по `deploy/manifest.tsv`;
    - бинарники `malina-web`, `malina-netd`, `map/kes/bms-reader`, `bms-proxy`, `grid-reader`,
      `malina-tsdb`, `malina-pamcheck`;
-   - веб-ассеты, seed-конфиги сети, симлинки, включение юнитов.
+   - веб-ассеты и `manuals/` (встроенная справка), seed-конфиги сети,
+     симлинки, включение юнитов.
    Кастомные артефакты (бинарники/юниты/ассеты) **в образ не запекаются** —
    ставятся из репо (`deploy/local/deploy-local.sh` / `deploy/deploy.sh --first-run`).
 

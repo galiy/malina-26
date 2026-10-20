@@ -179,15 +179,24 @@ install -D -o root -g root -m0755 daemons/bms-proxy/dist/bms-proxy-armv7  $ROOT/
 install -D -o root -g root -m0755 daemons/tsdb/dist/malina-tsdb-armv7        $ROOT/usr/local/sbin/malina-tsdb
 ```
 
-**2.9. Веб-ассеты (на /malina, root:root):**
+**2.9. Веб-ассеты и manuals (на /malina, root:root):**
 ```
 rm -rf $MAL/usr/local/share/malina/web
 mkdir -p $MAL/usr/local/share/malina/web
 cp -a web/assets/templates web/assets/static web/assets/i18n $MAL/usr/local/share/malina/web/
 find $MAL/usr/local/share/malina/web -type d -exec chmod 0755 {} +
 find $MAL/usr/local/share/malina/web -type f -exec chmod 0644 {} +
+
+rm -rf $MAL/usr/local/share/malina/manuals
+install -d -m0755 $MAL/usr/local/share/malina/manuals
+cp -a manuals/. $MAL/usr/local/share/malina/manuals/
+find $MAL/usr/local/share/malina/manuals -type d -exec chmod 0755 {} +
+find $MAL/usr/local/share/malina/manuals -type f -exec chmod 0644 {} +
 chown -R root:root $MAL/usr/local
 ```
+
+`manuals/` обязателен: `malina-web` ищет справку в
+`/malina/usr/local/share/malina/manuals`; без каталога `/help?doc=…` отдаёт 404.
 
 **2.10. PAM-хелпер (armhf) — компиляция в chroot образа (qemu):**
 ```
@@ -228,7 +237,7 @@ umount $MAL $ROOT   # (для loop: losetup -d)
 find $ROOT/etc $ROOT/usr $MAL/usr -not -user root -printf '%u %p\n' | head
 # ключевые файлы и режимы
 ls -l $ROOT/etc/systemd/system/malina-*.service $ROOT/usr/local/bin/malina-web $ROOT/usr/local/sbin/{map-reader,kes-reader,bms-reader,bms-proxy,malina-netd}
-ls -l $MAL/etc/malina/network $MAL/usr/local/share/malina/web | head
+ls -l $MAL/etc/malina/network $MAL/usr/local/share/malina/web $MAL/usr/local/share/malina/manuals | head
 readlink $ROOT/root $ROOT/home $ROOT/etc/wpa_supplicant $ROOT/etc/resolv.conf
 grep malina $ROOT/etc/fstab
 ```
@@ -506,12 +515,14 @@ ssh malina@<ip> 'sudo mount -o remount,rw / && \
   sudo install -m0755 /tmp/malina-web /malina/usr/local/bin/malina-web && \
   sudo install -m0644 /tmp/malina-web.service /etc/systemd/system/malina-web.service && \
   sudo cp -a /tmp/web-assets/* /malina/usr/local/share/malina/web/ && \
+  sudo rm -rf /malina/usr/local/share/malina/manuals && sudo cp -a manuals/. /malina/usr/local/share/malina/manuals/ && \
   sudo systemctl daemon-reload && sudo systemctl restart malina-web && \
   sudo mount -o remount,ro /'
 ```
 
 Для ассетов аналогично копируется содержимое `web/assets/{templates,static,i18n}` в
-`/malina/usr/local/share/malina/web/`. Root-файлы требуют rw-окна (`mount -o
+`/malina/usr/local/share/malina/web/`, а `manuals/` — в
+`/malina/usr/local/share/malina/manuals/`. Root-файлы требуют rw-окна (`mount -o
 remount,rw /` … `remount,ro`), каталог `/malina` — уже rw.
 
 ## Настройки reader-демонов (map/kes/bms-reader)
