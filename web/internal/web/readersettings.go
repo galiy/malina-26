@@ -90,23 +90,40 @@ func (s *Server) readerSettings(w http.ResponseWriter, r *http.Request, prefix, 
 	data["Levels"] = bmsProxyLevels
 	data["Enabled"] = c.Enabled
 	data["Level"] = c.LogLevel
+	if prefix == "map" {
+		// Синхронизация времени МАП живёт на странице настройки МАП.
+		data["MapTimeSyncEnabled"] = timeSyncEnabled(s.opts.MapTimeSyncOff)
+	}
 
 	if r.Method == http.MethodPost {
 		_ = r.ParseForm()
 		en := r.Form.Get(prefix+"_enabled") == "on"
 		lv, ok := normalizeBmsProxyLevel(r.Form.Get(prefix + "_log_level"))
-		if !ok {
+		ms := r.Form.Get(prefix+"_maptime_enabled") == "on"
+		saved := false
+		switch {
+		case !ok:
 			data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_level")
-		} else if err := saveReaderCfg(cfgPath, readerCfg{Enabled: en, LogLevel: lv}); err != nil {
-			data["Err"] = err.Error()
-		} else {
-			_, _ = controlCall(sock, []byte(`{"cmd":"reload"}`))
+		case prefix == "map" && setTimeSyncEnabled(s.opts.MapTimeSyncOff, ms) != nil:
+			data["Err"] = s.tr(s.lang(r), "sys.err.maptime")
+		default:
+			if err := saveReaderCfg(cfgPath, readerCfg{Enabled: en, LogLevel: lv}); err != nil {
+				data["Err"] = err.Error()
+			} else {
+				_, _ = controlCall(sock, []byte(`{"cmd":"reload"}`))
+				saved = true
+			}
+		}
+		if saved {
 			http.Redirect(w, r, r.URL.Path+"?ok=1", http.StatusSeeOther)
 			return
 		}
 		data["Enabled"] = en
 		data["Level"] = lv
-	} else if r.URL.Query().Get("ok") != "" {
+		if prefix == "map" {
+			data["MapTimeSyncEnabled"] = ms
+		}
+	} else if qo := r.URL.Query().Get("ok"); qo != "" {
 		data["Ok"] = s.tr(s.lang(r), "bms.saved")
 	}
 	s.render(w, http.StatusOK, active, data)

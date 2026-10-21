@@ -8,12 +8,14 @@ The page opens from the “System → System parameters” menu. The page title 
 
 - You need to change the web admin and SSH password.
 - You need to rename the device or change the timezone.
-- You need to set up log forwarding, MAP time sync, statistics accumulation, or monitoring.
+- You need to set up log forwarding or monitoring.
 - You need to reboot or shut down the device.
 
 ## What you will see
 
-Cards with settings: hostname and timezone, log forwarding, MAP time sync, statistics accumulation, monitoring, change password, and power management. Changes are saved separately by each card.
+Cards with settings: hostname and timezone, log forwarding, monitoring, change password, and power management. Changes are saved separately by each card.
+
+MAP time sync has been moved to the “MAP settings” page, and statistics accumulation (telemetry accumulator) — to the “Statistics settings” page.
 
 ## How to change the name and timezone
 
@@ -27,23 +29,6 @@ The address by the name `malina.local` is not guaranteed — use the IP.
 Specify a **remote syslog host** — a host name or IP. The port is not specified. An empty field means the address is taken automatically from the network (DHCP).
 
 1. Enter the address.
-2. Press “Save”.
-
-## How to enable MAP time sync
-
-The switch enables comparing the MAP clock with the device. The comparison runs every 10 minutes; the time is corrected only if the difference is greater than a minute.
-
-1. Check “Enable MAP time synchronization”.
-2. Press “Save”.
-
-## How to set up statistics accumulation
-
-- **Enable averaging** — write an averaged history.
-- **Averaging period (min)** — 1, 2, 3, 4, 5, 6, or 10 minutes. 5 is the default.
-
-If averaging is disabled, detailed data keeps being written, but the averaged history is not updated.
-
-1. Choose a period.
 2. Press “Save”.
 
 ## How to enable monitoring
@@ -83,8 +68,6 @@ Both actions require a confirmation.
 - After saving a success message appears and the value stays in the field.
 - The hostname and timezone apply immediately.
 - Log forwarding: entries appear on the syslog server.
-- MAP time sync: within 10 minutes the MAP time matches the device time.
-- Statistics: new averaged rows appear in “Statistics → Tables”.
 - Monitoring: when enabled, the external receiver gets periodic notifications.
 
 ## If it did not work
@@ -92,16 +75,16 @@ Both actions require a confirmation.
 - **“Invalid hostname”** — remove invalid characters, spaces, and hyphens at the edges.
 - **“Invalid time zone”** — choose a value from the list.
 - **“Invalid remote syslog host”** — check the address format.
-- **The statistics period does not save** — only 1, 2, 3, 4, 5, 6, and 10 minutes are allowed.
 - **Monitoring does not save** — check the IPv4 address and the 30–3600 second period.
 - **“Password too short (min 4)”** — minimum 4 characters.
 - **“Passwords do not match”** — enter the same password in both fields.
 - **Signed out after changing the password** — this is normal, sign in with the new password.
-- **The MAP time does not change** — check that synchronization is enabled, the MAP is reachable, and the device time and timezone are correct; wait up to 10 minutes.
 
 ## Related
 
 - [Table of contents](../README.md)
 - [Network settings](network.md)
+- [MAP settings](map-settings.md)
+- [Statistics settings](stats-settings.md)
 - [Administrator manual](../admin.md)
 - [Statistics: charts](stats-charts.md)

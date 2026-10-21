@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/galiy/malina-26/web/internal/accumulator"
 )
 
 type archNetwork struct {
@@ -405,6 +407,11 @@ func (s *Server) handleStatsSettings(w http.ResponseWriter, r *http.Request) {
 	data["Cfg"] = cfg
 	data["Status"] = archCallTimeout(s.opts.ArchControlSock, map[string]any{"cmd": "status"}, 3*time.Second)
 	data["FlashCandidates"] = flashCandidates()
+	// Аккумулятор телеметрии (усреднение) живёт на странице настройки статистики.
+	acc := accumulator.Load(s.opts.AccConfigPath)
+	data["AccEnabled"] = acc.Enabled
+	data["AccPeriod"] = acc.PeriodMin
+	data["AccPeriods"] = []int{1, 2, 3, 4, 5, 6, 10}
 	data["Ok"] = r.URL.Query().Get("ok")
 	data["Err"] = r.URL.Query().Get("err")
 	data["ErrText"] = r.URL.Query().Get("why")

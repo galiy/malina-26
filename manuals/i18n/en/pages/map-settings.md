@@ -7,6 +7,7 @@
 - The MAP is not displayed or data is not refreshing — you need to check whether polling is enabled.
 - You need to temporarily disable MAP polling.
 - You need to raise the log verbosity for diagnostics.
+- You need to enable or disable MAP time sync.
 
 ## What you will see
 
@@ -32,11 +33,19 @@ Choose a level and save:
 
 “Info” is used by default. It is worth enabling a detailed level temporarily: it fills the log faster.
 
+## How to enable MAP time sync
+
+The switch enables comparing the MAP clock with the device clock. The comparison runs every 10 minutes; the time is corrected only if the difference is greater than a minute.
+
+1. Check “Enable MAP time synchronization”.
+2. Press “Save”.
+
 ## How to check it applied
 
 - After saving a success message appears.
 - The settings apply immediately, without restarting the service.
 - In the status card the MAP state should remain “OK” and the last success time should keep updating.
+- MAP time sync: within 10 minutes the MAP time matches the device time.
 
 ## If it did not work
 
@@ -44,6 +53,7 @@ Choose a level and save:
 - **The card shows “No data / polling disabled”** — enable polling and save.
 - **The MAP shows “No connection”** — check the cable, power, and port; if necessary, contact the administrator.
 - **“Invalid log level”** — choose a value from the list.
+- **The MAP time does not change** — check that synchronization is enabled, the MAP is reachable, and the device time and timezone are correct; wait up to 10 minutes.
 
 ## Related
 

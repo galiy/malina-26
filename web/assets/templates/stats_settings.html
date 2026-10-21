@@ -1,6 +1,24 @@
 {{define "content"}}
 <div class="page-head page-head-left"><h1>{{index .T "stats.settings_title"}}</h1></div>
 
+<section class="card" aria-labelledby="sec-acc">
+  <h2 id="sec-acc">{{index .T "sys.acc"}}</h2>
+  <form method="post" action="/system/accumulator">
+    <table class="nettable"><tbody>
+      <tr><td><label for="acc_enabled">{{index .T "sys.acc_enable"}}</label></td><td><input id="acc_enabled" type="checkbox" name="enabled" value="1"{{if .AccEnabled}} checked{{end}}></td></tr>
+      <tr><td><label for="acc_period">{{index .T "sys.acc_period"}}</label></td><td>
+        <select id="acc_period" name="period">
+          {{range .AccPeriods}}<option value="{{.}}"{{if eq . $.AccPeriod}} selected{{end}}>{{.}}</option>{{end}}
+        </select></td></tr>
+      <tr><td colspan="2" class="muted">{{index .T "sys.acc_hint"}}</td></tr>
+    </tbody></table>
+    <div class="head-actions end">
+      <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
+      <button type="submit">{{index .T "sys.save"}}</button>
+    </div>
+  </form>
+</section>
+
 <section class="card">
   <h2>{{index .T "arch.title"}}</h2>
   <form method="post" action="/stats/settings">
@@ -51,8 +69,8 @@
   </form>
 </section>
 
-{{if .Ok}}<div class="flash ok">{{if eq .Ok "test"}}{{index .T "arch.test_ok"}}: raw — {{if .RawArchive}}{{index .T "arch.yes"}}{{else}}{{index .T "arch.no"}}{{end}}, avg — {{if .AvgArchive}}{{index .T "arch.yes"}}{{else}}{{index .T "arch.no"}}{{end}}{{else if eq .Ok "save"}}{{index .T "stats.settings_saved"}}{{else if eq .Ok "enabled"}}{{index .T "arch.enabled_ok"}}{{else if eq .Ok "continued"}}{{index .T "arch.enabled_continued"}}{{else if eq .Ok "need_restore"}}{{index .T "arch.need_restore"}}{{else}}{{index .T "arch.action_done"}}{{end}}</div>{{end}}
-{{if .Err}}<div class="flash err">{{if eq .Err "test"}}{{index .T "arch.test_error"}}{{if .ErrText}}: {{.ErrText}}{{end}}{{else if eq .Err "protocol_password"}}{{index .T "arch.protocol_password"}}{{else if eq .Err "ctrl"}}{{index .T "stats.settings_error"}}{{if .ErrText}}: {{.ErrText}}{{end}}{{else}}{{index .T "stats.settings_error"}}{{$v := .ErrText}}{{if $v}}: {{$v}}{{end}}{{end}}</div>{{end}}
+{{if .Ok}}<div class="flash ok">{{if eq .Ok "test"}}{{index .T "arch.test_ok"}}: raw — {{if .RawArchive}}{{index .T "arch.yes"}}{{else}}{{index .T "arch.no"}}{{end}}, avg — {{if .AvgArchive}}{{index .T "arch.yes"}}{{else}}{{index .T "arch.no"}}{{end}}{{else if eq .Ok "save"}}{{index .T "stats.settings_saved"}}{{else if eq .Ok "enabled"}}{{index .T "arch.enabled_ok"}}{{else if eq .Ok "continued"}}{{index .T "arch.enabled_continued"}}{{else if eq .Ok "need_restore"}}{{index .T "arch.need_restore"}}{{else if eq .Ok "acc"}}{{index .T "sys.msg.acc_ok"}}{{else}}{{index .T "arch.action_done"}}{{end}}</div>{{end}}
+{{if .Err}}<div class="flash err">{{if eq .Err "test"}}{{index .T "arch.test_error"}}{{if .ErrText}}: {{.ErrText}}{{end}}{{else if eq .Err "protocol_password"}}{{index .T "arch.protocol_password"}}{{else if eq .Err "acc"}}{{index .T "sys.err.acc"}}{{else if eq .Err "ctrl"}}{{index .T "stats.settings_error"}}{{if .ErrText}}: {{.ErrText}}{{end}}{{else}}{{index .T "stats.settings_error"}}{{$v := .ErrText}}{{if $v}}: {{$v}}{{end}}{{end}}</div>{{end}}
 
 <section class="card">
   <h2>{{index .T "arch.status"}}</h2>
@@ -86,5 +104,6 @@
   </details>
   {{end}}
 </section>
+
 <script src="{{asset "arch_settings.js"}}"></script>
 {{end}}

@@ -158,12 +158,7 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	data["Timezone"] = sysctl.CurrentTimezone()
 	data["Timezones"] = sysctl.ListTimezones()
 	data["RemoteSyslog"] = sysctl.RemoteSyslogSetting()
-	data["MapTimeSyncEnabled"] = timeSyncEnabled(s.opts.MapTimeSyncOff)
 	data["Monitoring"] = loadMonitoringConfigPath(s.opts.SNMPMonitoring)
-	acc := accumulator.Load(s.opts.AccConfigPath)
-	data["AccEnabled"] = acc.Enabled
-	data["AccPeriod"] = acc.PeriodMin
-	data["AccPeriods"] = []int{1, 2, 3, 4, 5, 6, 10}
 	lang := s.lang(r)
 	if ok := r.URL.Query().Get("ok"); ok != "" {
 		data["Ok"] = s.tr(lang, "sys.msg."+ok+"_ok")
@@ -176,6 +171,11 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) redirectSystem(w http.ResponseWriter, r *http.Request, key string) {
 	http.Redirect(w, r, "/system?"+key, http.StatusSeeOther)
+}
+
+// redirectMapSettings — возврат на «Настройка МАП» после сохранения.
+func (s *Server) redirectMapSettings(w http.ResponseWriter, r *http.Request, key string) {
+	http.Redirect(w, r, "/map/settings?"+key, http.StatusSeeOther)
 }
 
 // timeSyncEnabled — включена ли синхронизация времени МАП (нет флаг-файла).
@@ -198,7 +198,8 @@ func setTimeSyncEnabled(offPath string, enabled bool) error {
 	return os.WriteFile(offPath, []byte("off\n"), 0o644)
 }
 
-// handleSystemMapTimeSync — переключатель синхронизации времени МАП («Параметры системы»).
+// handleSystemMapTimeSync — переключатель синхронизации времени МАП
+// (настройки МАП, «Настройка МАП»).
 func (s *Server) handleSystemMapTimeSync(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
@@ -210,15 +211,16 @@ func (s *Server) handleSystemMapTimeSync(w http.ResponseWriter, r *http.Request)
 	_ = r.ParseForm()
 	enabled := r.FormValue("enabled") == "1"
 	if err := setTimeSyncEnabled(s.opts.MapTimeSyncOff, enabled); err != nil {
-		s.audit.Event("system_settings", map[string]any{"what": "maptime", "result": "err", "ip": clientIP(r)})
-		s.redirectSystem(w, r, "err=maptime")
+		s.audit.Event("map_settings", map[string]any{"what": "maptime", "result": "err", "ip": clientIP(r)})
+		s.redirectMapSettings(w, r, "err=maptime")
 		return
 	}
-	s.audit.Event("system_settings", map[string]any{"what": "maptime", "enabled": enabled, "result": "ok", "ip": clientIP(r)})
-	s.redirectSystem(w, r, "ok=maptime")
+	s.audit.Event("map_settings", map[string]any{"what": "maptime", "enabled": enabled, "result": "ok", "ip": clientIP(r)})
+	s.redirectMapSettings(w, r, "ok=maptime")
 }
 
-// handleSystemAccumulator — настройка аккумулятора (период/вкл) — «Параметры системы».
+// handleSystemAccumulator — настройка аккумулятора телеметрии (период/вкл) —
+// «Настройки статистики».
 func (s *Server) handleSystemAccumulator(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
@@ -231,16 +233,16 @@ func (s *Server) handleSystemAccumulator(w http.ResponseWriter, r *http.Request)
 	period, _ := strconv.Atoi(r.FormValue("period"))
 	cfg := accumulator.Config{Enabled: r.FormValue("enabled") == "1", PeriodMin: period}
 	if !accumulator.ValidatePeriod(cfg.PeriodMin) {
-		s.redirectSystem(w, r, "err=acc")
+		s.redirectStatsSettings(w, r, "err=acc")
 		return
 	}
 	if err := accumulator.Save(s.opts.AccConfigPath, cfg); err != nil {
-		s.audit.Event("system_settings", map[string]any{"what": "acc", "result": "err", "ip": clientIP(r)})
-		s.redirectSystem(w, r, "err=acc")
+		s.audit.Event("stats_settings", map[string]any{"what": "acc", "result": "err", "ip": clientIP(r)})
+		s.redirectStatsSettings(w, r, "err=acc")
 		return
 	}
-	s.audit.Event("system_settings", map[string]any{"what": "acc", "enabled": cfg.Enabled, "period": cfg.PeriodMin, "result": "ok", "ip": clientIP(r)})
-	s.redirectSystem(w, r, "ok=acc")
+	s.audit.Event("stats_settings", map[string]any{"what": "acc", "enabled": cfg.Enabled, "period": cfg.PeriodMin, "result": "ok", "ip": clientIP(r)})
+	s.redirectStatsSettings(w, r, "ok=acc")
 }
 
 // handleSystemHost — общая «хост»-настройка: имя хоста + часовой пояс.

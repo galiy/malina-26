@@ -5,15 +5,18 @@ The **Statistics → Settings** page manages backup of the telemetry database. A
 ## When to use this page
 
 - You need to save the measurement history to a network drive or a flash drive.
+- You need to set up statistics accumulation (telemetry averaging).
 - After a reinstall you need to bring back the accumulated data.
 - You need to check that the backup is actually running.
 - You need to temporarily disable the backup without deleting the archive already made.
 
 ## What you will see
 
-A **Database backup** card and a status card.
+A **Database backup** card, a **Telemetry accumulator** card, and a status card.
 
-In the settings:
+The “Telemetry accumulator” card controls averaging of raw data into the long-term history — see “How to set up statistics accumulation”.
+
+In the backup settings:
 
 - the backup toggle (shows whether backup is currently enabled);
 - destination selection: **network share** or **flash drive**;
@@ -25,6 +28,18 @@ Fields that do not apply to the chosen destination or protocol are hidden. If th
 The password is shown only while typing. After saving it is not displayed; an empty field means "leave empty to keep the previous password".
 
 The status card shows: whether backup is enabled, the current phase, the archive session ID, the time of the last backup of detailed and averaged data, the archive size, progress, and the last error.
+
+## How to set up statistics accumulation
+
+The “Telemetry accumulator” card controls averaging of raw measurements into the long-term history.
+
+- **Enable averaging** — write an averaged history.
+- **Averaging period (min)** — 1, 2, 3, 4, 5, 6, or 10 minutes. 5 is the default.
+
+If averaging is disabled, detailed data keeps being written, but the averaged history is not updated.
+
+1. Check “Enable averaging” and choose a period.
+2. Press “Save”.
 
 ## How to set up a network archive
 
@@ -68,6 +83,7 @@ Click **Disable**. The backup and archive trimming will stop, the service stays 
 - The time of the last averaged-data backup is updating at the selected interval.
 - The archive size is growing or stays stable.
 - After testing access, archives appear as found.
+- Statistics accumulation: new averaged rows appear in “Statistics → Tables”.
 
 ## If it does not work
 
@@ -80,6 +96,7 @@ Click **Disable**. The backup and archive trimming will stop, the service stays 
 - **The restore takes long** — do not turn off the device. Wait for it to finish or click "Cancel restore".
 - **"No segments to copy"** — the averaged database has not accumulated data yet. This is not an error; a copy will appear later.
 - **The flash drive is not in the list** — check that it is an external drive and not the system card, and that it is formatted.
+- **The statistics accumulation period does not save** — only 1, 2, 3, 4, 5, 6, and 10 minutes are allowed.
 
 ## Related
 
