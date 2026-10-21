@@ -15,10 +15,13 @@ var ErrNotManaged = errors.New("unit not managed")
 // ErrBadAction — недопустимое действие.
 var ErrBadAction = errors.New("bad action")
 
-// managedUnits — службы/таймеры, доступные в UI (просмотр и start/stop).
-// Управление ограничено только этим списком.
+// managedUnits — службы/таймеры «Малины», доступные в UI (просмотр и start/stop).
+// Сюда входит только собственный стек «Малины» (сеть, web, демоны сбора).
+// Системные службы ОС (ssh, cron, rsyslog, systemd-timesyncd и т.п.) на этой
+// вкладке не показываются — они попадают в «Системные» (только статус).
 var managedUnits = []string{
 	"malina-net.service",
+	"malina-net-wifi.service",
 	"malina-hostapd.service",
 	"malina-dnsmasq.service",
 	"malina-wpa.service",
@@ -29,10 +32,14 @@ var managedUnits = []string{
 	"malina-web.service",
 	"dhclient-eth0.service",
 	"malina-dhclient-wlan0.service",
-	"systemd-timesyncd.service",
-	"rsyslog.service",
-	"ssh.service",
-	"cron.service",
+	"map-reader.service",
+	"kes-reader.service",
+	"malina-bms-reader.service",
+	"malina-bms-proxy.service",
+	"malina-grid-reader.service",
+	"malina-tsdb.service",
+	"malina-tsdb-raw.service",
+	"malina-arch.service",
 }
 
 // Service — состояние systemd-unit-а для UI.
@@ -49,11 +56,6 @@ type Service struct {
 // svcNotes — комментарии к управляемым unit-ам (ключ нужен, чтобы текст
 // локализовался на клиенте).
 var svcNotes = map[string]string{
-	// Критичные для ОС — не останавливать.
-	"ssh.service":               "svc.note.critical",
-	"rsyslog.service":           "svc.note.critical",
-	"systemd-timesyncd.service": "svc.note.critical",
-	"cron.service":              "svc.note.critical",
 	// Ядро сети «Малины».
 	"malina-net.service": "svc.note.core",
 	// Сама веб-админка.
