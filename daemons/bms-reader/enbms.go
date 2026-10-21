@@ -22,16 +22,39 @@ func (enBMS) Speeds() []int  { return []int{19200} }
 // (устойчивость к помехам; arch §7/§10).
 func (enBMS) MissThreshold() int { return 3 }
 
+func (enBMS) MaxAddr() int { return enMaxADR }
+
 const enMaxADR = 15
+
+// Таймауты: опрос — по скорости порта (defTimeout/ioTimeout, arch §10),
+// проба отсутствующего адреса — 200 мс.
+const (
+	enPollTimeout  = 500 * time.Millisecond
+	enProbeTimeout = 200 * time.Millisecond
+)
 
 func u16be(b []byte, o int) uint16 { return binary.BigEndian.Uint16(b[o : o+2]) }
 
-// req — отправка запроса и чтение ответа; ADR ответа должен совпасть.
+// defTimeout — штатный таймаут опроса: зависит от скорости serial-порта
+// (arch §10), для TCP — 500 мс.
+func defTimeout(t Transport) time.Duration {
+	if x, ok := t.(interface{ DefaultTimeout() time.Duration }); ok {
+		return x.DefaultTimeout()
+	}
+	return enPollTimeout
+}
+
+// enReq — отправка запроса и чтение ответа с таймаутом опроса; ADR ответа
+// должен совпасть.
 func enReq(t Transport, adr int, cid2 byte, info []byte) (paceFrame, error) {
+	return enReqTimeout(t, adr, cid2, info, defTimeout(t))
+}
+
+func enReqTimeout(t Transport, adr int, cid2 byte, info []byte, to time.Duration) (paceFrame, error) {
 	if err := t.Write(buildPace(adr, cid2, info)); err != nil {
 		return paceFrame{}, err
 	}
-	f, err := readPace(t)
+	f, err := readPaceTimeout(t, to)
 	if err != nil {
 		return f, err
 	}
@@ -41,23 +64,38 @@ func enReq(t Transport, adr int, cid2 byte, info []byte) (paceFrame, error) {
 	return f, nil
 }
 
-// Probe — скан ADR 0..15 по SN (0xA4). docs/bms/enbms-rs485.md §3.
-func (enBMS) Probe(t Transport) (probeResult, error) {
+// Probe — проба кандидатов по SN (0xA4). docs/bms/enbms-rs485.md §3.
+//
+// candidates задаёт порядок обхода: весь диапазон 0..15 при поиске на новой
+// шине либо один адрес-дырку при рескане. До первого найденного устройства
+// промахи пропускаются (ищем первый ответивший адрес). После первого Found
+// обход прекращается на первом промахе — дырка/чужое устройство означает конец
+// непрерывного диапазона (arch §6.4). Таймаут пробы — 200 мс (arch §10).
+func (enBMS) Probe(t Transport, candidates []int) (probeResult, error) {
+	if len(candidates) == 0 {
+		return probeResult{Kind: probeNoAnswer}, nil
+	}
 	var slots []probeSlot
 	answeredNoSN := false
-	for adr := 0; adr <= enMaxADR; adr++ {
-		f, err := enReq(t, adr, 0xA4, nil)
-		if err != nil {
-			continue // нет ответа на этом ADR
-		}
-		if f.RTN != 0 {
-			answeredNoSN = true // PACE есть, но SN не отдаёт
+	for _, adr := range candidates {
+		if adr < 0 || adr > enMaxADR {
 			continue
+		}
+		f, err := enReqTimeout(t, adr, 0xA4, nil, enProbeTimeout)
+		if err != nil {
+			if len(slots) > 0 {
+				break // после первого Found — конец диапазона
+			}
+			continue // до первого Found — ищем дальше
 		}
 		sn := strings.TrimSpace(string(f.Info))
-		if len(sn) < 8 || !strings.HasPrefix(sn, "EMU") {
+		ok := f.RTN == 0 && len(sn) >= 8 && strings.HasPrefix(sn, "EMU")
+		if !ok {
 			answeredNoSN = true
-			continue
+			if len(slots) > 0 {
+				break // чужое/без SN на хвосте — конец диапазона
+			}
+			continue // на новой шине чужое устройство не мешает искать наше
 		}
 		slots = append(slots, probeSlot{Addr: adr, Base: sn})
 	}
@@ -76,11 +114,12 @@ func (enBMS) Poll(t Transport, adr int) (bmscontract.Telemetry, error) {
 	retried := false
 	f, err := enReq(t, adr, 0x42, nil)
 	if err != nil {
-		// ретрай один раз (arch §10: 2×500 мс)
+		// ретрай один раз (ещё один таймаут по скорости, arch §10)
 		retried = true
+		lx.Infof("enbms: adr=%d 0x42 не ответил, повтор", adr)
 		f, err = enReq(t, adr, 0x42, nil)
 		if err != nil {
-			lx.Debugf("enbms: adr=%d ошибка 0x42 (retry=%v): %v", adr, retried, err)
+			lx.Debugf("enbms: adr=%d 0x42 не ответил после ретрая: %v", adr, err)
 			return bmscontract.Telemetry{}, err
 		}
 	}

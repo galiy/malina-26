@@ -16,7 +16,7 @@ func TestDuplicateBaseSlots(t *testing.T) {
 	}
 	defer seg.Close()
 
-	o := newOrchestrator(&bmsShm{seg: seg}, nil, make(chan struct{}))
+	o := newOrchestrator(&bmsShm{seg: seg}, nil, make(chan struct{}), nil)
 	st := &srcState{
 		src: &source{desc: "serial:/dev/ttyUSB0", tr: &fakeTransport{}},
 		bt:  antBMS{},

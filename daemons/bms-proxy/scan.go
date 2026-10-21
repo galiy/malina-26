@@ -50,6 +50,8 @@ type portScanner struct {
 	stop    chan struct{}
 	mu      sync.Mutex
 	backoff map[uint64]time.Time
+	prefer  string // последний рабочий порт: пробуем его первым
+	baud    int    // скорость предыдущего прохода (для сброса банов)
 }
 
 func newPortScanner(stop chan struct{}) *portScanner {
@@ -59,10 +61,18 @@ func newPortScanner(stop chan struct{}) *portScanner {
 // findPort запускает один проход поиска на заданной скорости. Возвращает
 // открытый найденный порт либо nil, если за проход ничего не нашли.
 func (s *portScanner) findPort(baud int) *transport.Port {
+	s.beginScan(baud)
 	s.pruneBackoff()
 	busy := ports.BusyRdevs(os.Getpid())
 	// ports.ListPorts раскрывает glob-шаблоны и дедуплицирует кандидатов по rdev.
-	for _, path := range ports.ListPorts(scanPatterns()) {
+	paths := ports.ListPorts(scanPatterns())
+	s.mu.Lock()
+	pref := s.prefer
+	s.mu.Unlock()
+	// Последний рабочий порт — первым: смена baud применяется за один probe,
+	// а не после перебора всех ttyUSB.
+	paths = prioritize(paths, pref)
+	for _, path := range paths {
 		select {
 		case <-s.stop:
 			return nil
@@ -101,6 +111,47 @@ func (s *portScanner) findPort(baud int) *transport.Port {
 		s.setBackoff(rdev)
 	}
 	return nil
+}
+
+// beginScan фиксирует скорость прохода. При её смене старые промахи
+// недействительны — снимаем баны портов.
+func (s *portScanner) beginScan(baud int) {
+	s.mu.Lock()
+	if s.baud != 0 && s.baud != baud {
+		s.backoff = make(map[uint64]time.Time)
+	}
+	s.baud = baud
+	s.mu.Unlock()
+}
+
+// prioritize поднимает последний рабочий порт в начало списка кандидатов.
+func prioritize(paths []string, pref string) []string {
+	if pref == "" {
+		return paths
+	}
+	for i, p := range paths {
+		if p == pref {
+			copy(paths[1:i+1], paths[0:i])
+			paths[0] = pref
+			break
+		}
+	}
+	return paths
+}
+
+// setPrefer запоминает последний рабочий порт.
+func (s *portScanner) setPrefer(path string) {
+	s.mu.Lock()
+	s.prefer = path
+	s.mu.Unlock()
+}
+
+// clearBackoff снимает баны со всех портов: при смене baud старые промахи
+// недействительны.
+func (s *portScanner) clearBackoff() {
+	s.mu.Lock()
+	s.backoff = make(map[uint64]time.Time)
+	s.mu.Unlock()
 }
 
 func (s *portScanner) setBackoff(rdev uint64) {

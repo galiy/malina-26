@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"sync"
+	"time"
 
 	"github.com/galiy/malina-26/daemons/lib/shm"
 )
@@ -109,6 +110,28 @@ func (s *bmsShm) allocSlot(i int, gen uint64) {
 	defer s.mu.Unlock()
 	s.seg.Item(i).Clear()
 	s.seg.Slot(i).PrepareGen(gen)
+}
+
+// touchLastSeen обновляет только поле last_seen записи списка. Пишет пулер
+// сразу после успешного опроса, поэтому свежесть не зависит от очереди событий
+// и занятости цикла оркестратора. Остальные поля не трогаются (Publish меняет
+// лишь указанные байты под seqlock).
+func (s *bmsShm) touchLastSeen(i int, gen uint64, ts time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	it := s.seg.Item(i)
+	b := it.Bytes()
+	if binary.LittleEndian.Uint32(b[0:4]) != 1 { // слот не занят
+		return false
+	}
+	if binary.LittleEndian.Uint64(b[itOffGen:itOffGen+8]) != gen { // чужая генерация
+		return false
+	}
+	v := uint64(ts.Unix())
+	it.Publish(func(x []byte) {
+		binary.LittleEndian.PutUint64(x[itOffLastSeen:itOffLastSeen+8], v)
+	})
+	return true
 }
 
 // publishTelemetry публикует 107-Б payload в slot i, только если gen совпал.

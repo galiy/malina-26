@@ -125,17 +125,12 @@ func (u *udpListener) serve() {
 	}
 }
 
-// build собирает ответный кадр по запросу: мапит ADR на индекс живого списка
-// (addr_mode), читает свежий снимок shm и отдаёт SEPLOS INFO. nil — BMS нет.
+// build собирает ответный кадр по запросу: мапит ADR на стабильный слот shm
+// (addr_mode), читает свежий снимок и отдаёт SEPLOS INFO. nil — данных нет.
 func (u *udpListener) build(req *paceRequest) []byte {
 	s := u.d.settings()
-	idx := mapAddr(req.Adr, s.AddrMode)
-	shm := readShm(u.d.cfg.shmPath)
-	list := buildAliveList(shm, time.Now())
-	if idx < 0 || idx >= len(list) {
-		return nil
-	}
-	payload := readTelemetry(shm, list[idx].Slot, list[idx].Gen)
+	slot := mapAddr(req.Adr, s.AddrMode)
+	payload := readSlotTelemetry(readShm(u.d.cfg.shmPath), slot, time.Now())
 	if payload == nil || len(payload) < bmscontract.Size {
 		return nil
 	}

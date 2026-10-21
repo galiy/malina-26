@@ -20,6 +20,9 @@ func (antBMS) Speeds() []int  { return []int{19200} }
 // Запас нужен, т.к. Poll делает Flush и может отбросить кадр на границе.
 func (antBMS) MissThreshold() int { return 2 }
 
+// MaxAddr: пассивный тип без адресации — единственное устройство на порту.
+func (antBMS) MaxAddr() int { return 0 }
+
 // antMarker — заголовок live-кадра.
 var antMarker = []byte{0xAA, 0x55, 0xAA, 0xFF}
 
@@ -263,19 +266,27 @@ func antBase(f []byte) string {
 	return fmt.Sprintf("AntBMS-DSP-%d", capAh)
 }
 
-func (antBMS) Probe(t Transport) (probeResult, error) {
-	f, err := readAntFrame(t)
-	if err != nil {
-		return probeResult{Kind: probeNoAnswer}, nil
+// antProbeWindows — сколько окон по 500 мс слушаем пассивный поток при первичном
+// обнаружении. Один промах не должен отправлять порт в отстойник: кадры AntBMS
+// идут ~раз в секунду, одно 500-мс окно ловит их примерно через раз.
+const antProbeWindows = 3
+
+func (antBMS) Probe(t Transport, _ []int) (probeResult, error) {
+	for i := 0; i < antProbeWindows; i++ {
+		f, err := readAntFrame(t)
+		if err != nil {
+			continue
+		}
+		tel, err := parseAntFrame(f)
+		if err != nil {
+			continue
+		}
+		if err := validateAntCells(f, int(tel.CellCount)); err != nil {
+			continue
+		}
+		return probeResult{Kind: probeFound, Slots: []probeSlot{{Addr: 0, Base: antBase(f)}}}, nil
 	}
-	tel, err := parseAntFrame(f)
-	if err != nil {
-		return probeResult{Kind: probeNoAnswer}, nil
-	}
-	if err := validateAntCells(f, int(tel.CellCount)); err != nil {
-		return probeResult{Kind: probeNoAnswer}, nil
-	}
-	return probeResult{Kind: probeFound, Slots: []probeSlot{{Addr: 0, Base: antBase(f)}}}, nil
+	return probeResult{Kind: probeNoAnswer}, nil
 }
 
 func (antBMS) Poll(t Transport, _ int) (bmscontract.Telemetry, error) {

@@ -67,9 +67,10 @@ func TestBmsGatewaysPreserveFields(t *testing.T) {
 	}
 }
 
-// TestSaveBmsSettings — единое сохранение BMS-Reader + BMS-Proxy пишет оба файла
-// без потери полей (шлюзы, enabled/log_level, UDP enabled/addr).
-func TestSaveBmsSettings(t *testing.T) {
+// TestSaveBmsSettingsSeparate — приёмник и прокси пишутся раздельно:
+// запись одного файла не меняет второй. Reload живёт в обработчиках страницы
+// и здесь не проверяется.
+func TestSaveBmsSettingsSeparate(t *testing.T) {
 	dir := t.TempDir()
 	s := &Server{opts: Options{
 		BmsConfigPath:      filepath.Join(dir, "bms-reader.json"),
@@ -77,18 +78,37 @@ func TestSaveBmsSettings(t *testing.T) {
 	}}
 	cfg := bmsGatewaysFile{Enabled: true, LogLevel: "debug", Gateways: []bmsGateway{{Host: "192.0.2.1", Port: 502, Mode: "modbus"}}}
 	np := bmsProxyCfg{Enabled: true, Baud: 19200, LogLevel: "warn", AddrMode: "1-16", UDPEnabled: true, UDPListen: "0.0.0.0:502"}
-	if be, pe := s.saveBmsSettings(cfg, np); be != nil || pe != nil {
-		t.Fatalf("save errors: bms=%v proxy=%v", be, pe)
-	}
-	g, err := loadBmsGateways(s.bmsCfgPath())
-	if err != nil {
+	if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
 		t.Fatal(err)
 	}
-	if !g.Enabled || g.LogLevel != "debug" || len(g.Gateways) != 1 || g.Gateways[0].Host != "192.0.2.1" {
-		t.Fatalf("bms-reader потерял поля: %+v", g)
+	if err := saveBmsProxyCfg(s.bmsProxyCfgPath(), np); err != nil {
+		t.Fatal(err)
 	}
-	p := loadBmsProxyCfg(s.bmsProxyCfgPath())
-	if !p.Enabled || p.Baud != 19200 || p.LogLevel != "warn" || p.AddrMode != "1-16" || !p.UDPEnabled || p.UDPListen != "0.0.0.0:502" {
-		t.Fatalf("bms-proxy потерял поля: %+v", p)
+	proxyBefore, _ := os.ReadFile(s.bmsProxyCfgPath())
+
+	cfg.LogLevel = "info"
+	cfg.Gateways = nil
+	if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	proxyAfter, _ := os.ReadFile(s.bmsProxyCfgPath())
+	if string(proxyBefore) != string(proxyAfter) {
+		t.Fatal("сохранение приёмника изменило bms-proxy.json")
+	}
+
+	readerBefore, _ := os.ReadFile(s.bmsCfgPath())
+	np.Baud = 57600
+	if err := saveBmsProxyCfg(s.bmsProxyCfgPath(), np); err != nil {
+		t.Fatal(err)
+	}
+	readerAfter, _ := os.ReadFile(s.bmsCfgPath())
+	if string(readerBefore) != string(readerAfter) {
+		t.Fatal("сохранение прокси изменило bms-reader.json")
+	}
+	if p := loadBmsProxyCfg(s.bmsProxyCfgPath()); p.Baud != 57600 {
+		t.Fatalf("baud прокси: %d", p.Baud)
+	}
+	if g, err := loadBmsGateways(s.bmsCfgPath()); err != nil || g.LogLevel != "info" || len(g.Gateways) != 0 {
+		t.Fatalf("приёмник: %+v, err=%v", g, err)
 	}
 }

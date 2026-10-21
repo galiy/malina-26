@@ -76,7 +76,7 @@ func TestEnBmsE2E(t *testing.T) {
 	}
 	defer tr.Close()
 
-	res, err := enBMS{}.Probe(tr)
+	res, err := enBMS{}.Probe(tr, allCandidates(enBMS{}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,7 +18,7 @@ import (
 //
 //	C — выключен (enabled=false): длинный сон, ждёт reload (docs/bms-proxy.md §8);
 //	A — поиск порта (docs/bms-proxy.md §6);
-//	B — обновление списка живых BMS + горутина-слушатель (docs/bms-proxy.md §7).
+//	B — слушатель порта и ответ по стабильному слоту (docs/bms-proxy.md §7).
 func main() {
 	log.SetPrefix("bms-proxy: ")
 	log.SetFlags(log.LstdFlags)
@@ -58,8 +58,7 @@ func main() {
 	ctl := &control{stop: stop, reload: reload}
 	go ctl.serve()
 
-	sh := &shared{}
-	d := &daemon{cfg: cfg, stop: stop, reload: reload, sh: sh, sc: newPortScanner(stop), udp: &udpManager{}}
+	d := &daemon{cfg: cfg, stop: stop, reload: reload, sc: newPortScanner(stop), udp: &udpManager{}}
 
 	// Второй слушатель — UDP: включается настройкой `udp_enabled` + адрес `udp_listen`
 	// (по умолчанию выключен). Независим от COM/состояний (docs/bms-proxy.md §7а).
@@ -77,7 +76,6 @@ type daemon struct {
 	cfg    *config
 	stop   chan struct{}
 	reload chan struct{}
-	sh     *shared
 	sc     *portScanner
 	udp    *udpManager
 	port   *transport.Port // найденный порт (состояние B)
@@ -164,6 +162,7 @@ func (d *daemon) stateFindPort() bool {
 		}
 		p := d.sc.findPort(d.settings().Baud)
 		if p != nil {
+			d.sc.setPrefer(p.Path())
 			d.port = p
 			return true
 		}
@@ -182,7 +181,7 @@ func (d *daemon) stateFindPort() bool {
 	}
 }
 
-// stateServe — состояние B: обновление списка живых BMS + слушатель.
+// stateServe — состояние B: слушатель порта и ответы по стабильному слоту.
 func (d *daemon) stateServe() {
 	p := d.port
 	if p == nil {
@@ -190,30 +189,24 @@ func (d *daemon) stateServe() {
 	}
 	d.port = nil
 	s := d.settings()
-	infof("состояние B: слушаем на %s (baud=%d, адресация %s, список живых раз в %s)",
-		p.Path(), s.Baud, s.AddrMode, refreshPeriod)
-	d.refresh()
+	infof("состояние B: слушаем на %s (baud=%d, адресация %s, адрес инвертора → слот shm)",
+		p.Path(), s.Baud, s.AddrMode)
 
 	// childStop позволяет остановить слушателя и дождаться его выхода ДО
 	// закрытия порта (иначе ReadOneErr может залипнуть/крутиться на закрытом fd).
 	childStop := make(chan struct{})
-	done := listener(p, s.Baud, d.cfg.shmPath, s.AddrMode, d.sh, childStop)
+	done := listener(p, s.Baud, d.cfg.shmPath, s.AddrMode, childStop)
 	shutdown := func() {
 		close(childStop)
 		<-done
 		p.Close()
 	}
 
-	tick := time.NewTicker(refreshPeriod)
-	defer tick.Stop()
-
 	for {
 		select {
 		case <-d.stop:
 			shutdown()
 			return
-		case <-tick.C:
-			d.refresh()
 		case <-d.reload:
 			ns := d.applySettings()
 			if !ns.Enabled {
@@ -236,11 +229,4 @@ func (d *daemon) stateServe() {
 			return
 		}
 	}
-}
-
-// refresh перечитывает список живых BMS и атомарно кладёт в общее состояние.
-func (d *daemon) refresh() {
-	live := buildAliveList(readShm(d.cfg.shmPath), time.Now())
-	d.sh.store(live)
-	debugf("живых BMS=%d", len(live))
 }

@@ -6,11 +6,12 @@ import (
 	controllib "github.com/galiy/malina-26/daemons/lib/control"
 )
 
-// control — команды через Unix-сокет: ping, list, reload (arch §13).
+// control — команды через Unix-сокет: ping, list, reload, rescan (arch §13).
 type control struct {
 	seg    *bmsShm
 	stop   chan struct{}
 	reload func()
+	rescan func()
 }
 
 type ctlRequest struct {
@@ -41,6 +42,11 @@ func (c *control) handleLine(line []byte) any {
 	case "reload":
 		if c.reload != nil {
 			c.reload()
+		}
+		return ctlResponse{OK: true}
+	case "rescan":
+		if c.rescan != nil {
+			c.rescan()
 		}
 		return ctlResponse{OK: true}
 	default:

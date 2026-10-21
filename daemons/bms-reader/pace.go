@@ -45,10 +45,17 @@ type paceFrame struct {
 	Info []byte
 }
 
-// readPace читает один ответ (до CR) и проверяет CHK.
+// readPace читает один ответ (до CR) и проверяет CHK с обычным таймаутом
+// опроса (arch §10). Для пробы отсутствующего адреса — readPaceTimeout.
 func readPace(t Transport) (paceFrame, error) {
-	t.SetReadTimeout(500 * time.Millisecond)
-	deadline := time.Now().Add(500 * time.Millisecond)
+	return readPaceTimeout(t, defTimeout(t))
+}
+
+// readPaceTimeout читает ответ с заданным таймаутом. Для probe он короче
+// (200 мс), чтобы перебор дырок не блокировал шину.
+func readPaceTimeout(t Transport, to time.Duration) (paceFrame, error) {
+	t.SetReadTimeout(to)
+	deadline := time.Now().Add(to)
 	var acc []byte
 	for time.Now().Before(deadline) {
 		tmp := make([]byte, 256)
@@ -59,7 +66,11 @@ func readPace(t Transport) (paceFrame, error) {
 				return parsePace(acc[:i])
 			}
 		}
-		if err != nil && err != errTimeout {
+		if err == errTimeout {
+			// Транспорт уже выждал свой таймаут — ждать второй раз незачем.
+			return paceFrame{}, errTimeout
+		}
+		if err != nil {
 			return paceFrame{}, err
 		}
 	}

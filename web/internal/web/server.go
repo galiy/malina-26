@@ -449,6 +449,8 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/master/settings", s.handleMasterSettings)
 	mux.HandleFunc("/bms", s.handleBmsPage)
 	mux.HandleFunc("/bms/settings", s.handleBmsSettings)
+	mux.HandleFunc("/bms/rescan", s.handleBmsRescan)
+	mux.HandleFunc("/bms/proxy/settings", s.handleBmsProxySettings)
 	mux.HandleFunc("/map/settings", s.handleMapSettings)
 	mux.HandleFunc("/kes/settings", s.handleKesSettings)
 	mux.HandleFunc("/grid/settings", s.handleGridSettings)

@@ -53,9 +53,16 @@ func main() {
 
 	stop := make(chan struct{})
 	reload := make(chan struct{}, 1)
+	rescanCh := make(chan struct{}, 1)
 
 	ctl := &control{seg: seg, stop: stop}
 	ctl.reload = func() { holder.reloadSettings(lx, reload) }
+	ctl.rescan = func() {
+		select {
+		case rescanCh <- struct{}{}:
+		default: // проход уже запрошен
+		}
+	}
 	go ctl.serve()
 
 	sigc := make(chan os.Signal, 1)
@@ -83,7 +90,7 @@ func main() {
 			phase := make(chan struct{})
 			var wg sync.WaitGroup
 			sink := stat.New(rawSock)
-			orch := newOrchestrator(seg, sink, phase)
+			orch := newOrchestrator(seg, sink, phase, rescanCh)
 			orch.setGateways(gws)
 			wg.Add(1)
 			go func() {
@@ -95,8 +102,9 @@ func main() {
 			case <-stop:
 			}
 			close(phase)
-			// 20 с — с запасом на probeAll (EnBMS до ~16 с); иначе старый run может
-			// дооткрыть порт после closeAll и удержать flock.
+			// 20 с — с запасом на probeAll (AntBMS до 3×0.5 с + EnBMS до 16
+			// адресов × 200 мс ≈ 4.7 с); иначе старый run может дооткрыть порт
+			// после closeAll и удержать flock.
 			waitTimeout(&wg, 20*time.Second, "оркестратор")
 			// Сначала гасим пулеры источников и закрываем их транспорты (порты),
 			// только потом публикуем пустой shm — иначе пулер может дописать слот.

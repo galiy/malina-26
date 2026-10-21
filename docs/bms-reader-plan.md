@@ -72,7 +72,7 @@
 
 ### M6. Публикация и агрегация
 - puller: **107 Б → shm** (телеметрийный слот, читает web) **и** 107 Б → `tscontract` →
-  `stat.Publish` (raw); heartbeat `lastSeen` → оркестратор; shm-список пишет оркестратор.
+  `stat.Publish` (raw); `last_seen` пишет пулер (touch), оркестратору — heartbeat-событие; остальные поля shm-списка пишет оркестратор.
 - Аккумулятор: колонки `bms`, агрегация **OR** (`flags`/`balance_mask`/`alarm`),
   `last` (`mode`); avg.
 - **Приёмка:** e2e с эмуляторами → raw/avg в tsdb.

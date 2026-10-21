@@ -17,20 +17,22 @@ const (
 
 // Параметры поведения (docs/bms-proxy.md §6/§7).
 const (
-	probeListen   = 2 * time.Second        // ждать запрос на порту (есть ли наш порт)
-	banPort       = 10 * time.Second       // бан «не наш» порта
-	liveWindow    = 2 * time.Second        // порог: BMS живая, если last_seen не старше
-	refreshPeriod = 1 * time.Second        // период обновления списка живых BMS
-	idleListener  = 5 * time.Second        // 5 с без запросов → слушатель завершается
-	scanCycle     = 2 * time.Second        // цикл перебора портов в состоянии поиска
-	readTick      = 200 * time.Millisecond // шаг чтения: отзывчивость к stop/reload
+	probeListen = 2 * time.Second  // ждать запрос на порту (есть ли наш порт)
+	banPort     = 10 * time.Second // бан «не наш» порта
+	// liveWindow — страховка от зависшего bms-reader: данные старше порога не
+	// отдаём. Штатно heartbeat идёт раз в секунду; запас 4 с покрывает один
+	// медленный цикл опроса (arch §10).
+	liveWindow   = 4 * time.Second
+	idleListener = 5 * time.Second        // 5 с без запросов → слушатель завершается
+	scanCycle    = 2 * time.Second        // цикл перебора портов в состоянии поиска
+	readTick     = 200 * time.Millisecond // шаг чтения: отзывчивость к stop/reload
 )
 
 // Допустимые скорости порта (docs/bms-proxy.md §8). Задаются явно в настройке.
 var allowedBauds = []int{2400, 9600, 19200, 57600, 115200, 230400}
 
 // Допустимые виды адресации инвертора (docs/bms-proxy.md §5/§8):
-// addrMode0 — «0…15» (ADR == индекс живого списка), addrMode1 — «1…16» (ADR-1).
+// addrMode0 — «0…15» (слот = ADR), addrMode1 — «1…16» (слот = ADR-1).
 const (
 	addrMode0 = "0-15"
 	addrMode1 = "1-16"

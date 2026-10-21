@@ -35,12 +35,6 @@ const (
 	itOffLastSeen = 192 // uint64 LE (unix, сек)
 )
 
-// aliveBMS — живая BMS в нашем нумерованном списке: номер → (слот, gen).
-type aliveBMS struct {
-	Slot int    // индекс слота shm (по нему читается payload)
-	Gen  uint64 // генерация слота (сверка с телеметрией)
-}
-
 // readShm читает сегмент bms-reader целиком. Ошибка/отсутствие → nil.
 func readShm(path string) []byte {
 	b, err := os.ReadFile(path)
@@ -57,36 +51,48 @@ func readShm(path string) []byte {
 	return b
 }
 
-// buildAliveList перебирает слоты и возвращает живые BMS (номер → слот,gen).
-// Критерий «живой» (docs/bms-proxy.md §4): state==1 и last_seen не старше
-// liveWindow. Порядок — по возрастанию номера слота; нумерация 0..N-1.
-func buildAliveList(data []byte, now time.Time) []aliveBMS {
+// readSlotTelemetry читает телеметрию слота с проверкой занятости, свежести и
+// generation. Слот — стабильный адрес инвертора (ADR), а не индекс компактного
+// списка: выпадение одной BMS не переназначает номера другим.
+func readSlotTelemetry(data []byte, slot int, now time.Time) []byte {
 	if data == nil || len(data) < shmHeader+bmsSlots*bmsListLen {
 		return nil
 	}
-	live := make([]aliveBMS, 0, bmsSlots)
-	for i := 0; i < bmsSlots; i++ {
-		off := shmHeader + i*bmsListLen
-		it := data[off : off+bmsListLen]
-		if binary.LittleEndian.Uint32(it[0:4]) != 1 { // слот свободен
-			continue
-		}
-		if binary.LittleEndian.Uint64(it[8:16])&1 != 0 { // seqlock: идёт запись
-			continue
-		}
-		if it[itOffState] != 1 { // state=0 → lost
-			continue
-		}
-		lastSeen := int64(binary.LittleEndian.Uint64(it[itOffLastSeen : itOffLastSeen+8]))
-		if now.Sub(time.Unix(lastSeen, 0)) > liveWindow { // не живая
-			continue
-		}
-		live = append(live, aliveBMS{
-			Slot: i,
-			Gen:  binary.LittleEndian.Uint64(it[itOffGen : itOffGen+8]),
-		})
+	if slot < 0 || slot >= bmsSlots {
+		return nil
 	}
-	return live
+	off := shmHeader + slot*bmsListLen
+	it := data[off : off+bmsListLen]
+	if binary.LittleEndian.Uint32(it[0:4]) != 1 { // слот свободен
+		return nil
+	}
+	// Упрощённый seqlock: достаточно проверить бит записи. Поля записи — 64-бит
+	// выровненные, а payload защищён отдельным seqlock+CRC в readTelemetry.
+	if binary.LittleEndian.Uint64(it[8:16])&1 != 0 { // идёт запись
+		return nil
+	}
+	if it[itOffState] != 1 { // state=0 → lost
+		return nil
+	}
+	lastSeen := int64(binary.LittleEndian.Uint64(it[itOffLastSeen : itOffLastSeen+8]))
+	if now.Sub(time.Unix(lastSeen, 0)) > liveWindow {
+		return nil // bms-reader не публикует heartbeat — данные недостоверны
+	}
+	gen := binary.LittleEndian.Uint64(it[itOffGen : itOffGen+8])
+	return readTelemetry(data, slot, gen)
+}
+
+// slotDiag — диагностика записи списка для debug-лога (без чтения payload).
+func slotDiag(data []byte, slot int, now time.Time) (age time.Duration, state uint8, gen uint64) {
+	if data == nil || len(data) < shmHeader+bmsSlots*bmsListLen || slot < 0 || slot >= bmsSlots {
+		return 0, 0, 0
+	}
+	it := data[shmHeader+slot*bmsListLen : shmHeader+(slot+1)*bmsListLen]
+	if binary.LittleEndian.Uint32(it[0:4]) != 1 {
+		return 0, 0, 0
+	}
+	ls := int64(binary.LittleEndian.Uint64(it[itOffLastSeen : itOffLastSeen+8]))
+	return now.Sub(time.Unix(ls, 0)), it[itOffState], binary.LittleEndian.Uint64(it[itOffGen : itOffGen+8])
 }
 
 // readTelemetry читает payload слота (контракт 107 Б) и сверяет gen.

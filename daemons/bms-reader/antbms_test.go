@@ -62,7 +62,7 @@ func TestParseAntFrame(t *testing.T) {
 func TestAntProbe(t *testing.T) {
 	f := buildAntFrame([]uint16{3300, 3301, 3302, 3303}, -50, 80, 160_000_000)
 	tr := &fakeTransport{rb: f}
-	res, err := antBMS{}.Probe(tr)
+	res, err := antBMS{}.Probe(tr, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

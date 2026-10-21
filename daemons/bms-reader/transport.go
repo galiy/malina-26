@@ -38,9 +38,29 @@ type serialPort interface {
 	Close()
 }
 
+// ioTimeout — таймаут ожидания ответа по скорости порта (arch §10).
+// 9600–19199 → 700 мс, 19200–57599 → 500 мс, ≥57600 → 200 мс; ниже 9600 —
+// пропорционально 700 мс (и всегда больше 700). Неизвестная скорость (TCP) —
+// 500 мс. Меньше 200 мс не бывает ни в одной ветке.
+func ioTimeout(baud int) time.Duration {
+	switch {
+	case baud <= 0:
+		return 500 * time.Millisecond
+	case baud < 9600:
+		return 700 * time.Millisecond * time.Duration(9600) / time.Duration(baud)
+	case baud < 19200:
+		return 700 * time.Millisecond
+	case baud < 57600:
+		return 500 * time.Millisecond
+	default:
+		return 200 * time.Millisecond
+	}
+}
+
 type serialTransport struct {
-	p  serialPort
-	to time.Duration
+	p   serialPort
+	to  time.Duration
+	def time.Duration // штатный таймаут для этой скорости (не меняется SetReadTimeout)
 }
 
 func openSerial(path string, baud int) (Transport, error) {
@@ -53,10 +73,14 @@ func openSerial(path string, baud int) (Transport, error) {
 		return nil, err
 	}
 	p.Flush()
-	return &serialTransport{p: p, to: 500 * time.Millisecond}, nil
+	d := ioTimeout(baud)
+	return &serialTransport{p: p, to: d, def: d}, nil
 }
 
 func (t *serialTransport) SetReadTimeout(d time.Duration) { t.to = d }
+
+// DefaultTimeout — штатный таймаут опроса для этой скорости.
+func (t *serialTransport) DefaultTimeout() time.Duration { return t.def }
 
 // Read читает доступную пачку байт одним syscall.Read (Port.Read).
 // Дедлайн сохраняется; VMIN/VTIME и select — в lib/transport.
@@ -93,6 +117,9 @@ type tcpTransport struct {
 	c  net.Conn
 	to time.Duration
 }
+
+// DefaultTimeout — для TCP скорость неизвестна, оставляем 500 мс.
+func (t *tcpTransport) DefaultTimeout() time.Duration { return 500 * time.Millisecond }
 
 func openTCP(host string, port int) (Transport, error) {
 	if host == "" || port <= 0 {

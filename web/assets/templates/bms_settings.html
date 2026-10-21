@@ -11,7 +11,7 @@
     <h1>{{index .T "bms.settings_title"}}</h1>
     <div class="head-actions">
       <button type="button" class="cancelbtn">{{index .T "sys.cancel"}}</button>
-      <button type="submit">{{index .T "sys.save"}}</button>
+      <button type="submit" formaction="/bms/settings">{{index .T "bms.save_reader"}}</button>
     </div>
   </div>
 
@@ -52,8 +52,17 @@
         </select>
       </td>
     </tr>
+    <tr>
+      <td>{{index .T "bms.rescan"}}</td>
+      <td>
+        <button type="button" id="bmsRescan" aria-describedby="bmsRescanHint" {{if not .BmsrEnabled}}disabled{{end}}>{{index .T "bms.rescan_btn"}}</button>
+        <div class="muted" id="bmsRescanHint">{{index .T "bms.rescan_hint"}}</div>
+      </td>
+    </tr>
   </tbody></table>
+</form>
 
+<form method="post" action="/bms/proxy/settings" id="proxyForm">
   <table class="nettable"><tbody>
     <tr class="group"><td colspan="2">{{index .T "bms.proxy_title"}}</td></tr>
     <tr>
@@ -101,6 +110,10 @@
       <td><input name="udp_listen" value="{{.ProxyUDPListen}}" placeholder="0.0.0.0:502"></td>
     </tr>
     <tr id="hint-udp" data-hint-for="udp" hidden><td colspan="2"><div class="hint-pop">{{index .T "bms.proxy_udp_desc"}}</div></td></tr>
+    <tr>
+      <td></td>
+      <td><button type="submit" formaction="/bms/proxy/settings">{{index .T "bms.save_proxy"}}</button></td>
+    </tr>
   </tbody></table>
 </form>
 
@@ -112,7 +125,9 @@
     var initialRows = rows ? rows.innerHTML : "";
     document.querySelector(".cancelbtn").addEventListener("click", function () {
       if (rows) rows.innerHTML = initialRows; // вернуть исходный набор строк шлюзов
-      this.form.reset();                       // вернуть значения полей
+      this.form.reset();                       // вернуть значения полей приёмника
+      var pf = document.getElementById("proxyForm");
+      if (pf) pf.reset();                      // и настройки прокси
       // свернуть подсказку UDP
       var hr = document.getElementById("hint-udp");
       if (hr) hr.hidden = true;
@@ -138,6 +153,20 @@
       };
       udpChk.addEventListener("change", sync);
       sync();
+    }
+    // Явный поиск батарей: сбрасывает паузы после неудачных проб в bms-reader.
+    var rescanBtn = document.getElementById("bmsRescan");
+    if (rescanBtn) {
+      rescanBtn.addEventListener("click", function () {
+        rescanBtn.disabled = true;
+        fetch("/bms/rescan", { method: "POST" }).then(function (resp) {
+          window.location.href = resp.ok
+            ? "/bms/settings?rescan=1"
+            : "/bms/settings?rescan_err=1";
+        }).catch(function () {
+          window.location.href = "/bms/settings?rescan_err=1";
+        });
+      });
     }
   })();
 </script>

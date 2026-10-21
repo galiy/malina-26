@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -251,13 +252,6 @@ func loadBmsGateways(path string) (bmsGatewaysFile, error) {
 
 // saveBmsSettings пишет оба конфига (BMS-Reader и BMS-Proxy). Возвращает
 // раздельные ошибки, чтобы вызывающий сделал reload по каждому успешному файлу.
-func (s *Server) saveBmsSettings(cfg bmsGatewaysFile, np bmsProxyCfg) (error, error) {
-	if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
-		return err, nil
-	}
-	return nil, saveBmsProxyCfg(s.bmsProxyCfgPath(), np)
-}
-
 // saveBmsGateways — атомарная запись (temp + rename), как у остальных конфигов.
 func saveBmsGateways(path string, f bmsGatewaysFile) error {
 	b, err := json.MarshalIndent(f, "", "  ")
@@ -448,52 +442,27 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		_ = r.ParseForm()
-		// Единая форма: шлюзы + BMS-Reader + БМС-Прокси сохраняются вместе.
+		// Эта форма — шлюзы + BMS-Reader. Настройки БМС-Прокси сохраняет
+		// отдельная кнопка (formaction /bms/proxy/settings).
 		gws, verr := parseBmsForm(r)
 		bmsrEn := r.Form.Get("bmsr_enabled") == "on"
 		bmsrLv, bmsrOK := normalizeBmsProxyLevel(r.Form.Get("bmsr_log_level"))
-
-		np := bmsProxyCfg{
-			Enabled:    r.Form.Get("proxy_enabled") == "on",
-			Baud:       baudFromForm(r.Form.Get("proxy_baud")),
-			LogLevel:   r.Form.Get("proxy_log_level"),
-			AddrMode:   r.Form.Get("proxy_addr_mode"),
-			UDPEnabled: r.Form.Get("udp_enabled") == "on",
-			UDPListen:  strings.TrimSpace(r.Form.Get("udp_listen")),
-		}
-		lv, lvOK := normalizeBmsProxyLevel(np.LogLevel)
-		am, amOK := normalizeBmsProxyAddrMode(np.AddrMode)
 
 		switch {
 		case verr != "":
 			data["Err"] = verr
 		case !bmsrOK:
 			data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_level")
-		case !bmsProxyBaudOK(np.Baud):
-			data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_baud")
-		case !lvOK:
-			data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_level")
-		case !amOK:
-			data["Err"] = s.tr(s.lang(r), "bms.proxy_bad_addr_mode")
 		default:
-			np.LogLevel = lv
-			np.AddrMode = am
 			cfg.Gateways = gws
 			cfg.Enabled = bmsrEn
 			cfg.LogLevel = bmsrLv
-			// Сохраняем оба файла; reload — по каждому успешно записанному.
-			bmsErr, proxyErr := s.saveBmsSettings(cfg, np)
-			if bmsErr != nil {
-				data["Err"] = bmsErr.Error()
+			if err := saveBmsGateways(s.bmsCfgPath(), cfg); err != nil {
+				data["Err"] = err.Error()
 			} else {
 				_, _ = controlCall(s.bmsSock(), []byte(`{"cmd":"reload"}`))
-				if proxyErr != nil {
-					data["Err"] = proxyErr.Error()
-				} else {
-					_, _ = controlCall(s.bmsProxySock(), []byte(`{"cmd":"reload"}`))
-					http.Redirect(w, r, "/bms/settings?ok=1", http.StatusSeeOther)
-					return
-				}
+				http.Redirect(w, r, "/bms/settings?ok=1", http.StatusSeeOther)
+				return
 			}
 		}
 		// повторный рендер при ошибке — показать то, что ввёл пользователь
@@ -504,24 +473,90 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 		} else {
 			data["BmsrLevel"] = bmsrLvl
 		}
-		data["ProxyEnabled"] = np.Enabled
-		data["ProxyBaud"] = np.Baud
-		if lvOK {
-			data["ProxyLevel"] = lv
-		} else {
-			data["ProxyLevel"] = pc.LogLevel
-		}
-		if amOK {
-			data["ProxyAddrMode"] = am
-		} else {
-			data["ProxyAddrMode"] = pc.AddrMode
-		}
-		data["ProxyUDPEnabled"] = np.UDPEnabled
-		data["ProxyUDPListen"] = np.UDPListen
 	} else if r.URL.Query().Get("ok") != "" {
 		data["Ok"] = s.tr(s.lang(r), "bms.saved")
+	} else if e := r.URL.Query().Get("proxy_err"); e != "" {
+		// Только известные ключи, чтобы страница не показывала мусор.
+		switch e {
+		case "bms.proxy_bad_baud", "bms.proxy_bad_level", "bms.proxy_bad_addr_mode", "bms.proxy_save_err":
+			data["Err"] = s.tr(s.lang(r), e)
+		default:
+			data["Err"] = s.tr(s.lang(r), "bms.proxy_save_err")
+		}
+	} else if r.URL.Query().Get("rescan") != "" {
+		data["Ok"] = s.tr(s.lang(r), "bms.rescan_done")
+	} else if r.URL.Query().Get("rescan_err") != "" {
+		data["Err"] = s.tr(s.lang(r), "bms.rescan_err")
 	}
 	s.render(w, http.StatusOK, "bms_settings", data)
+}
+
+// handleBmsProxySettings — отдельное сохранение настроек БМС-Прокси:
+// только bms-proxy.json и reload только прокси. Кнопка на странице имеет
+// formaction на этот путь, поэтому настройки приёмника не затрагиваются.
+func (s *Server) handleBmsProxySettings(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAuth(w, r); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/bms/settings", http.StatusSeeOther)
+		return
+	}
+	_ = r.ParseForm()
+	np := bmsProxyCfg{
+		Enabled:    r.Form.Get("proxy_enabled") == "on",
+		Baud:       baudFromForm(r.Form.Get("proxy_baud")),
+		LogLevel:   r.Form.Get("proxy_log_level"),
+		AddrMode:   r.Form.Get("proxy_addr_mode"),
+		UDPEnabled: r.Form.Get("udp_enabled") == "on",
+		UDPListen:  strings.TrimSpace(r.Form.Get("udp_listen")),
+	}
+	lv, lvOK := normalizeBmsProxyLevel(np.LogLevel)
+	am, amOK := normalizeBmsProxyAddrMode(np.AddrMode)
+	fail := func(key string) {
+		http.Redirect(w, r, "/bms/settings?proxy_err="+url.QueryEscape(key), http.StatusSeeOther)
+	}
+	switch {
+	case !bmsProxyBaudOK(np.Baud):
+		fail("bms.proxy_bad_baud")
+		return
+	case !lvOK:
+		fail("bms.proxy_bad_level")
+		return
+	case !amOK:
+		fail("bms.proxy_bad_addr_mode")
+		return
+	}
+	np.LogLevel = lv
+	np.AddrMode = am
+	if err := saveBmsProxyCfg(s.bmsProxyCfgPath(), np); err != nil {
+		fail("bms.proxy_save_err")
+		return
+	}
+	_, _ = controlCall(s.bmsProxySock(), []byte(`{"cmd":"reload"}`))
+	http.Redirect(w, r, "/bms/settings?ok=proxy", http.StatusSeeOther)
+}
+
+// handleBmsRescan — явный rescan bms-reader: сброс отстойника (включая
+// «никогда») и внеочередной проход по кандидатам. Отвечает JSON: страница по
+// статусу ответа выбирает флеш «запущено» или «ошибка».
+func (s *Server) handleBmsRescan(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAuth(w, r); !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	resp, err := controlCall(s.bmsSock(), []byte(`{"cmd":"rescan"}`))
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil || !strings.Contains(string(resp), `"ok":true`) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"ok":false}`))
+		return
+	}
+	_, _ = w.Write([]byte(`{"ok":true}`))
 }
 
 // handleBmsPage — страница конкретной BMS (/bms?id&gen): закладки-заглушки

@@ -38,7 +38,7 @@ func TestUDPSyncRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	addr := occ.LocalAddr().String()
-	d := &daemon{cfg: newConfig(), sh: &shared{}, udp: &udpManager{}, sc: newPortScanner(make(chan struct{}))}
+	d := &daemon{cfg: newConfig(), udp: &udpManager{}, sc: newPortScanner(make(chan struct{}))}
 
 	d.udp.sync(addr, d)
 	if d.udp.cur != nil {
@@ -245,7 +245,7 @@ func TestParseRequestChk(t *testing.T) {
 	}
 }
 
-// TestMapAddr — мапинг адреса инвертора на индекс живого списка.
+// TestMapAddr — ADR инвертора → стабильный слот shm.
 func TestMapAddr(t *testing.T) {
 	if got := mapAddr(1, addrMode1); got != 0 {
 		t.Fatalf("1-16: ADR=1 → %d, ожидалось 0", got)
@@ -258,6 +258,16 @@ func TestMapAddr(t *testing.T) {
 	}
 	if got := mapAddr(15, addrMode0); got != 15 {
 		t.Fatalf("0-15: ADR=15 → %d, ожидалось 15", got)
+	}
+	// Вне диапазона — заведомо невалидный слот, данные не отдаются.
+	data := mkSeg(t)
+	for _, adr := range []int{0, 16} {
+		if slot := mapAddr(adr, addrMode1); readSlotTelemetry(data, slot, time.Now()) != nil {
+			t.Fatalf("ADR=%d вне диапазона 1-16 отдал данные", adr)
+		}
+	}
+	if slot := mapAddr(16, addrMode0); slot != 16 || readSlotTelemetry(data, slot, time.Now()) != nil {
+		t.Fatalf("ADR=16 вне диапазона 0-15: slot=%d", slot)
 	}
 }
 
@@ -287,7 +297,7 @@ func TestLoadSettingsAddrModeDefault(t *testing.T) {
 	}
 }
 
-func TestBuildAliveList(t *testing.T) {
+func TestReadSlotTelemetry(t *testing.T) {
 	data := mkSeg(t)
 	now := time.Now()
 
@@ -300,30 +310,36 @@ func TestBuildAliveList(t *testing.T) {
 	binary.LittleEndian.PutUint64(it[itOffLastSeen:itOffLastSeen+8], uint64(now.Unix()))
 	writeItem(data, 0, it[:])
 
-	// слот 1: lost (state=0)
-	writeItem(data, 1, nil)
+	var tel bmscontract.Telemetry
+	tel.CellCount = 2
+	putSlot(data, 0, 100, bmscontract.Encode(&tel))
 
-	live := buildAliveList(data, now)
-	if len(live) != 1 {
-		t.Fatalf("живых=%d, ожидалось 1", len(live))
+	got := readSlotTelemetry(data, 0, now)
+	if got == nil {
+		t.Fatal("живой слот не прочитан")
 	}
-	if live[0].Slot != 0 || live[0].Gen != 100 {
-		t.Fatalf("живая: slot=%d gen=%d", live[0].Slot, live[0].Gen)
+	// слот 1 свободен
+	if readSlotTelemetry(data, 1, now) != nil {
+		t.Fatal("свободный слот отдан")
 	}
 }
 
-func TestBuildAliveListStale(t *testing.T) {
+func TestReadSlotTelemetryStale(t *testing.T) {
 	data := mkSeg(t)
 	now := time.Now()
-	// слот 0: last_seen протух (> 2 с)
+	// last_seen старше liveWindow
 	var it [bmsListLen]byte
 	binary.LittleEndian.PutUint32(it[0:4], 1)
 	it[itOffState] = 1
-	binary.LittleEndian.PutUint64(it[itOffLastSeen:itOffLastSeen+8], uint64(now.Add(-3*time.Second).Unix()))
+	binary.LittleEndian.PutUint64(it[itOffGen:itOffGen+8], 1)
+	binary.LittleEndian.PutUint64(it[itOffLastSeen:itOffLastSeen+8], uint64(now.Add(-liveWindow-time.Second).Unix()))
 	writeItem(data, 0, it[:])
+	var tel bmscontract.Telemetry
+	tel.CellCount = 1
+	putSlot(data, 0, 1, bmscontract.Encode(&tel))
 
-	if live := buildAliveList(data, now); len(live) != 0 {
-		t.Fatalf("протухшая BMS попала в живые: %v", live)
+	if got := readSlotTelemetry(data, 0, now); got != nil {
+		t.Fatalf("протухшая BMS отдана: %v", got)
 	}
 }
 
@@ -412,37 +428,46 @@ func putSlot(data []byte, slot int, gen uint64, payload []byte) {
 	copy(s[bmsSlotHdr:bmsSlotHdr+len(payload)], payload)
 }
 
-// TestBuildAliveListDuplicateBase — две BMS с одинаковым BASE/ID должны обе
-// попасть в живой список и обе отдаваться по своим слотам/генерациям.
-func TestBuildAliveListDuplicateBase(t *testing.T) {
+// TestReadSlotStableAddressing — адресация по слоту стабильна: потеря соседнего
+// слота не сдвигает и не подменяет данные запрошенного ADR.
+func TestReadSlotStableAddressing(t *testing.T) {
 	data := mkSeg(t)
 	now := time.Now()
-	for slot := 0; slot < 2; slot++ {
+	mk := func(slot int, cells int, gen uint64) {
 		var it [bmsListLen]byte
 		binary.LittleEndian.PutUint32(it[0:4], 1)
 		it[itOffState] = 1
 		copy(it[itOffID:], "AntBMS-DSP-160")
-		copy(it[itOffBase:], "AntBMS-DSP-160")
-		binary.LittleEndian.PutUint64(it[itOffGen:], uint64(100+slot))
+		binary.LittleEndian.PutUint64(it[itOffGen:], gen)
 		binary.LittleEndian.PutUint64(it[itOffLastSeen:], uint64(now.Unix()))
 		writeItem(data, slot, it[:])
-
 		var tel bmscontract.Telemetry
-		tel.CellCount = 1
-		putSlot(data, slot, uint64(100+slot), bmscontract.Encode(&tel))
+		tel.CellCount = uint8(cells)
+		putSlot(data, slot, gen, bmscontract.Encode(&tel))
 	}
+	mk(0, 1, 100)
+	mk(2, 2, 102)
 
-	live := buildAliveList(data, now)
-	if len(live) != 2 {
-		t.Fatalf("живых=%d, ожидалось 2", len(live))
+	// «1-16»: ADR 1 → слот 0, ADR 3 → слот 2; ADR 2 (слот 1) молчит.
+	if slot := mapAddr(1, addrMode1); slot != 0 || readSlotTelemetry(data, slot, now) == nil {
+		t.Fatalf("ADR 1: slot=%d", slot)
 	}
-	if live[0].Slot != 0 || live[0].Gen != 100 || live[1].Slot != 1 || live[1].Gen != 101 {
-		t.Fatalf("живой список: %+v", live)
+	if slot := mapAddr(2, addrMode1); slot != 1 || readSlotTelemetry(data, slot, now) != nil {
+		t.Fatalf("ADR 2 не должен отдавать данные: slot=%d", slot)
 	}
-	for _, b := range live {
-		if p := readTelemetry(data, b.Slot, b.Gen); p == nil {
-			t.Fatalf("телеметрия слота %d недоступна", b.Slot)
-		}
+	if slot := mapAddr(3, addrMode1); slot != 2 || readSlotTelemetry(data, slot, now) == nil {
+		t.Fatalf("ADR 3: slot=%d", slot)
+	}
+	// Потеря слота 0 не сдвигает ADR 3 на чужой слот.
+	writeItem(data, 0, make([]byte, bmsListLen))
+	if readSlotTelemetry(data, 0, now) != nil {
+		t.Fatal("слот 0 не очищен")
+	}
+	if slot := mapAddr(3, addrMode1); slot != 2 {
+		t.Fatalf("после потери ADR 3 съехал на слот %d", slot)
+	}
+	if readSlotTelemetry(data, 2, now) == nil {
+		t.Fatal("слот 2 перестал читаться после потери соседнего")
 	}
 }
 
