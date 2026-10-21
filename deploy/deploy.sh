@@ -21,7 +21,7 @@
 #   (без флага)  точечное ОБНОВЛЕНИЕ работающего устройства: только бинарники +
 #                веб-ассеты + unit-файлы выбранных сервисов; `/etc` — коротким
 #                rw-окном.
-#   user@host    по умолчанию malina@192.168.13.68 (или env HOST)
+#   user@host    по умолчанию malina@192.168.13.60 (или env HOST)
 #
 # Пароль SSH: env MALINA_PASS или строка MALINA_PASS=... в .kilo/secrets (не коммитится).
 #
@@ -85,7 +85,7 @@ if [ "$PURGE" = 1 ] && [ "$FIRST" != 1 ] && ! has tsdb; then
   ONLY="$ONLY tsdb"
 fi
 
-HOST="${HOSTARG:-${HOST:-malina@192.168.13.68}}"
+HOST="${HOSTARG:-${HOST:-malina@192.168.13.60}}"
 [ "${HOST#-}" = "$HOST" ] || { echo "некорректный хост: $HOST" >&2; exit 2; }
 
 PASS="${MALINA_PASS:-}"
