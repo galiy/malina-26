@@ -4,6 +4,7 @@ AGENTS.md
 archive/
 disasm/
 review/
+go.work.sum
 /tsdb
 /kes-emu
 /malina-web
