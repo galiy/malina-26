@@ -2,13 +2,14 @@ package web
 
 import (
 	"encoding/binary"
+	"hash/crc32"
 	"time"
 )
 
 // Чтение бинарного контракта bms-reader из POSIX shared memory.
 // Формат синхронизирован с daemons/bms-reader/shm.go:
 //
-//	[header 64][list: 16×200][slots: 16×(32+107)]
+//	[header 64][list: 16×200][slots: 16×(32+112)] (payload — 107 Б)
 const (
 	bmsShmMagic    = 0x424D5342 // "BSMB"
 	bmsShmVersion  = 1
@@ -100,7 +101,14 @@ func loadBmsList() BmsList {
 		if off+bmsListItemLen > len(data) {
 			break
 		}
-		if it, ok := decodeBmsItem(i, data[off:off+bmsListItemLen]); ok {
+		it, ok := decodeBmsItem(i, data[off:off+bmsListItemLen], int64(off))
+		if !ok {
+			// Гонка с писателем: перечитываем запись один раз.
+			if ib, err := readShmAt(bmsShmPath, int64(off), bmsListItemLen); err == nil {
+				it, ok = decodeBmsItem(i, ib, int64(off))
+			}
+		}
+		if ok {
 			bl.Bms = append(bl.Bms, it)
 		}
 	}
@@ -108,12 +116,24 @@ func loadBmsList() BmsList {
 	return bl
 }
 
-func decodeBmsItem(i int, b []byte) (BmsInfo, bool) {
+func decodeBmsItem(i int, b []byte, absOff int64) (BmsInfo, bool) {
 	if binary.LittleEndian.Uint32(b[0:4]) != 1 { // валиден только state==1
 		return BmsInfo{}, false
 	}
-	if binary.LittleEndian.Uint64(b[8:16])&1 != 0 { // seqlock: идёт запись
+	seq := binary.LittleEndian.Uint64(b[8:16])
+	if seq&1 != 0 { // seqlock: идёт запись
 		return BmsInfo{}, false
+	}
+	// Перечитываем seq уже после копирования: писатель мог начать/закончить
+	// запись между чтением региона и проверкой.
+	seqb, err := readShmAt(bmsShmPath, absOff+8, 8)
+	if err != nil || binary.LittleEndian.Uint64(seqb) != seq {
+		return BmsInfo{}, false
+	}
+	gen := binary.LittleEndian.Uint64(b[bmsOffGen : bmsOffGen+8])
+	genb, err := readShmAt(bmsShmPath, absOff+bmsOffGen, 8)
+	if err != nil || binary.LittleEndian.Uint64(genb) != gen {
+		return BmsInfo{}, false // слот переиспользован (ABA)
 	}
 	return BmsInfo{
 		ID:       i,
@@ -142,15 +162,29 @@ func bmsRawPayload(id int, gen uint64) []byte {
 	if binary.LittleEndian.Uint32(slot[0:4]) != 1 { // валиден только state==1
 		return nil
 	}
-	if binary.LittleEndian.Uint64(slot[16:24])&1 != 0 { // seqlock: идёт запись
+	seq := binary.LittleEndian.Uint64(slot[16:24])
+	if seq&1 != 0 { // seqlock: идёт запись
 		return nil
 	}
 	if binary.LittleEndian.Uint64(slot[8:16]) != gen {
 		return nil
 	}
 	n := int(binary.LittleEndian.Uint32(slot[24:28]))
-	if n <= 0 || n > bmsSlotData {
+	if n != 107 { // ровно бинарный контракт bms v1
 		return nil
 	}
-	return append([]byte(nil), slot[bmsSlotHdr:bmsSlotHdr+n]...)
+	payload := append([]byte(nil), slot[bmsSlotHdr:bmsSlotHdr+n]...)
+	// seq не должен измениться за время копирования; CRC ловит рваный payload.
+	seqb, err := readShmAt(bmsShmPath, off+16, 8)
+	if err != nil || binary.LittleEndian.Uint64(seqb) != seq {
+		return nil
+	}
+	genb, err := readShmAt(bmsShmPath, off+8, 8)
+	if err != nil || binary.LittleEndian.Uint64(genb) != gen {
+		return nil // слот переиспользован (ABA)
+	}
+	if crc32.ChecksumIEEE(payload) != binary.LittleEndian.Uint32(slot[28:32]) {
+		return nil
+	}
+	return payload
 }

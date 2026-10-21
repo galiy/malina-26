@@ -140,3 +140,61 @@ func TestAntAlarm(t *testing.T) {
 		t.Fatal("flags: charge_mos должен быть выставлен (≠0)")
 	}
 }
+
+// TestAntStreamTakesLastFrame — при нескольких кадрах в буфере readAntFrame
+// обязан вернуть последний (свежий), а не первый (голову FIFO).
+func TestAntStreamTakesLastFrame(t *testing.T) {
+	f1 := buildAntFrame([]uint16{3300, 3301}, 500, 60, 160_000_000)
+	f2 := buildAntFrame([]uint16{3300, 3301}, 1200, 59, 160_000_000)
+	tr := &fakeTransport{rb: append(append([]byte{}, f1...), f2...)}
+	g, err := readAntFrame(tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytesEq(g, f2) {
+		t.Fatalf("взят не последний кадр: current=%d", int32(binary.BigEndian.Uint32(g[70:74])))
+	}
+}
+
+// TestValidateAntCellsRejectsImplausibleCell — мВ вне 1.0..5.0 В отбрасываются
+// при Probe; в Poll такой кадр (авария) должен публиковаться.
+func TestValidateAntCellsRejectsImplausibleCell(t *testing.T) {
+	allBad := buildAntFrame([]uint16{900, 900}, 100, 50, 160_000_000)
+	if err := validateAntCells(allBad, 2); err == nil {
+		t.Fatal("ожидалась ошибка: все ячейки вне 1.0..5.0 В")
+	}
+	// Аварийный кадр с одной мёртвой ячейкой должен публиковаться.
+	oneBad := buildAntFrame([]uint16{3300, 900}, 100, 50, 160_000_000)
+	if err := validateAntCells(oneBad, 2); err != nil {
+		t.Fatalf("одна мёртвая ячейка не должна отбрасывать кадр: %v", err)
+	}
+	if _, err := parseAntFrame(oneBad); err != nil {
+		t.Fatalf("Poll не должен отбрасывать аварийный кадр: %v", err)
+	}
+}
+
+// flushTransport считает вызовы Flush (проверка Poll → Flush перед чтением).
+type flushTransport struct {
+	fakeTransport
+	flushes int
+}
+
+func (f *flushTransport) Flush() { f.flushes++ }
+
+// TestAntPollFlushesAndTakesLatest — Poll сбрасывает FIFO и публикует последний
+// кадр, а не первый.
+func TestAntPollFlushesAndTakesLatest(t *testing.T) {
+	f1 := buildAntFrame([]uint16{3300, 3301}, 500, 60, 160_000_000)
+	f2 := buildAntFrame([]uint16{3300, 3301}, 1200, 59, 160_000_000)
+	tr := &flushTransport{fakeTransport: fakeTransport{rb: append(append([]byte{}, f1...), f2...)}}
+	tel, err := antBMS{}.Poll(tr, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.flushes != 1 {
+		t.Fatalf("Flush вызван %d раз, ожидался 1", tr.flushes)
+	}
+	if tel.CurrentDA != 12000 {
+		t.Fatalf("current_da=%d, ожидался последний кадр (12000)", tel.CurrentDA)
+	}
+}

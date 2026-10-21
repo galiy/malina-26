@@ -78,6 +78,15 @@ func (t *serialTransport) Read(p []byte) (int, error) {
 func (t *serialTransport) Write(p []byte) error { return t.p.WriteAll(p) }
 func (t *serialTransport) Close() error         { t.p.Close(); return nil }
 
+// Flush сбрасывает входной буфер порта. Для пассивного потока AntBMS
+// применяется перед опросом: накопленный FIFO (до 640 КиБ) отбрасывается,
+// публикуется свежий кадр, а не голова очереди.
+func (t *serialTransport) Flush() {
+	if p, ok := t.p.(interface{ Flush() }); ok {
+		p.Flush()
+	}
+}
+
 // --- TCP ---
 
 type tcpTransport struct {

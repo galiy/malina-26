@@ -20,7 +20,7 @@ On the main page — battery tiles: type, mode, charge (SOC), voltage, current, 
 
 At the top — the device ID and the “Disable update” checkbox. Data refreshes roughly once a second.
 
-On the panel — key indicators (charge, voltage, current, power, cell spread), highlighted cells, temperatures, power switches, and alarms. The maximum cell is marked in red, the minimum in blue. If there are no alarms, it says so. Below — history charts for the selected period.
+On the panel — key indicators (charge, voltage, current, power, cell spread), highlighted cells, temperatures, power switches, and alarms. The maximum cell is marked in red, the minimum in blue. If there are no alarms, it says so. Below — history charts for the selected period. If data stops updating, a yellow banner “Data is stale: no update for N s” appears at the top — check the BMS connection and polling status.
 
 For some BMS types, per-cell warnings and protections are not transmitted by the protocol — then only balancing and the minimum/maximum cells are visible.
 

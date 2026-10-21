@@ -7,6 +7,11 @@
   var ID = window.BMS_ID, GEN = window.BMS_GEN, SERIAL = window.BMS_SERIAL || "";
   var BMS_TYPE = window.BMS_TYPE || "";
   var errBox = document.getElementById("bmsErr");
+  var staleBox = document.getElementById("bmsStale");
+  var STALE_SEC = 5; // опрос 1 Гц; 5 с без обновления — уже аномалия
+  var lastOk = 0;     // время последнего успешного render()
+  var pageStart = Date.now();
+  var staleShown = false;
   var pause = document.getElementById("bmsPause");
   if (ID == null) { return; }
   function t(k) { return I18N[k] || k; }
@@ -143,9 +148,9 @@
     var bals = [];
     if (d.balance_mask) { for (var i = 0; i < d.cell_count && i < 32; i++) { if ((d.balance_mask >>> i) & 1) { bals.push(i + 1); } } }
     el.innerHTML =
-      '<span class="mos ' + on(0) + '">' + esc(t("bms.kpi.chg")) + ": " + (on(0) ? "ВКЛ" : "ВЫКЛ") + "</span>" +
-      '<span class="mos ' + on(1) + '">' + esc(t("bms.kpi.dis")) + ": " + (on(1) ? "ВКЛ" : "ВЫКЛ") + "</span>" +
-      '<span class="mos ' + (on(2) || bals.length ? "on" : "") + '">' + esc(t("bms.kpi.bal")) + ": " + (bals.length ? bals.join(", ") : (on(2) ? "ВКЛ" : "ВЫКЛ")) + "</span>";
+      '<span class="mos ' + on(0) + '">' + esc(t("bms.kpi.chg")) + ": " + (on(0) ? t("bms.on") : t("bms.off")) + "</span>" +
+      '<span class="mos ' + on(1) + '">' + esc(t("bms.kpi.dis")) + ": " + (on(1) ? t("bms.on") : t("bms.off")) + "</span>" +
+      '<span class="mos ' + (on(2) || bals.length ? "on" : "") + '">' + esc(t("bms.kpi.bal")) + ": " + (bals.length ? bals.join(", ") : (on(2) ? t("bms.on") : t("bms.off"))) + "</span>";
   }
   function renderAlarms(d, al) {
     var el = document.getElementById("bmsAlarms"); if (!el) { return; }
@@ -175,12 +180,32 @@
     inflight = new AbortController();
     fetch("/api/bms/raw?id=" + encodeURIComponent(ID) + "&gen=" + encodeURIComponent(GEN), { cache: "no-store", credentials: "same-origin", signal: inflight.signal })
       .then(function (r) { if (r.status === 404) { throw { gone: true }; } if (r.status === 401) { throw { auth: true }; } if (!r.ok) { throw new Error("HTTP " + r.status); } return r.arrayBuffer(); })
-      .then(function (buf) { showErr(""); render(decode(buf)); })
+      .then(function (buf) { showErr(""); render(decode(buf)); lastOk = Date.now(); updateStale(); })
       .catch(function (e) { if (e && e.auth) { window.location.href = "/login"; return; } if (e && e.gone) { relocate(); return; } if (!(e && e.name === "AbortError")) { showErr(t("map.connection_lost")); } });
   }
+  function updateStale() {
+    if (!staleBox) { return; }
+    if (pause && pause.checked) { staleBox.hidden = true; return; }
+    var base = lastOk || pageStart;
+    var age = Math.max(0, Math.floor((Date.now() - base) / 1000));
+    if (age > STALE_SEC) {
+      // Первое появление объявляем (aria-live), последующее изменение
+      // возраста — без повторного объявления каждую секунду.
+      staleBox.setAttribute("aria-live", staleShown ? "off" : "polite");
+      staleBox.textContent = t("bms.stale") + ": " + t("bms.stale_age").replace("{n}", age);
+      staleBox.hidden = false;
+      staleShown = true;
+    } else if (staleShown || !staleBox.hidden) {
+      staleBox.hidden = true;
+      staleBox.setAttribute("aria-live", "polite");
+      staleShown = false;
+    }
+  }
   var inflight = null;
-  function start() { if (timer) { return; } tick(); timer = setInterval(tick, 1000); }
-  function stop() { if (timer) { clearInterval(timer); timer = null; } if (inflight) { inflight.abort(); inflight = null; } }
+  var staleTimer = null;
+  function start() { if (timer) { return; } lastOk = Date.now(); pageStart = Date.now(); tick(); updateStale(); timer = setInterval(tick, 1000); staleTimer = setInterval(updateStale, 1000); }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { lastOk = Date.now(); updateStale(); } });
+  function stop() { if (timer) { clearInterval(timer); timer = null; } if (staleTimer) { clearInterval(staleTimer); staleTimer = null; } if (staleBox) { staleBox.hidden = true; staleBox.setAttribute("aria-live", "polite"); } staleShown = false; if (inflight) { inflight.abort(); inflight = null; } }
   var timer = null;
   if (pause) { pause.addEventListener("change", function () { if (pause.checked) { stop(); } else { start(); } }); }
   start();

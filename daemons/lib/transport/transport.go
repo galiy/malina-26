@@ -10,6 +10,7 @@ package transport
 import (
 	"errors"
 	"io"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -85,6 +86,7 @@ func EAGAINRetries() uint64 { return eagainRetries.Load() }
 
 // Port — открытый последовательный порт (raw, 8N1, non-blocking).
 type Port struct {
+	mu   sync.Mutex // сериализация fd: Close не должен гоняться с Read/Write/Flush
 	path string
 	fd   int
 	baud int
@@ -144,8 +146,10 @@ func Open(path string) (*Port, error) {
 	return p, nil
 }
 
-// Close закрывает порт.
+// Close закрывает порт. Ждёт завершения текущего Read/Write/Flush.
 func (p *Port) Close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.fd >= 0 {
 		syscall.Close(p.fd)
 		p.fd = -1
@@ -239,6 +243,8 @@ func (p *Port) setBaudOther(baud int) error {
 
 // Flush сбрасывает входной/выходной буфер порта.
 func (p *Port) Flush() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.fd < 0 {
 		return
 	}
@@ -247,6 +253,8 @@ func (p *Port) Flush() {
 
 // WriteAll пишет все байты с таймаутом.
 func (p *Port) WriteAll(b []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.fd < 0 {
 		return ErrClosed
 	}
@@ -321,6 +329,8 @@ func (p *Port) waitReadable(deadline time.Time) error {
 // fd неблокирующий: select ждёт готовность до дедлайна, read может вернуть
 // EAGAIN — это обрабатывается повтором.
 func (p *Port) Read(buf []byte, deadline time.Time) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.fd < 0 {
 		return 0, ErrClosed
 	}

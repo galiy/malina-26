@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/binary"
 	"encoding/json"
+	"hash/crc32"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -37,6 +38,7 @@ func writeBmsShmSegTest(t *testing.T, payload []byte) string {
 	binary.LittleEndian.PutUint32(slot[0:4], 1) // state != 0
 	binary.LittleEndian.PutUint64(slot[8:16], 0)
 	binary.LittleEndian.PutUint32(slot[24:28], uint32(len(payload)))
+	binary.LittleEndian.PutUint32(slot[28:32], crc32.ChecksumIEEE(payload))
 	copy(slot[bmsSlotHdr:], payload)
 
 	path := filepath.Join(t.TempDir(), "bms-state")
@@ -88,7 +90,7 @@ func TestBmsDevicesAuth(t *testing.T) {
 }
 
 func TestBmsRaw(t *testing.T) {
-	payload := make([]byte, bmsSlotData)
+	payload := make([]byte, 107)
 	for i := range payload {
 		payload[i] = byte(i)
 	}
@@ -103,8 +105,8 @@ func TestBmsRaw(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("валидный: code=%d", rec.Code)
 	}
-	if rec.Body.Len() != bmsSlotData {
-		t.Fatalf("длина payload=%d, ожидалось %d", rec.Body.Len(), bmsSlotData)
+	if rec.Body.Len() != 107 {
+		t.Fatalf("длина payload=%d, ожидалось 107", rec.Body.Len())
 	}
 	if rec.Header().Get("Content-Type") != "application/octet-stream" {
 		t.Fatalf("Content-Type=%q", rec.Header().Get("Content-Type"))
@@ -289,5 +291,45 @@ func TestParseBmsSlotQuery(t *testing.T) {
 		if _, _, ok := parseBmsSlotQuery(c.id, c.gen); ok != c.valid {
 			t.Errorf("id=%q gen=%q: valid=%v, ожидалось %v", c.id, c.gen, ok, c.valid)
 		}
+	}
+}
+
+// TestBmsRawRejectsBadCRC — испорченный payload при старом CRC → 404.
+func TestBmsRawRejectsBadCRC(t *testing.T) {
+	payload := make([]byte, 107)
+	payload[0] = 16
+	path := writeBmsShmSegTest(t, payload)
+	buf, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf[bmsShmHeader+bmsSlots*bmsListItemLen+bmsSlotHdr] ^= 0xff
+	if err := os.WriteFile(path, buf, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prev := bmsShmPath
+	bmsShmPath = path
+	t.Cleanup(func() { bmsShmPath = prev })
+
+	s := &Server{}
+	rec := httptest.NewRecorder()
+	s.handleAPIBmsRaw(rec, authedReq(http.MethodGet, "/api/bms/raw?id=0&gen=0", ""))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("битый CRC: code=%d, ожидалось 404", rec.Code)
+	}
+}
+
+// TestBmsRawRejectsWrongLen — payload не 107 Б → 404 (контракт bms v1).
+func TestBmsRawRejectsWrongLen(t *testing.T) {
+	path := writeBmsShmSegTest(t, make([]byte, 108))
+	prev := bmsShmPath
+	bmsShmPath = path
+	t.Cleanup(func() { bmsShmPath = prev })
+
+	s := &Server{}
+	rec := httptest.NewRecorder()
+	s.handleAPIBmsRaw(rec, authedReq(http.MethodGet, "/api/bms/raw?id=0&gen=0", ""))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("длина 108: code=%d, ожидалось 404", rec.Code)
 	}
 }

@@ -16,16 +16,19 @@ func (antBMS) Name() string   { return "AntBMS-DSP" }
 func (antBMS) Framing() uint8 { return framingNative }
 func (antBMS) Speeds() []int  { return []int{19200} }
 
-// MissThreshold: пассивный поток — нет кадра за окно = сразу потеря (arch §10).
-func (antBMS) MissThreshold() int { return 1 }
+// MissThreshold: пассивный поток — потеря после двух подряд пустых окон.
+// Запас нужен, т.к. Poll делает Flush и может отбросить кадр на границе.
+func (antBMS) MissThreshold() int { return 2 }
 
 // antMarker — заголовок live-кадра.
 var antMarker = []byte{0xAA, 0x55, 0xAA, 0xFF}
 
 const antFrameLen = 140
 
-// extractAntFrame ищет в буфере валидный 140-байтный кадр (маркер + CRC).
-func extractAntFrame(b []byte) []byte {
+// takeAntFrame извлекает первый валидный кадр и возвращает остаток буфера.
+// Если полного валидного кадра нет, remainder начинается с первого возможного
+// маркера (включая неполный) — так частичный кадр не теряется между чтениями.
+func takeAntFrame(b []byte) (frame, rest []byte) {
 	for i := 0; i+antFrameLen <= len(b); i++ {
 		if b[i] != antMarker[0] {
 			continue
@@ -40,9 +43,19 @@ func extractAntFrame(b []byte) []byte {
 		if uint16(sum) != binary.BigEndian.Uint16(b[i+138:i+140]) {
 			continue
 		}
-		return b[i : i+antFrameLen]
+		return b[i : i+antFrameLen], b[i+antFrameLen:]
 	}
-	return nil
+	// Полного кадра нет: оставляем всё, начиная с первого префикса маркера.
+	for i := 0; i < len(b); i++ {
+		l := len(antMarker)
+		if left := len(b) - i; left < l {
+			l = left
+		}
+		if bytesEq(b[i:i+l], antMarker[:l]) {
+			return nil, b[i:]
+		}
+	}
+	return nil, nil
 }
 
 func bytesEq(a, b []byte) bool {
@@ -57,31 +70,111 @@ func bytesEq(a, b []byte) bool {
 	return true
 }
 
-// readAntFrame читает пассивный поток до валидного кадра (окно 500 мс).
+// readAntFrame читает доступный пассивный поток и возвращает ПОСЛЕДНИЙ
+// валидный кадр. Чтение идёт до первого валидного кадра (общий дедлайн 500 мс);
+// после него — короткий дренаж 150 мс, чтобы забрать уже доступные кадры.
+// Это устраняет публикацию «головы» FIFO: при потоке быстрее опроса старые
+// кадры не накапливаются.
 func readAntFrame(t Transport) ([]byte, error) {
-	t.SetReadTimeout(500 * time.Millisecond)
-	deadline := time.Now().Add(500 * time.Millisecond)
-	var acc []byte
+	const (
+		readWindow  = 500 * time.Millisecond
+		drainWindow = 150 * time.Millisecond
+		drainWait   = 10 * time.Millisecond
+	)
+	t.SetReadTimeout(readWindow)
+	defer t.SetReadTimeout(readWindow)
+	deadline := time.Now().Add(readWindow)
+	var (
+		acc       []byte
+		last      []byte
+		frames    int
+		total     int
+		drainTill time.Time
+	)
 	var tmp [256]byte // переиспользуемый буфер (без аллокации на итерацию)
-	for time.Now().Before(deadline) {
+	for {
+		rem := time.Until(deadline)
+		if rem <= 0 {
+			break
+		}
+		to := rem
+		if last != nil {
+			// После первого валидного кадра не ждём полное окно: добираем
+			// только уже доступные байты.
+			if d := time.Until(drainTill); d < to {
+				to = d
+			}
+			if to > drainWait {
+				to = drainWait
+			}
+			if to <= 0 {
+				break
+			}
+		}
+		t.SetReadTimeout(to)
 		n, err := t.Read(tmp[:])
 		if n > 0 {
+			total += n
 			acc = append(acc, tmp[:n]...)
-			if f := extractAntFrame(acc); f != nil {
-				return f, nil
+			for {
+				f, rest := takeAntFrame(acc)
+				if f == nil {
+					acc = rest // сохранить частичный кадр до следующего чтения
+					break
+				}
+				last = f
+				frames++
+				acc = rest
+				if drainTill.IsZero() {
+					drainTill = time.Now().Add(drainWindow)
+				}
 			}
 			if len(acc) > 4096 {
 				acc = acc[len(acc)-antFrameLen:]
 			}
 		}
 		if err != nil && err != errTimeout {
+			if last != nil {
+				break // уже есть валидный кадр — ошибку не теряем
+			}
 			return nil, err
 		}
+		if last != nil && !drainTill.IsZero() && !time.Now().Before(drainTill) {
+			break
+		}
 	}
-	if f := extractAntFrame(acc); f != nil {
-		return f, nil
+	if last != nil {
+		lx.Debugf("ant: прочитано %d Б, кадров %d, выбран последний (uptime=%d)",
+			total, frames, antUptime(last))
+		return last, nil
 	}
 	return nil, errTimeout
+}
+
+// validateAntCells проверяет правдоподобность напряжений (только для Probe:
+// в Poll аварийный кадр с 0 мВ должен публиковаться, а не считаться потерей).
+// Достаточно хотя бы одной правдоподобной ячейки: кадр с частично мёртвыми
+// ячейками принимается (авария видна), полностью недостоверный — отклоняется.
+func validateAntCells(f []byte, n int) error {
+	ok := 0
+	for i := 0; i < n; i++ {
+		mv := binary.BigEndian.Uint16(f[6+2*i : 8+2*i])
+		if mv >= 1000 && mv <= 5000 {
+			ok++
+		}
+	}
+	if ok == 0 {
+		return fmt.Errorf("antbms: нет правдоподобных напряжений ячеек (n=%d)", n)
+	}
+	return nil
+}
+
+// antUptime — uptime BMS из кадра (offset 87, u32 BE), для диагностики свежести.
+func antUptime(f []byte) uint32 {
+	if len(f) < 91 {
+		return 0
+	}
+	return binary.BigEndian.Uint32(f[87:91])
 }
 
 // parseAntFrame разбирает 140 Б в контракт (§6 antbms-dsp).
@@ -175,13 +268,22 @@ func (antBMS) Probe(t Transport) (probeResult, error) {
 	if err != nil {
 		return probeResult{Kind: probeNoAnswer}, nil
 	}
-	if _, err := parseAntFrame(f); err != nil {
+	tel, err := parseAntFrame(f)
+	if err != nil {
+		return probeResult{Kind: probeNoAnswer}, nil
+	}
+	if err := validateAntCells(f, int(tel.CellCount)); err != nil {
 		return probeResult{Kind: probeNoAnswer}, nil
 	}
 	return probeResult{Kind: probeFound, Slots: []probeSlot{{Addr: 0, Base: antBase(f)}}}, nil
 }
 
 func (antBMS) Poll(t Transport, _ int) (bmscontract.Telemetry, error) {
+	// Пассивный поток: сбрасываем накопленный FIFO перед чтением, иначе
+	// публикуется самый старый кадр (см. docs/bms/antbms-dsp.md §5).
+	if f, ok := t.(interface{ Flush() }); ok {
+		f.Flush()
+	}
 	f, err := readAntFrame(t)
 	if err != nil {
 		return bmscontract.Telemetry{}, err

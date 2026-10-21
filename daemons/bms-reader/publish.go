@@ -45,7 +45,9 @@ func telemetryValues(t bmscontract.Telemetry) []tscontract.Value {
 }
 
 // publishRaw пишет снапшот телеметрии в raw-tsdb через stat.Sink.
-func publishRaw(sink *stat.Sink, id string, tel bmscontract.Telemetry) {
+// ts — время завершения опроса/последнего кадра (не публикации): старые данные не должны выглядеть
+// свежими. Нулевое время заменяется текущим.
+func publishRaw(sink *stat.Sink, id string, tel bmscontract.Telemetry, ts time.Time) {
 	if sink == nil {
 		return
 	}
@@ -57,6 +59,9 @@ func publishRaw(sink *stat.Sink, id string, tel bmscontract.Telemetry) {
 	if err != nil {
 		return
 	}
+	if ts.IsZero() {
+		ts = time.Now()
+	}
 	// Время ряда — в МИЛЛИСЕКУНДАХ (как у map/kes и как ждёт tsdb/аккумулятор).
-	sink.Publish("bms", id, time.Now().UnixMilli(), 1, payload)
+	sink.Publish("bms", id, ts.UnixMilli(), 1, payload)
 }

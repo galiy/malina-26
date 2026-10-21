@@ -235,6 +235,10 @@ func (o *orchestrator) trySource(src *source) {
 			if err != nil {
 				continue
 			}
+			if o.stopped() {
+				tr.Close()
+				return
+			}
 			if o.probeAndAct(src, tr) {
 				// Источник принят (matched) — транспорт остаётся открытым у пулера.
 				// Если услышали ЧУЖОЙ трафик (sawNotMine), источник не зарегистрирован:
@@ -260,7 +264,13 @@ func (o *orchestrator) trySource(src *source) {
 }
 
 func (o *orchestrator) probeAndAct(src *source, tr Transport) bool {
+	if o.stopped() {
+		return false
+	}
 	matched, slots, sawNotMine := o.probeAll(tr)
+	if o.stopped() {
+		return false
+	}
 	switch {
 	case matched != nil:
 		o.clearBackoff(src.desc)
@@ -279,6 +289,9 @@ func (o *orchestrator) probeAndAct(src *source, tr Transport) bool {
 func (o *orchestrator) probeAll(tr Transport) (bmsType, []probeSlot, bool) {
 	sawNotMine := false
 	for _, bt := range bmsTypesOrder {
+		if o.stopped() {
+			return nil, nil, false
+		}
 		res, err := bt.Probe(tr)
 		if err != nil {
 			continue
@@ -296,6 +309,9 @@ func (o *orchestrator) probeAll(tr Transport) (bmsType, []probeSlot, bool) {
 // addSource создаёт состояние шины и (при необходимости) пулер-поток; слоты
 // добавляются в него. Вызывается из оркестраторского цикла.
 func (o *orchestrator) addSource(src *source, bt bmsType, slots []probeSlot) {
+	if o.stopped() {
+		return
+	}
 	o.mu.Lock()
 	st, ok := o.states[src.desc]
 	if !ok {
@@ -406,6 +422,7 @@ func (o *orchestrator) sourcePoller(st *srcState) {
 		for _, d := range devs {
 			st.src.mu.Lock()
 			tel, err := st.bt.Poll(st.src.tr, d.addr)
+			tRecv := time.Now() // время завершения опроса, до кодирования/публикации
 			st.src.mu.Unlock()
 			if err != nil {
 				d.miss++
@@ -433,7 +450,7 @@ func (o *orchestrator) sourcePoller(st *srcState) {
 			if !o.isActive(d) {
 				continue
 			}
-			publishRaw(o.sink, d.id, tel)
+			publishRaw(o.sink, d.id, tel, tRecv)
 			select {
 			case o.events <- devEvent{d: d}:
 			default:
@@ -516,7 +533,10 @@ func (o *orchestrator) loseDevice(d *device) {
 		delete(o.states, st.src.desc)
 		o.mu.Unlock()
 		o.bumpBackoff(st.src.desc, false)
+		// Закрываем под мьютексом источника: пулер мог ещё читать транспорт.
+		st.src.mu.Lock()
 		st.src.tr.Close()
+		st.src.mu.Unlock()
 	}
 }
 
@@ -535,12 +555,22 @@ func (o *orchestrator) rescan() {
 		if o.stopped() {
 			return
 		}
+		// Пассивный AntBMS не сканируется: Probe лишь повторно читает поток.
+		if _, passive := st.bt.(antBMS); passive {
+			continue
+		}
 		st.src.mu.Lock()
 		res, err := st.bt.Probe(st.src.tr)
 		st.src.mu.Unlock()
+		if o.stopped() {
+			return
+		}
 		if err == nil && res.Kind == probeFound {
 			added := false
 			for _, s := range res.Slots {
+				if o.stopped() {
+					return
+				}
 				if o.addSlot(st, s) {
 					added = true
 				}

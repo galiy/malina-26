@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"hash/crc32"
 	"net"
 	"strings"
 	"testing"
@@ -407,6 +408,7 @@ func putSlot(data []byte, slot int, gen uint64, payload []byte) {
 	binary.LittleEndian.PutUint64(s[8:16], gen)
 	binary.LittleEndian.PutUint64(s[16:24], 0)
 	binary.LittleEndian.PutUint32(s[24:28], uint32(len(payload)))
+	binary.LittleEndian.PutUint32(s[28:32], crc32.ChecksumIEEE(payload))
 	copy(s[bmsSlotHdr:bmsSlotHdr+len(payload)], payload)
 }
 
@@ -441,5 +443,19 @@ func TestBuildAliveListDuplicateBase(t *testing.T) {
 		if p := readTelemetry(data, b.Slot, b.Gen); p == nil {
 			t.Fatalf("телеметрия слота %d недоступна", b.Slot)
 		}
+	}
+}
+
+// TestReadTelemetryBadCRC — испорченный payload при старом CRC → nil.
+func TestReadTelemetryBadCRC(t *testing.T) {
+	data := mkSeg(t)
+	var tel bmscontract.Telemetry
+	tel.CellCount = 1
+	payload := bmscontract.Encode(&tel)
+	putSlot(data, 0, 1, payload)
+	off := shmHeader + bmsSlots*bmsListLen + 0*bmsSlotSize + bmsSlotHdr
+	data[off] ^= 0xff
+	if got := readTelemetry(data, 0, 1); got != nil {
+		t.Fatalf("битый CRC принят: %v", got)
 	}
 }

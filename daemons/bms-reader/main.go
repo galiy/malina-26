@@ -95,7 +95,9 @@ func main() {
 			case <-stop:
 			}
 			close(phase)
-			waitTimeout(&wg, 5*time.Second, "оркестратор")
+			// 20 с — с запасом на probeAll (EnBMS до ~16 с); иначе старый run может
+			// дооткрыть порт после closeAll и удержать flock.
+			waitTimeout(&wg, 20*time.Second, "оркестратор")
 			// Сначала гасим пулеры источников и закрываем их транспорты (порты),
 			// только потом публикуем пустой shm — иначе пулер может дописать слот.
 			orch.waitPollers()

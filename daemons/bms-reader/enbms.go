@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/galiy/malina-26/daemons/lib/bmscontract"
 )
@@ -71,14 +72,19 @@ func (enBMS) Probe(t Transport) (probeResult, error) {
 
 // Poll — телеметрия слота: 0x42 (+ 0x44 режим/ключи/баланс/alarm).
 func (enBMS) Poll(t Transport, adr int) (bmscontract.Telemetry, error) {
+	start := time.Now()
+	retried := false
 	f, err := enReq(t, adr, 0x42, nil)
 	if err != nil {
 		// ретрай один раз (arch §10: 2×500 мс)
+		retried = true
 		f, err = enReq(t, adr, 0x42, nil)
 		if err != nil {
+			lx.Debugf("enbms: adr=%d ошибка 0x42 (retry=%v): %v", adr, retried, err)
 			return bmscontract.Telemetry{}, err
 		}
 	}
+	lx.Debugf("enbms: adr=%d rtt=%s retry=%v rtn=%d", adr, time.Since(start).Round(time.Millisecond), retried, f.RTN)
 	if f.RTN != 0 {
 		return bmscontract.Telemetry{}, fmt.Errorf("enbms: 0x42 rtn=%d", f.RTN)
 	}

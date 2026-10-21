@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"hash/crc32"
 	"os"
 	"time"
 )
@@ -112,8 +113,12 @@ func readTelemetry(data []byte, slot int, gen uint64) []byte {
 		return nil
 	}
 	n := int(binary.LittleEndian.Uint32(s[24:28]))
-	if n <= 0 || n > bmsSlotData {
+	if n != 107 { // ровно бинарный контракт bms v1
 		return nil
 	}
-	return append([]byte(nil), s[bmsSlotHdr:bmsSlotHdr+n]...)
+	payload := append([]byte(nil), s[bmsSlotHdr:bmsSlotHdr+n]...)
+	if crc32.ChecksumIEEE(payload) != binary.LittleEndian.Uint32(s[28:32]) {
+		return nil // рваный/повреждённый снимок
+	}
+	return payload
 }
