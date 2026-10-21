@@ -78,7 +78,9 @@ MALINA_PASS=<пароль> deploy/deploy.sh --build --first-run <user@host>
 
 # локальный деплой на SD (перезаливка образа + p3 + раскладка + проверка):
 deploy/local/deploy-local.sh /dev/sdX
-# перенос ПАК по сети (методика для агента, без скрипта) — deploy/redeploy-plan.md
+# перенос ПАК по сети (Вариант B) — ТОЛЬКО по deploy/redeploy-plan.md ЦЕЛИКОМ:
+#   socat raw TCP + приём через /dev/tcp (SHA в /dev/shm) + sysrq-ребут +
+#   bootstrap-сеть /etc/cron.d/vb-bootstrap. Импровизация (dd по SSH) запрещена.
 ```
 
 ## Доступы по умолчанию
