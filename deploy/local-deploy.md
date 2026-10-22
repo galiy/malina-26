@@ -410,8 +410,8 @@ done
 2. Сделать копию базового образа и разложить p3 + артефакты текущего репозитория:
 
 ```bash
-BASE=/opt/raspberry_tmp/pi-gen/deploy/2026-10-17-malina-lite.img
-IMG=/opt/raspberry_tmp/pi-gen/deploy/2026-10-19-malina-release.img
+BASE=/opt/raspberry_tmp/pi-gen/deploy/2026-10-21-malina-lite.img
+IMG=/opt/raspberry_tmp/pi-gen/deploy/2026-10-22-malina-release.img
 sudo cp --sparse=always "$BASE" "$IMG"
 sudo chown "$USER:$USER" "$IMG"   # deploy-local делает truncate от своего имени
 MAL_P3_GB=3 deploy/local/deploy-local.sh "$IMG"
@@ -423,9 +423,9 @@ MAL_P3_GB=3 deploy/local/deploy-local.sh "$IMG"
 ls -l --block-size=1 "$IMG"       # ожидаемо 6 988 759 040
 sfdisk -d "$IMG"                  # p1 512M, p2 3G, p3 3G
 cd /opt/raspberry_tmp/pi-gen/deploy
-sudo zip -9 malina-2026.10.19-rpi3-8gb.img.zip 2026-10-19-malina-release.img
-sha256sum malina-2026.10.19-rpi3-8gb.img.zip \
-  > malina-2026.10.19-rpi3-8gb.img.zip.sha256
+sudo zip -9 malina-2026.10.22-1-rpi3-8gb.img.zip 2026-10-22-malina-release.img
+sha256sum malina-2026.10.22-1-rpi3-8gb.img.zip \
+  > malina-2026.10.22-1-rpi3-8gb.img.zip.sha256
 ```
 
 4. Выложить на VPS, заменив предыдущую версию (на VPS ~2,5 ГБ свободно,
@@ -433,12 +433,12 @@ sha256sum malina-2026.10.19-rpi3-8gb.img.zip \
 
 ```bash
 export SSHPASS='<VPS_PASSWORD>'
-sshpass -e scp malina-2026.10.19-rpi3-8gb.img.zip \
-  malina-2026.10.19-rpi3-8gb.img.zip.sha256 \
+sshpass -e scp malina-2026.10.22-1-rpi3-8gb.img.zip \
+  malina-2026.10.22-1-rpi3-8gb.img.zip.sha256 \
   <VPS_USER>@<VPS_IP>:<VPS_PATH>/
 
 sshpass -e ssh <VPS_USER>@<VPS_IP> \
-  'cd <VPS_PATH> && sha256sum -c malina-2026.10.19-rpi3-8gb.img.zip.sha256; df -h /'
+  'cd <VPS_PATH> && sha256sum -c malina-2026.10.22-1-rpi3-8gb.img.zip.sha256; df -h /'
 ```
 
 Так как имя файла фиксировано, новый архив заменяет старый. Если появились

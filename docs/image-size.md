@@ -31,7 +31,7 @@
 ## Сборка
 
 ```bash
-IMG=/opt/raspberry_tmp/pi-gen/deploy/2026-10-19-malina-lite.img
+IMG=/opt/raspberry_tmp/pi-gen/deploy/2026-10-21-malina-lite.img
 MAL_P3_GB=3 deploy/local/deploy-local.sh "$IMG"
 ```
 
