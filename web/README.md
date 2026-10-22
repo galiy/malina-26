@@ -113,7 +113,9 @@
 «Сохранить всё»/«Отменить всё»). Пишет через `POST /api/map/write`; текущие значения
 берёт из штатного raw-пула страницы. Данные параметров — `static/control-data.js`,
 генерируется `web/tools/gen_control.py` из `~/src/mapsettings/catalog.json` (+легаси-набор);
-логика — `static/control.js`. Требования — `docs/map-write-ui.md`.
+логика — `static/control.js`. Группа «Внешние устройства» (перед «Реле») содержит адрес МАП, режим/скорость/
+количество устройств RS3 и внешние BMS/MPPT; RS3-строки показываются только на
+Titanator, BMS/MPPT — на Titanator и Dominator. Требования — `docs/map-write-ui.md`.
 
 ## Подсистема `malina-netd`
 

@@ -29,7 +29,9 @@ Two sub-tabs:
 
 ### Control
 
-At the top — commands, below — parameters by group: “Generation”, “Net 1”, “Net 2”, “Battery”, “Relay”, “Other”.
+At the top — commands, below — parameters by group: “Generation”, “Net 1”, “Net 2”, “Battery”, “External devices”, “Relay”, “Other”.
+
+The “External devices” group configures the RS3 port and external BMS/MPPT. RS3 is available on Titanator only; on Dominator only BMS/MPPT are shown.
 
 ## How to issue a command
 

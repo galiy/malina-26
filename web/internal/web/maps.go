@@ -36,10 +36,12 @@ func (s *Server) handleMapPage(w http.ResponseWriter, r *http.Request) {
 	data := s.baseData(r)
 	data["Active"] = "map"
 	data["FieldNames"] = mapFieldNames
+	data["Model"] = ""
 	if ok {
 		data["ID"] = m.ID
 		data["Gen"] = m.Gen
 		data["SerialLabel"] = m.SerialLabel()
+		data["Model"] = m.Model
 		data["Title"] = fmt.Sprintf(s.tr(s.lang(r), "map.title"), mapModelFull(s.trFor(r), m.Model), m.SerialLabel(), m.Port)
 	} else if sn != "" {
 		// Устройство ещё не обнаружено — страница-ожидание; клиент повторит поиск.

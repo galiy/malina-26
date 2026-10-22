@@ -14,28 +14,42 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 # Легаси-набор: (группа, адрес, легаси-тип, доп-ячейка). Группы: 0 Генерация,
 # 1 Сеть1, 2 Сеть2, 3 АКБ, 4 Реле, 5 Прочее. Реле3 (0x120..0x123) — только Титан.
-GROUPS = ["Генерация", "Сеть 1", "Сеть 2", "АКБ", "Реле", "Прочее"]
+GROUPS = ["Генерация", "Сеть 1", "Сеть 2", "АКБ", "Внешние устройства", "Реле", "Прочее"]
+
+# Ключи заголовков групп. Индексы в GROUPS не совпадают с историческими ctl.gN:
+# новый раздел вставлен перед «Реле», поэтому старые ключи закреплены явно.
+TITLE_KEYS = {
+    0: "ctl.g0", 1: "ctl.g1", 2: "ctl.g2", 3: "ctl.g3",
+    4: "ctl.group_external", 5: "ctl.g4", 6: "ctl.g5",
+}
+
+# Легаси-набор: (группа, адрес, легаси-тип, доп-ячейка, режимы). Реле3 — только
+# Титанатор. Группа 4 «Внешние устройства»: RS3/DevAdr — Titanator (T),
+# BMS/MPPT — Titanator+Dominator (B).
 SPEC = [
     (0, 0x138, "list", None), (0, 0x139, "list", None), (0, 0x13A, "ac", None),
     (0, 0x13B, "list", None), (0, 0x13C, "list", None),     (0, 0x13D, "dc_dop", 0x102),
     (0, 0x13E, "list", None),
     (1, 0x150, "list", None), (1, 0x151, "list", None), (1, 0x152, "power_dop", 0x107),
-    (1, 0x153, "dc", None), (1, 0x155, "number", None), (1, 0x156, "list", None),
-    (1, 0x157, "number", None),
+    (1, 0x153, "dc", None), (1, 0x155, "number", None),
     (2, 0x168, "power_dop", 0x107), (2, 0x169, "ac", None), (2, 0x16A, "ac", None),
     (2, 0x16B, "list", None), (2, 0x16C, "dc_dop", 0x103), (2, 0x16D, "time", None),
     (2, 0x16E, "time", None), (2, 0x16F, "number", None),
     (3, 0x180, "list", None), (3, 0x181, "capacity", None), (3, 0x182, "current_c", None),
     (3, 0x183, "current_c", None), (3, 0x184, "list", None), (3, 0x185, "dc_dop", 0x104),
     (3, 0x186, "dc_dop", 0x105), (3, 0x187, "dc_dop", 0x106),
-    (4, 0x198, "relay_funk", None), (4, 0x199, "relay", None), (4, 0x19A, "relay", None),
-    (4, 0x19B, "relay", None), (4, 0x19C, "relay_funk", None), (4, 0x19D, "relay", None),
-    (4, 0x19E, "relay", None), (4, 0x19F, "relay", None),
+    # Внешние устройства
+    (4, 0x1CA, "number", None, "T"), (4, 0x1CC, "list", None, "T"),
+    (4, 0x1CD, "list", None, "T"),   (4, 0x1CE, "number", None, "T"),
+    (4, 0x156, "list", None, "B"),   (4, 0x157, "number", None, "B"),
+    (5, 0x198, "relay_funk", None), (5, 0x199, "relay", None), (5, 0x19A, "relay", None),
+    (5, 0x19B, "relay", None), (5, 0x19C, "relay_funk", None), (5, 0x19D, "relay", None),
+    (5, 0x19E, "relay", None), (5, 0x19F, "relay", None),
     # Реле3 — только Титанатор
-    (4, 0x120, "relay_funk", None, "T"), (4, 0x121, "relay", None, "T"),
-    (4, 0x122, "relay", None, "T"), (4, 0x123, "relay", None, "T"),
-    (5, 0x1B2, "list", None), (5, 0x1B3, "list", None), (5, 0x1B4, "list", None), (5, 0x1B5, "list", None),
-    (5, 0x1B6, "time", None), (5, 0x1B7, "charge_time", None),
+    (5, 0x120, "relay_funk", None, "T"), (5, 0x121, "relay", None, "T"),
+    (5, 0x122, "relay", None, "T"), (5, 0x123, "relay", None, "T"),
+    (6, 0x1B2, "list", None), (6, 0x1B3, "list", None), (6, 0x1B4, "list", None), (6, 0x1B5, "list", None),
+    (6, 0x1B6, "time", None), (6, 0x1B7, "charge_time", None),
 ]
 
 
@@ -138,10 +152,13 @@ def main():
             e["short"] = {str(k): v for k, v in RELAY_FUNK_SHORT.items()}
         if addr in SHORT:
             e["short"] = {str(k): v for k, v in SHORT[addr].items()}
+        if grp == 4:
+            e["filter"] = True
+            e["i18n"] = True
         groups.setdefault(grp, []).append(e)
 
     out = {
-        "groups": [{"name": GROUPS[g], "params": groups[g]} for g in sorted(groups)],
+        "groups": [{"name": GROUPS[g], "titleKey": TITLE_KEYS[g], "params": groups[g]} for g in sorted(groups)],
         "addr2fid": {("%X" % a): n for a, n in fid.items()},
         "commands": {
             "on": {"code": "02"}, "off": {"code": "01"}, "reset": {"code": "06"},

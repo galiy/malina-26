@@ -7,6 +7,7 @@
   var I18N = window.I18N || {};
   var META = window.MAP_CONTROL || { groups: [], commands: {} };
   var MAP_ID = window.MAP_ID;
+  var MODEL = window.MAP_MODEL || "";
   var tab = document.getElementById("tab-control");
   if (!tab || MAP_ID == null) { return; }
 
@@ -56,9 +57,35 @@
   function dopVal(p) { if (!p.dop) { return 0; } var v = F[fieldOf(p.dop)]; return (typeof v === "number") ? v : 0; }
   function inRange(p, disp) { if (p.min == null || p.max == null) { return true; } return disp >= p.min - 1e-9 && disp <= p.max + 1e-9; }
 
+  // filter — только для новых параметров раздела «Внешние устройства»;
+  // старые группы (включая Реле3) не фильтруются, поведение сохраняется.
+  function visible(p) {
+    if (!p.filter) { return true; }
+    var m = p.modes || "";
+    if (m === "T") { return MODEL === "T"; }
+    if (m === "D") { return MODEL === "D"; }
+    if (m === "B") { return MODEL === "T" || MODEL === "D"; }
+    return true;
+  }
+  function nameOf(p) {
+    if (p.i18n && p.fid && I18N["mi.n." + p.fid] !== undefined) { return t("mi.n." + p.fid); }
+    return p.name;
+  }
+  function labelI18n(p, k) {
+    if (p.i18n && p.fid && I18N["mi.e." + p.fid + "." + k] !== undefined) { return t("mi.e." + p.fid + "." + k); }
+    return undefined;
+  }
   function trimWord(s, n) { if (s.length <= n) { return s; } var t = s.slice(0, n); var i = t.lastIndexOf(" "); if (i > 0) { t = t.slice(0, i); } return t + "…"; }
-  function shortLabel(p, k) { var s = (p.short && p.short[String(k)] !== undefined) ? p.short[String(k)] : (p.enum ? p.enum[String(k)] : String(k)); return (s && s.length > 30) ? trimWord(s, 30) : s; }
-  function fullLabel(p, k) { return (p.enum && p.enum[String(k)] !== undefined) ? p.enum[String(k)] : shortLabel(p, k); }
+  function shortLabel(p, k) {
+    var s = labelI18n(p, k);
+    if (s === undefined) { s = (p.short && p.short[String(k)] !== undefined) ? p.short[String(k)] : (p.enum ? p.enum[String(k)] : String(k)); }
+    return (s && s.length > 30) ? trimWord(s, 30) : s;
+  }
+  function fullLabel(p, k) {
+    var s = labelI18n(p, k);
+    if (s !== undefined) { return s; }
+    return (p.enum && p.enum[String(k)] !== undefined) ? p.enum[String(k)] : shortLabel(p, k);
+  }
 
   function fieldOf(addr) { return (window.MAP_CONTROL.addr2fid || {})[addr] || ""; }
 
@@ -91,8 +118,11 @@
   }
 
   function paramGroup(g, gi) {
-    var rows = g.params.map(function (p) { return paramRow(p); }).join("");
-    return '<h2 class="map-sec">' + esc(t("ctl.g" + gi)) + '</h2>' +
+    var ps = g.params.filter(visible);
+    if (!ps.length) { return ""; }
+    var title = (g.titleKey && I18N[g.titleKey] !== undefined) ? t(g.titleKey) : g.name;
+    var rows = ps.map(function (p) { return paramRow(p); }).join("");
+    return '<h2 class="map-sec">' + esc(title) + '</h2>' +
       '<table class="ctl-tbl"><thead><tr>' +
       '<th>' + esc(t("ctl.col_name")) + '</th><th></th>' +
       '<th>' + esc(t("ctl.col_cur")) + '</th><th></th>' +
@@ -102,7 +132,7 @@
   function paramRow(p) {
     var h = helpText(p);
     return '<tr data-addr="' + p.addr + '">' +
-      '<td class="ctl-name"><span>' + esc(p.name) + '</span></td>' +
+      '<td class="ctl-name"><span>' + esc(nameOf(p)) + '</span></td>' +
       '<td class="ctl-q">' + (h ? '<a href="#" class="ctl-help">?</a>' : '') + '</td>' +
       '<td class="ctl-cur" data-l="' + esc(t("ctl.col_cur")) + '"></td>' +
       '<td class="ctl-q2"></td>' +
@@ -113,6 +143,9 @@
   function norm(s) { return (s || "").trim().replace(/\.+$/, "").toLowerCase(); }
   // Содержательная подсказка: описание, которое НЕ дублирует имя параметра.
   function helpText(p) {
+    if (p.i18n && p.fid && I18N["ctl.ext." + p.fid + ".hint"] !== undefined) {
+      return t("ctl.ext." + p.fid + ".hint");
+    }
     var d = (p.desc || "").trim();
     if (!d) { return ""; }
     if (norm(d) === norm(p.name)) { return ""; }
@@ -143,9 +176,10 @@
       esc2(te);
       return;
     }
+    var stepAttr = (p.type === "number" && Number.isInteger(p.min) && Number.isInteger(p.max)) ? "1" : "any";
     td.innerHTML = '<input type="number" class="ctl-input"' +
       (p.min != null ? ' min="' + p.min + '"' : '') + (p.max != null ? ' max="' + p.max + '"' : '') +
-      ' step="any">';
+      ' step="' + stepAttr + '">';
     var ne = td.querySelector("input");
     ne.addEventListener("input", function () { onEdit(p, this.value); });
     esc2(ne);
@@ -297,10 +331,10 @@
 
   function saveAll() {
     var ops = [];
-    META.groups.forEach(function (g) { g.params.forEach(function (p) { var st = state[p.addr]; if (st.edited && st.valid) { ops = ops.concat(opsFor(p)); } }); });
+    META.groups.forEach(function (g) { g.params.forEach(function (p) { var st = state[p.addr]; if (st && st.edited && st.valid) { ops = ops.concat(opsFor(p)); } }); });
     if (!ops.length) { return; }
     post(ops, function (j) {
-      if (j && j.ok) { META.groups.forEach(function (g) { g.params.forEach(function (p) { state[p.addr].edited = false; var r = tab.querySelector('tr[data-addr="' + p.addr + '"]'); if (r) { r.classList.remove("ctl-changed"); r.querySelector(".ctl-edit").classList.remove("ctl-invalid"); renderActs(p, r); } }); }); }
+      if (j && j.ok) { META.groups.forEach(function (g) { g.params.forEach(function (p) { var st = state[p.addr]; if (!st) { return; } st.edited = false; var r = tab.querySelector('tr[data-addr="' + p.addr + '"]'); if (r) { r.classList.remove("ctl-changed"); r.querySelector(".ctl-edit").classList.remove("ctl-invalid"); renderActs(p, r); } }); }); }
       else { alert(errText(j)); }
       forceRefresh();
     });
