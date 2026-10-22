@@ -82,19 +82,6 @@ func readSlotTelemetry(data []byte, slot int, now time.Time) []byte {
 	return readTelemetry(data, slot, gen)
 }
 
-// slotDiag — диагностика записи списка для debug-лога (без чтения payload).
-func slotDiag(data []byte, slot int, now time.Time) (age time.Duration, state uint8, gen uint64) {
-	if data == nil || len(data) < shmHeader+bmsSlots*bmsListLen || slot < 0 || slot >= bmsSlots {
-		return 0, 0, 0
-	}
-	it := data[shmHeader+slot*bmsListLen : shmHeader+(slot+1)*bmsListLen]
-	if binary.LittleEndian.Uint32(it[0:4]) != 1 {
-		return 0, 0, 0
-	}
-	ls := int64(binary.LittleEndian.Uint64(it[itOffLastSeen : itOffLastSeen+8]))
-	return now.Sub(time.Unix(ls, 0)), it[itOffState], binary.LittleEndian.Uint64(it[itOffGen : itOffGen+8])
-}
-
 // readTelemetry читает payload слота (контракт 107 Б) и сверяет gen.
 // Возвращает nil, если слот пуст/невалиден/ген не совпал (docs/bms-proxy.md §5).
 func readTelemetry(data []byte, slot int, gen uint64) []byte {

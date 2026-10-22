@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"hash/crc32"
 	"time"
 
 	"github.com/galiy/malina-26/daemons/lib/bmscontract"
@@ -83,14 +82,11 @@ func mapAddr(adr int, addrMode string) int {
 // serveRequest обрабатывает один запрос телеметрии; false — данных нет (молчим).
 // rx — время первого байта запроса, raw — кадр (для debug-лога).
 func serveRequest(p *transport.Port, shmPath, addrMode string, req *paceRequest, rx time.Time, raw string) bool {
+	debugf("RX t=%d raw=%q", rx.UnixMicro(), raw)
 	slot := mapAddr(req.Adr, addrMode)
-	data := readShm(shmPath)
-	now := time.Now()
-	payload := readSlotTelemetry(data, slot, now)
+	payload := readSlotTelemetry(readShm(shmPath), slot, time.Now())
 	if payload == nil || len(payload) < bmscontract.Size {
-		age, state, gen := slotDiag(data, slot, now)
-		debugf("RX t=%d adr=%d raw=%q -> NOANSWER slot=%d age_ms=%d state=%d gen=%d",
-			rx.UnixMicro(), req.Adr, raw, slot, age.Milliseconds(), state, gen)
+		debugf("запрос ADR=%d: слот %d недоступен — молчу", req.Adr, slot)
 		return false
 	}
 	tel, err := bmscontract.Decode(payload)
@@ -102,48 +98,16 @@ func serveRequest(p *transport.Port, shmPath, addrMode string, req *paceRequest,
 	if responseDelay > 0 {
 		time.Sleep(responseDelay)
 	}
-	buildStart := time.Now()
 	info := buildSeplosInfo(&tel)
 	// slaveNo (INFO[1]) — номер пакета в параллельной сборке. У нас он равен
 	// слоту: ADR1→0, ADR2→1, ADR3→2 (protocol-485.md §5, dips.pdf).
 	info[1] = byte(slot)
 	frame := buildTelemetryFrame(req.Adr, info)
-	buildUs := time.Since(buildStart).Microseconds()
 	tx := time.Now()
-	err = p.WriteAll(frame)
-	writeUs := time.Since(tx).Microseconds()
-	if err != nil {
+	if err := p.WriteAll(frame); err != nil {
 		warnf("запись ответа ADR=%d: %v", req.Adr, err)
 		return false
 	}
-	age, state, gen := slotDiag(data, slot, now)
-	var cmin, cmax uint16
-	for i := 0; i < int(tel.CellCount) && i < len(tel.CellsMV); i++ {
-		v := tel.CellsMV[i]
-		if i == 0 || v < cmin {
-			cmin = v
-		}
-		if i == 0 || v > cmax {
-			cmax = v
-		}
-	}
-	var tmin, tmax int16
-	for i := 0; i < int(tel.TempCount) && i < len(tel.TempsDC); i++ {
-		v := tel.TempsDC[i]
-		if i == 0 || v < tmin {
-			tmin = v
-		}
-		if i == 0 || v > tmax {
-			tmax = v
-		}
-	}
-	debugf("RX t=%d adr=%d raw=%q -> TX t=%d slot=%d age_ms=%d state=%d gen=%d delay_ms=%d build_us=%d write_us=%d total_us=%d "+
-		"cells=%d cell_min=%d cell_max=%d temps=%d temp_min=%d temp_max=%d cur=%d total_cv=%d port_cv=%d soc=%d soh=%d cap=%d rem=%d cycles=%d mode=%d flags=%#x balance=%#x alarm=%x pcrc=%08x txraw=%q",
-		rx.UnixMicro(), req.Adr, raw, tx.UnixMicro(), slot, age.Milliseconds(), state, gen,
-		responseDelay.Milliseconds(), buildUs, writeUs, time.Since(rx).Microseconds(),
-		tel.CellCount, cmin, cmax, tel.TempCount, tmin, tmax,
-		tel.CurrentDA, tel.TotalCV, tel.PortCV, tel.SocDP, tel.SohDP,
-		tel.CapMAh, tel.RemainingMAh, tel.Cycles, tel.Mode, tel.Flags, tel.BalanceMask,
-		tel.Alarm[:], crc32.ChecksumIEEE(payload), string(frame))
+	debugf("TX t=%d adr=%d raw=%q", tx.UnixMicro(), req.Adr, string(frame))
 	return true
 }

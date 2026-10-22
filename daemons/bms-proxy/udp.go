@@ -107,21 +107,23 @@ func (u *udpListener) serve() {
 			time.Sleep(200 * time.Millisecond)
 			continue
 		}
+		rx := time.Now()
+		debugf("UDP %s: RX t=%d raw=%q", addr, rx.UnixMicro(), string(buf[:n]))
 		req := parseRequest(buf[:n])
 		if req == nil || req.CID2 != cid2Tel {
-			debugf("UDP %s: не-PACE/не телеметрия (%d Б)", addr, n)
+			debugf("UDP %s: t=%d не-PACE/не телеметрия (%d Б)", addr, rx.UnixMicro(), n)
 			continue
 		}
 		frame := u.build(req)
 		if frame == nil {
-			debugf("UDP %s: ADR=%d — нет BMS, молчу", addr, req.Adr)
+			debugf("UDP %s: t=%d ADR=%d — нет BMS, молчу", addr, rx.UnixMicro(), req.Adr)
 			continue
 		}
 		if _, err := u.conn.WriteToUDP(frame, addr); err != nil {
 			warnf("UDP-ответ %s: %v", addr, err)
 			continue
 		}
-		debugf("UDP %s: ответ ADR=%d, кадр=%d Б", addr, req.Adr, len(frame))
+		debugf("UDP %s: TX t=%d adr=%d raw=%q", addr, time.Now().UnixMicro(), req.Adr, string(frame))
 	}
 }
 
