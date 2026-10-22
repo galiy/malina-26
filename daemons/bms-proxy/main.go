@@ -149,7 +149,7 @@ func (d *daemon) stateStopped() {
 // stateFindPort — состояние A: поиск «своего» порта. Возвращает false, если
 // демон останавливают; true — порт найден либо переключение состояния.
 func (d *daemon) stateFindPort() bool {
-	infof("состояние A: поиск порта (baud=%d)", d.settings().Baud)
+	infof("состояние A: поиск порта (baud=%d, protocol=%s)", d.settings().Baud, d.settings().Protocol)
 	for {
 		select {
 		case <-d.stop:
@@ -160,7 +160,8 @@ func (d *daemon) stateFindPort() bool {
 		if !d.settings().Enabled {
 			return true
 		}
-		p := d.sc.findPort(d.settings().Baud)
+		s := d.settings()
+		p := d.sc.findPort(s.Baud, s.Protocol)
 		if p != nil {
 			d.sc.setPrefer(p.Path())
 			d.port = p
@@ -175,7 +176,7 @@ func (d *daemon) stateFindPort() bool {
 				infof("reload: выключен → состояние C")
 				return true
 			}
-			infof("reload: enabled=%v baud=%d log=%s addr=%s", s.Enabled, s.Baud, s.LogLevel, s.AddrMode)
+			infof("reload: enabled=%v baud=%d protocol=%s log=%s addr=%s", s.Enabled, s.Baud, s.Protocol, s.LogLevel, s.AddrMode)
 		case <-time.After(scanCycle):
 		}
 	}
@@ -189,13 +190,18 @@ func (d *daemon) stateServe() {
 	}
 	d.port = nil
 	s := d.settings()
-	infof("состояние B: слушаем на %s (baud=%d, адресация %s, адрес инвертора → слот shm)",
-		p.Path(), s.Baud, s.AddrMode)
+	infof("состояние B: слушаем на %s (baud=%d, protocol=%s, адресация %s)",
+		p.Path(), s.Baud, s.Protocol, s.AddrMode)
 
 	// childStop позволяет остановить слушателя и дождаться его выхода ДО
 	// закрытия порта (иначе ReadOneErr может залипнуть/крутиться на закрытом fd).
 	childStop := make(chan struct{})
-	done := listener(p, s.Baud, d.cfg.shmPath, s.AddrMode, childStop)
+	var done <-chan struct{}
+	if s.Protocol == protoVektor {
+		done = vektorListener(p, d.cfg.shmPath, childStop)
+	} else {
+		done = listener(p, s.Baud, d.cfg.shmPath, s.AddrMode, childStop)
+	}
 	shutdown := func() {
 		close(childStop)
 		<-done
@@ -214,15 +220,15 @@ func (d *daemon) stateServe() {
 				shutdown()
 				return
 			}
-			if ns.Baud != s.Baud || ns.AddrMode != s.AddrMode {
-				// Скорость и адресация применяются к порту/слушателю — перезапускаем
-				// (возврат в состояние A заново найдёт порт с новыми параметрами).
-				infof("reload: смена baud %d→%d / адресации %s→%s — перезапускаю слушателя",
-					s.Baud, ns.Baud, s.AddrMode, ns.AddrMode)
+			if ns.Baud != s.Baud || ns.AddrMode != s.AddrMode || ns.Protocol != s.Protocol {
+				// Скорость, адресация и протокол применяются к порту/слушателю —
+				// перезапускаем (состояние A заново найдёт порт с новыми параметрами).
+				infof("reload: смена baud %d→%d / протокола %s→%s / адресации %s→%s — перезапускаю слушателя",
+					s.Baud, ns.Baud, s.Protocol, ns.Protocol, s.AddrMode, ns.AddrMode)
 				shutdown()
 				return
 			}
-			infof("reload: enabled=%v baud=%d log=%s addr=%s", ns.Enabled, ns.Baud, ns.LogLevel, ns.AddrMode)
+			infof("reload: enabled=%v baud=%d protocol=%s log=%s addr=%s", ns.Enabled, ns.Baud, ns.Protocol, ns.LogLevel, ns.AddrMode)
 		case <-done:
 			infof("состояние B: слушатель завершился (idle/EOF/ошибка) → поиск порта")
 			p.Close()

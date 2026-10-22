@@ -1,6 +1,7 @@
 {
   "enabled": false,
   "baud": 19200,
+  "protocol": "seplos",
   "log_level": "info",
   "addr_mode": "1-16"
 }

@@ -17,8 +17,9 @@ const (
 
 // Параметры поведения (docs/bms-proxy.md §6/§7).
 const (
-	probeListen = 2 * time.Second  // ждать запрос на порту (есть ли наш порт)
-	banPort     = 10 * time.Second // бан «не наш» порта
+	probeListen       = 2 * time.Second  // Seplos: ждать PACE-запрос на порту
+	probeListenVektor = 10 * time.Second // Vektor: ждать валидный Modbus-запрос
+	banPort           = 10 * time.Second // бан «не наш» порта
 	// liveWindow — страховка от зависшего bms-reader: данные старше порога не
 	// отдаём. Штатно heartbeat идёт раз в секунду; запас 4 с покрывает один
 	// медленный цикл опроса (arch §10).
@@ -26,10 +27,11 @@ const (
 	idleListener = 5 * time.Second        // 5 с без запросов → слушатель завершается
 	scanCycle    = 2 * time.Second        // цикл перебора портов в состоянии поиска
 	readTick     = 200 * time.Millisecond // шаг чтения: отзывчивость к stop/reload
-	// responseDelay — пауза перед ответом. Реальный EnBMS начинает отвечать
-	// через 32–34 мс после запроса (замер 2026-10-22, 57600); инвертору нужно
-	// время на переключение RS485 в приём. Отвечая за 0.7 мс, мы рискуем
-	// потерять первый байт кадра и получить ретрай через 2 с.
+	// responseDelay — пауза перед ответом (Seplos serial и Vektor serial/UDP).
+	// Реальный EnBMS начинает отвечать через 32–34 мс после запроса (замер
+	// 2026-10-22, 57600); инвертору нужно время на переключение RS485 в приём.
+	// Отвечая за 0.7 мс, мы рискуем потерять первый байт кадра и получить
+	// ретрай через 2 с. Для Vektor выдерживаем ту же паузу.
 	responseDelay = 30 * time.Millisecond
 )
 
@@ -43,10 +45,17 @@ const (
 	addrMode1 = "1-16"
 )
 
+// Протокол обмена с инвертором (docs/bms-proxy.md §8).
+const (
+	protoSeplos = "seplos" // текущий PACE/ASCII
+	protoVektor = "vektor" // Vektor(Growatt), Modbus RTU: блок состояния + 16 ячеек
+)
+
 // settings — настройки bms-proxy (bms-proxy.json).
 type settings struct {
 	Enabled  bool   `json:"enabled"`
 	Baud     int    `json:"baud"`
+	Protocol string `json:"protocol"`
 	LogLevel string `json:"log_level"`
 	AddrMode string `json:"addr_mode"`
 
@@ -68,7 +77,7 @@ func (s settings) udpListenAddr() string {
 // defaultSettings — значения по умолчанию: выключен, 19200, INFO, адресация 1..16,
 // UDP-слушатель выключен.
 func defaultSettings() settings {
-	return settings{Enabled: false, Baud: 19200, LogLevel: "info", AddrMode: addrMode1}
+	return settings{Enabled: false, Baud: 19200, Protocol: protoSeplos, LogLevel: "info", AddrMode: addrMode1}
 }
 
 // normalizeAddrMode приводит вид адресации к канонической форме «0-15»/«1-16»
@@ -116,7 +125,24 @@ func loadSettings(path string) settings {
 	} else {
 		s.AddrMode = defaultSettings().AddrMode
 	}
+	// Канонизация протокола: ""/неизвестный → seplos.
+	if pr, ok := normalizeProtocol(s.Protocol); ok {
+		s.Protocol = pr
+	} else {
+		s.Protocol = protoSeplos
+	}
 	return s
+}
+
+// normalizeProtocol приводит протокол к "seplos"/"vektor".
+func normalizeProtocol(p string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case protoSeplos:
+		return protoSeplos, true
+	case protoVektor:
+		return protoVektor, true
+	}
+	return "", false
 }
 
 func validBaud(b int) bool {

@@ -9,7 +9,7 @@ import (
 // TestBmsProxyCfgRoundTrip — сохранение и загрузка bms-proxy.json.
 func TestBmsProxyCfgRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bms-proxy.json")
-	in := bmsProxyCfg{Enabled: true, Baud: 115200, LogLevel: "debug", AddrMode: "0-15", UDPEnabled: true, UDPListen: "0.0.0.0:502"}
+	in := bmsProxyCfg{Enabled: true, Baud: 115200, Protocol: "vektor", LogLevel: "debug", AddrMode: "0-15", UDPEnabled: true, UDPListen: "0.0.0.0:502"}
 	if err := saveBmsProxyCfg(path, in); err != nil {
 		t.Fatalf("save: %v", err)
 	}

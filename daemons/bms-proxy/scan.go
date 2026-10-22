@@ -10,9 +10,9 @@ import (
 )
 
 // Поиск «своего» порта в пассивном режиме (docs/bms-proxy.md §6):
-// перебираем свободные кандидаты, на каждом слушаем probeListen (2 с) входящий
-// PACE-запрос; услышали валидный запрос телеметрии (CID1 0x46, CID2 0x42,
-// валидный CHK) — порт наш; иначе бан на banPort.
+// перебираем свободные кандидаты, на каждом слушаем входящий запрос: для Seplos
+// 2 с на PACE-кадр (CID1 0x46, CID2 0x42, валидный CHK), для Vektor до 10 с на
+// валидный Modbus RTU-запрос (адрес 1..16, CRC16). Услышали — порт наш; иначе бан.
 func scanPatterns() []string {
 	return []string{
 		"/dev/ttyUSB*", "/dev/ttyACM*", "/dev/ttyAMA*", "/dev/ttyS*",
@@ -20,16 +20,35 @@ func scanPatterns() []string {
 	}
 }
 
-// pasvProbe слушает порт до deadline и возвращает адрес из первого валидного
-// PACE-запроса телеметрии; (0,false), если подходящего кадра нет.
-func pasvProbe(p *transport.Port, deadline time.Time) (int, bool) {
+// pasvProbe слушает порт до deadline. Seplos: первый валидный PACE-запрос
+// телеметрии; Vektor: первый валидный Modbus RTU-запрос (docs/bms-proxy.md §5.1).
+// Весь принятый поток пишется burst-логгером probe.
+func pasvProbe(p *transport.Port, deadline time.Time, protocol string) (int, bool) {
+	bl := newBurstLogger("probe")
+	defer bl.Stop()
 	var buf []byte
 	for time.Now().Before(deadline) {
 		c, err := p.ReadOneErr(deadline)
 		if err != nil {
-			return 0, false
+			break
 		}
+		bl.Feed('R', []byte{c})
 		buf = append(buf, c)
+		if protocol == protoVektor {
+			// «Наш» порт в Vektor — один из известных блоков: состояние
+			// 0x0015×21 или ячейки 0x0071×16. Инвертор шлёт их ~1 раз/с.
+			// Прочие валидные Modbus-кадры отбрасываем и ждём дальше.
+			if start, adr, n, ok := findModbusRequest(buf); ok {
+				if isVektorKnownRequest(buf, start, n) {
+					return adr, true
+				}
+				buf = append(buf[:0], buf[start+n:]...)
+			}
+			if len(buf) > 4096 {
+				buf = buf[:0]
+			}
+			continue
+		}
 		if c == '\r' {
 			req := parseRequest(buf)
 			buf = buf[:0]
@@ -47,11 +66,12 @@ func pasvProbe(p *transport.Port, deadline time.Time) (int, bool) {
 // portScanner — перебор кандидатов с backoff. Живёт столько же, сколько демон,
 // поэтому 10-секундный бан портов переживает циклы A→B→A (docs/bms-proxy.md §7).
 type portScanner struct {
-	stop    chan struct{}
-	mu      sync.Mutex
-	backoff map[uint64]time.Time
-	prefer  string // последний рабочий порт: пробуем его первым
-	baud    int    // скорость предыдущего прохода (для сброса банов)
+	stop     chan struct{}
+	mu       sync.Mutex
+	backoff  map[uint64]time.Time
+	prefer   string // последний рабочий порт: пробуем его первым
+	baud     int    // скорость предыдущего прохода (для сброса банов)
+	protocol string // протокол предыдущего прохода
 }
 
 func newPortScanner(stop chan struct{}) *portScanner {
@@ -60,8 +80,8 @@ func newPortScanner(stop chan struct{}) *portScanner {
 
 // findPort запускает один проход поиска на заданной скорости. Возвращает
 // открытый найденный порт либо nil, если за проход ничего не нашли.
-func (s *portScanner) findPort(baud int) *transport.Port {
-	s.beginScan(baud)
+func (s *portScanner) findPort(baud int, protocol string) *transport.Port {
+	s.beginScan(baud, protocol)
 	s.pruneBackoff()
 	busy := ports.BusyRdevs(os.Getpid())
 	// ports.ListPorts раскрывает glob-шаблоны и дедуплицирует кандидатов по rdev.
@@ -101,26 +121,31 @@ func (s *portScanner) findPort(baud int) *transport.Port {
 			s.setBackoff(rdev)
 			continue
 		}
-		deadline := time.Now().Add(probeListen)
-		if adr, ok := pasvProbe(p, deadline); ok {
-			infof("наш порт %s (baud=%d, первый адрес %d)", path, baud, adr)
+		budget := probeListen
+		if protocol == protoVektor {
+			budget = probeListenVektor
+		}
+		deadline := time.Now().Add(budget)
+		if adr, ok := pasvProbe(p, deadline, protocol); ok {
+			infof("наш порт %s (baud=%d, protocol=%s, первый адрес %d)", path, baud, protocol, adr)
 			return p
 		}
 		p.Close()
-		infof("scan: %s не наш (молчит) — бан %s", path, banPort)
+		infof("scan: %s не наш (нет валидного запроса protocol=%s) — бан %s", path, protocol, banPort)
 		s.setBackoff(rdev)
 	}
 	return nil
 }
 
-// beginScan фиксирует скорость прохода. При её смене старые промахи
+// beginScan фиксирует скорость/протокол прохода. При их смене старые промахи
 // недействительны — снимаем баны портов.
-func (s *portScanner) beginScan(baud int) {
+func (s *portScanner) beginScan(baud int, protocol string) {
 	s.mu.Lock()
-	if s.baud != 0 && s.baud != baud {
+	if (s.baud != 0 && s.baud != baud) || (s.protocol != "" && s.protocol != protocol) {
 		s.backoff = make(map[uint64]time.Time)
 	}
 	s.baud = baud
+	s.protocol = protocol
 	s.mu.Unlock()
 }
 

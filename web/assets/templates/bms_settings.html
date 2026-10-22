@@ -80,6 +80,16 @@
       </td>
     </tr>
     <tr>
+      <td>{{index .T "bms.proxy_protocol"}}</td>
+      <td>
+        <select name="proxy_protocol">
+          <option value="seplos" {{if eq .ProxyProtocol "seplos"}}selected{{end}}>{{index .T "bms.proxy_protocol_seplos"}}</option>
+          <option value="vektor" {{if eq .ProxyProtocol "vektor"}}selected{{end}}>{{index .T "bms.proxy_protocol_vektor"}}</option>
+        </select>
+        <div class="muted">{{index .T "bms.proxy_protocol_hint"}}</div>
+      </td>
+    </tr>
+    <tr>
       <td>{{index .T "bms.proxy_log_level"}}</td>
       <td>
         <select name="proxy_log_level">

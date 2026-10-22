@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -482,5 +484,26 @@ func TestReadTelemetryBadCRC(t *testing.T) {
 	data[off] ^= 0xff
 	if got := readTelemetry(data, 0, 1); got != nil {
 		t.Fatalf("битый CRC принят: %v", got)
+	}
+}
+
+// TestLoadSettingsProtocol — протокол по умолчанию seplos, vektor принимается.
+func TestLoadSettingsProtocol(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "bms-proxy.json")
+	if got := loadSettings(p); got.Protocol != protoSeplos {
+		t.Fatalf("нет файла: protocol=%q", got.Protocol)
+	}
+	if err := os.WriteFile(p, []byte(`{"protocol":"vektor"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadSettings(p); got.Protocol != protoVektor {
+		t.Fatalf("vektor: protocol=%q", got.Protocol)
+	}
+	if err := os.WriteFile(p, []byte(`{"protocol":"growatt"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadSettings(p); got.Protocol != protoSeplos {
+		t.Fatalf("неизвестный протокол: protocol=%q", got.Protocol)
 	}
 }

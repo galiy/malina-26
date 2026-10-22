@@ -20,6 +20,8 @@ func listener(p *transport.Port, baud int, shmPath, addrMode string, stop chan s
 	go func() {
 		defer close(done)
 		infof("слушатель на %s (baud=%d)", p.Path(), baud)
+		bl := newBurstLogger("listen")
+		defer bl.Stop()
 		var buf []byte
 		var reqStart time.Time
 		last := time.Now()
@@ -41,6 +43,7 @@ func listener(p *transport.Port, baud int, shmPath, addrMode string, stop chan s
 				}
 				continue
 			}
+			bl.Feed('R', []byte{c})
 			if len(buf) == 0 && c == '~' {
 				reqStart = time.Now()
 			}
@@ -63,7 +66,7 @@ func listener(p *transport.Port, baud int, shmPath, addrMode string, stop chan s
 				debugf("RX t=%d adr=%d ignore=cid2 raw=%q", reqStart.UnixMicro(), req.Adr, raw)
 				continue
 			}
-			serveRequest(p, shmPath, addrMode, req, reqStart, raw)
+			serveRequest(p, shmPath, addrMode, req, bl)
 		}
 	}()
 	return done
@@ -80,9 +83,8 @@ func mapAddr(adr int, addrMode string) int {
 }
 
 // serveRequest обрабатывает один запрос телеметрии; false — данных нет (молчим).
-// rx — время первого байта запроса, raw — кадр (для debug-лога).
-func serveRequest(p *transport.Port, shmPath, addrMode string, req *paceRequest, rx time.Time, raw string) bool {
-	debugf("RX t=%d raw=%q", rx.UnixMicro(), raw)
+// Сырые RX/TX пишет burst-логгер (docs/bms-proxy.md §5.1).
+func serveRequest(p *transport.Port, shmPath, addrMode string, req *paceRequest, bl *burstLogger) bool {
 	slot := mapAddr(req.Adr, addrMode)
 	payload := readSlotTelemetry(readShm(shmPath), slot, time.Now())
 	if payload == nil || len(payload) < bmscontract.Size {
@@ -103,11 +105,98 @@ func serveRequest(p *transport.Port, shmPath, addrMode string, req *paceRequest,
 	// слоту: ADR1→0, ADR2→1, ADR3→2 (protocol-485.md §5, dips.pdf).
 	info[1] = byte(slot)
 	frame := buildTelemetryFrame(req.Adr, info)
-	tx := time.Now()
+	bl.Feed('T', frame)
 	if err := p.WriteAll(frame); err != nil {
 		warnf("запись ответа ADR=%d: %v", req.Adr, err)
 		return false
 	}
-	debugf("TX t=%d adr=%d raw=%q", tx.UnixMicro(), req.Adr, string(frame))
 	return true
+}
+
+// vektorListener — состояние B для Vektor(Growatt): читает Modbus RTU-запросы,
+// отвечает на блок состояния `0x03 0x0015×21` и блок ячеек `0x03 0x0071×16`
+// синтетическими данными из активных BMS (4 с), остальные запросы логирует
+// (docs/bms-proxy.md §5.1).
+func vektorListener(p *transport.Port, shmPath string, stop chan struct{}) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		infof("слушатель Vektor на %s (protocol=%s, отвечаю на 0x03 0x0015×21 и 0x03 0x0071×16)", p.Path(), protoVektor)
+		bl := newBurstLogger("vektor")
+		defer bl.Stop()
+		last := time.Now()
+		var buf []byte
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			c, err := p.ReadOneErr(time.Now().Add(readTick))
+			if err != nil {
+				if !errors.Is(err, transport.ErrTimeout) {
+					infof("слушатель Vektor %s: чтение остановлено: %v", p.Path(), err)
+					return
+				}
+				if time.Since(last) >= idleListener {
+					infof("слушатель Vektor %s: %s без запросов — завершаюсь", p.Path(), idleListener)
+					return
+				}
+				continue
+			}
+			bl.Feed('R', []byte{c})
+			buf = append(buf, c)
+			var handled bool
+			buf, handled = vektorProcess(p, shmPath, buf, bl)
+			if handled {
+				last = time.Now() // idle считается по валидным Modbus-кадрам
+			}
+		}
+	}()
+	return done
+}
+
+// vektorProcess разбирает накопленный поток: отвечает на блоки состояния и
+// напряжений ячеек, остальные полные кадры логирует и отбрасывает. Возвращает
+// остаток буфера (неполный/неразобранный хвост) и признак обработки валидного
+// кадра.
+func vektorProcess(p *transport.Port, shmPath string, buf []byte, bl *burstLogger) ([]byte, bool) {
+	handled := false
+	for {
+		start, adr, n, ok := findModbusRequest(buf)
+		if !ok {
+			if len(buf) > 4096 {
+				return buf[:0], handled
+			}
+			return buf, handled
+		}
+		handled = true
+		if start > 0 {
+			buf = append(buf[:0], buf[start:]...)
+		}
+		var reply []byte
+		supported := true
+		switch {
+		case isVektorCellRequest(buf, 0, n):
+			reply = vektorCellReply(shmPath, byte(adr))
+		case isVektorStatusRequest(buf, 0, n):
+			reply = vektorStatusReply(shmPath, byte(adr))
+		default:
+			supported = false
+		}
+		if !supported {
+			debugf("Vektor: ADR=%d fn=0x%02X — запрос не поддержан, молчу", adr, buf[1])
+		} else if reply == nil {
+			debugf("Vektor: ADR=%d — нет активных BMS, молчу", adr)
+		} else {
+			if responseDelay > 0 {
+				time.Sleep(responseDelay) // полдуплекс RS485: дать инвертору переключиться на приём
+			}
+			bl.Feed('T', reply)
+			if err := p.WriteAll(reply); err != nil {
+				warnf("Vektor: запись ответа ADR=%d: %v", adr, err)
+			}
+		}
+		buf = buf[n:]
+	}
 }

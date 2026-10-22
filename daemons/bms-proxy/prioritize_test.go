@@ -29,11 +29,11 @@ func TestPrioritize(t *testing.T) {
 func TestBeginScanClearsBackoff(t *testing.T) {
 	sc := newPortScanner(make(chan struct{}))
 	sc.backoff[42] = time.Now().Add(time.Hour)
-	sc.beginScan(19200)
+	sc.beginScan(19200, protoSeplos)
 	if !sc.inBackoff(42) {
 		t.Fatal("бан снят без смены скорости")
 	}
-	sc.beginScan(57600)
+	sc.beginScan(57600, protoSeplos)
 	if sc.inBackoff(42) {
 		t.Fatal("бан не снят при смене скорости")
 	}

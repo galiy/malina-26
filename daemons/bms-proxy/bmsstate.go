@@ -5,6 +5,8 @@ import (
 	"hash/crc32"
 	"os"
 	"time"
+
+	"github.com/galiy/malina-26/daemons/lib/bmscontract"
 )
 
 // Чтение бинарного контракта bms-reader из POSIX shared memory (/dev/shm/…).
@@ -80,6 +82,36 @@ func readSlotTelemetry(data []byte, slot int, now time.Time) []byte {
 	}
 	gen := binary.LittleEndian.Uint64(it[itOffGen : itOffGen+8])
 	return readTelemetry(data, slot, gen)
+}
+
+// activeTelemetry — телеметрия активного слота вместе с типом BMS из списка
+// shm (typeId: 1=AntBMS, 2=EnBMS). Нужен для Vektor-маппинга alarm.
+type activeTelemetry struct {
+	TypeID uint8
+	Tel    bmscontract.Telemetry
+}
+
+// readActiveTelemetries декодирует телеметрию всех активных слотов: state=1 и
+// last_seen не старше liveWindow (4 с). Нужен Vektor-режиму для блока состояния
+// и синтетических напряжений ячеек (docs/bms-proxy.md §5.1).
+func readActiveTelemetries(data []byte, now time.Time) []activeTelemetry {
+	if data == nil || len(data) < shmHeader+bmsSlots*bmsListLen {
+		return nil
+	}
+	var out []activeTelemetry
+	for slot := 0; slot < bmsSlots; slot++ {
+		payload := readSlotTelemetry(data, slot, now)
+		if payload == nil {
+			continue
+		}
+		tel, err := bmscontract.Decode(payload)
+		if err != nil {
+			continue
+		}
+		typeID := data[shmHeader+slot*bmsListLen+itOffTypeID]
+		out = append(out, activeTelemetry{TypeID: typeID, Tel: tel})
+	}
+	return out
 }
 
 // readTelemetry читает payload слота (контракт 107 Б) и сверяет gen.

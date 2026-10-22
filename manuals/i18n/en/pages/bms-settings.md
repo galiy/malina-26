@@ -42,6 +42,7 @@ While the receiver is disabled, the service runs but no batteries are polled and
 The proxy transfers battery data to the inverter through a serial port.
 
 - **Enabled** — enable the proxy. Disabled by default.
+- **BMS protocol** — `Seplos(Pylon)` (default) or `Vektor(Growatt)`. Seplos is the current mode; Vektor replies to the inverter with a status block (SOC, voltage, current, temperature, limits) and 16 cell voltages from active batteries (1-device mode).
 - **Port speed** — 2400, 9600, 19200, 57600, 115200, or 230400. 19200 is the default.
 - **Log level.**
 - **Inverter addressing** — `1–16` (default) or `0–15`. Depends on how the inverter numbers the batteries.

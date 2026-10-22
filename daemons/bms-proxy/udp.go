@@ -108,6 +108,36 @@ func (u *udpListener) serve() {
 			continue
 		}
 		rx := time.Now()
+		if u.d.settings().Protocol == protoVektor {
+			debugf("UDP %s: t=%d len=%d hex=%X raw=%q", addr, rx.UnixMicro(), n, buf[:n], string(buf[:n]))
+			start, slave, flen, ok := findModbusRequest(buf[:n])
+			if !ok {
+				continue
+			}
+			var reply []byte
+			switch {
+			case isVektorCellRequest(buf[:n], start, flen):
+				reply = vektorCellReply(u.d.cfg.shmPath, byte(slave))
+			case isVektorStatusRequest(buf[:n], start, flen):
+				reply = vektorStatusReply(u.d.cfg.shmPath, byte(slave))
+			default:
+				debugf("UDP %s: t=%d ADR=%d — запрос не поддержан, молчу", addr, rx.UnixMicro(), slave)
+				continue
+			}
+			if reply == nil {
+				debugf("UDP %s: t=%d ADR=%d — нет активных BMS, молчу", addr, rx.UnixMicro(), slave)
+				continue
+			}
+			if responseDelay > 0 {
+				time.Sleep(responseDelay) // пауза перед ответом, как в Seplos (docs/bms-proxy.md §5.1)
+			}
+			if _, err := u.conn.WriteToUDP(reply, addr); err != nil {
+				warnf("UDP-ответ Vektor %s: %v", addr, err)
+				continue
+			}
+			debugf("UDP %s: TX t=%d adr=%d hex=%X", addr, time.Now().UnixMicro(), slave, reply)
+			continue
+		}
 		debugf("UDP %s: RX t=%d raw=%q", addr, rx.UnixMicro(), string(buf[:n]))
 		req := parseRequest(buf[:n])
 		if req == nil || req.CID2 != cid2Tel {

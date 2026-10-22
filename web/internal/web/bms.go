@@ -284,6 +284,7 @@ func saveBmsGateways(path string, f bmsGatewaysFile) error {
 type bmsProxyCfg struct {
 	Enabled  bool   `json:"enabled"`
 	Baud     int    `json:"baud"`
+	Protocol string `json:"protocol"`
 	LogLevel string `json:"log_level"`
 	AddrMode string `json:"addr_mode"`
 	// UDP-слушатель: явный переключатель UDPEnabled + адрес UDPListen.
@@ -297,9 +298,10 @@ type bmsProxyCfg struct {
 var bmsProxyBauds = []int{2400, 9600, 19200, 57600, 115200, 230400}
 var bmsProxyLevels = []string{"debug", "info", "warn", "error"}
 var bmsProxyAddrModes = []string{"1-16", "0-15"}
+var bmsProxyProtocols = []string{"seplos", "vektor"}
 
 func defaultBmsProxyCfg() bmsProxyCfg {
-	return bmsProxyCfg{Enabled: false, Baud: 19200, LogLevel: "info", AddrMode: "1-16"}
+	return bmsProxyCfg{Enabled: false, Baud: 19200, Protocol: "seplos", LogLevel: "info", AddrMode: "1-16"}
 }
 
 func loadBmsProxyCfg(path string) bmsProxyCfg {
@@ -323,6 +325,11 @@ func loadBmsProxyCfg(path string) bmsProxyCfg {
 		c.AddrMode = am
 	} else {
 		c.AddrMode = defaultBmsProxyCfg().AddrMode
+	}
+	if pr, ok := normalizeBmsProxyProtocol(c.Protocol); ok {
+		c.Protocol = pr
+	} else {
+		c.Protocol = defaultBmsProxyCfg().Protocol
 	}
 	return c
 }
@@ -352,6 +359,16 @@ func saveBmsProxyCfg(path string, c bmsProxyCfg) error {
 		return err
 	}
 	return os.Rename(name, path)
+}
+
+func normalizeBmsProxyProtocol(p string) (string, bool) {
+	p = strings.ToLower(strings.TrimSpace(p))
+	for _, v := range bmsProxyProtocols {
+		if p == v {
+			return p, true
+		}
+	}
+	return "", false
 }
 
 func bmsProxyBaudOK(b int) bool {
@@ -425,6 +442,7 @@ func (s *Server) handleBmsSettings(w http.ResponseWriter, r *http.Request) {
 	data["ProxyBaud"] = pc.Baud
 	data["ProxyLevel"] = pc.LogLevel
 	data["ProxyAddrMode"] = pc.AddrMode
+	data["ProxyProtocol"] = pc.Protocol
 	data["ProxyUDPEnabled"] = pc.UDPEnabled
 	data["ProxyUDPListen"] = pc.UDPListen
 	// Список шлюзов всегда в данных: при ошибке сохранения любой из форм
@@ -506,6 +524,7 @@ func (s *Server) handleBmsProxySettings(w http.ResponseWriter, r *http.Request) 
 	np := bmsProxyCfg{
 		Enabled:    r.Form.Get("proxy_enabled") == "on",
 		Baud:       baudFromForm(r.Form.Get("proxy_baud")),
+		Protocol:   r.Form.Get("proxy_protocol"),
 		LogLevel:   r.Form.Get("proxy_log_level"),
 		AddrMode:   r.Form.Get("proxy_addr_mode"),
 		UDPEnabled: r.Form.Get("udp_enabled") == "on",
@@ -513,6 +532,7 @@ func (s *Server) handleBmsProxySettings(w http.ResponseWriter, r *http.Request) 
 	}
 	lv, lvOK := normalizeBmsProxyLevel(np.LogLevel)
 	am, amOK := normalizeBmsProxyAddrMode(np.AddrMode)
+	pr, prOK := normalizeBmsProxyProtocol(np.Protocol)
 	fail := func(key string) {
 		http.Redirect(w, r, "/bms/settings?proxy_err="+url.QueryEscape(key), http.StatusSeeOther)
 	}
@@ -526,9 +546,13 @@ func (s *Server) handleBmsProxySettings(w http.ResponseWriter, r *http.Request) 
 	case !amOK:
 		fail("bms.proxy_bad_addr_mode")
 		return
+	case !prOK:
+		fail("bms.proxy_bad_protocol")
+		return
 	}
 	np.LogLevel = lv
 	np.AddrMode = am
+	np.Protocol = pr
 	if err := saveBmsProxyCfg(s.bmsProxyCfgPath(), np); err != nil {
 		fail("bms.proxy_save_err")
 		return
