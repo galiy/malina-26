@@ -150,15 +150,19 @@ func vektorStatusRegisters(s vektorSnapshot) [vektorStatusCount]uint16 {
 }
 
 // vektorStatusReply читает активные BMS и собирает ответ на блок состояния.
-// nil — активных BMS нет (молчим).
-func vektorStatusReply(shmPath string, slave byte) []byte {
+// qty — сколько регистров запросил MAP (16 для старой прошивки, 21 для новой).
+// nil — активных BMS нет или qty вне 1..21 (молчим).
+func vektorStatusReply(shmPath string, slave byte, qty int) []byte {
+	if qty <= 0 || qty > vektorStatusCount {
+		return nil
+	}
 	ats := readActiveTelemetries(readShm(shmPath), time.Now())
 	snap, ok := buildVektorSnapshot(ats)
 	if !ok {
 		return nil
 	}
 	regs := vektorStatusRegisters(snap)
-	return buildVektorRegisterResponse(slave, regs[:])
+	return buildVektorRegisterResponse(slave, regs[:qty])
 }
 
 // --- тип батареи ---------------------------------------------------------

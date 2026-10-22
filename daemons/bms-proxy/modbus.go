@@ -16,12 +16,13 @@ const (
 	// Vektor/Growatt: 0x0071..0x0080 — напряжения ячеек 1..16, по 1 мВ на
 	// регистр. 0x0015..0x0029 — блок состояния (SOC, U, I, T, лимиты, ёмкости,
 	// SOH, CV, warning, cell max/min). Отвечаем только на эти два блока.
-	vektorCellReg     = 0x0071
-	vektorCellQty     = 16
-	vektorCellCount   = 16
-	vektorStatusReg   = 0x0015
-	vektorStatusQty   = 21
-	vektorStatusCount = 21
+	vektorCellReg      = 0x0071
+	vektorCellQty      = 16
+	vektorCellCount    = 16
+	vektorStatusReg    = 0x0015
+	vektorStatusQty    = 21 // новая прошивка MAP: 0x0015..0x0029
+	vektorStatusQtyAlt = 16 // старая прошивка MAP: 0x0015..0x0024
+	vektorStatusCount  = 21
 )
 
 // modbusCRC возвращает CRC16 Modbus (poly 0xA001, init 0xFFFF). Для полного
@@ -109,9 +110,21 @@ func isVektorStatusRequest(buf []byte, start, frameLen int) bool {
 		return false
 	}
 	f := buf[start : start+frameLen]
-	return f[1] == modbusFnReadHolding &&
-		binary.BigEndian.Uint16(f[2:4]) == vektorStatusReg &&
-		binary.BigEndian.Uint16(f[4:6]) == vektorStatusQty
+	if f[1] != modbusFnReadHolding || binary.BigEndian.Uint16(f[2:4]) != vektorStatusReg {
+		return false
+	}
+	qty := binary.BigEndian.Uint16(f[4:6])
+	// Старая прошивка MAP читает 16 регистров (0x0015..0x0024), новая — 21
+	// (0x0015..0x0029). Отвечаем ровно запрошенным количеством.
+	return qty == vektorStatusQtyAlt || qty == vektorStatusQty
+}
+
+// vektorRequestQty — количество регистров из запроса (bytes 4..5).
+func vektorRequestQty(buf []byte, start int) int {
+	if start < 0 || start+6 > len(buf) {
+		return 0
+	}
+	return int(binary.BigEndian.Uint16(buf[start+4 : start+6]))
 }
 
 // isVektorKnownRequest — запрос одного из блоков, на которые отвечает прокси.

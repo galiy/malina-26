@@ -119,7 +119,7 @@ func (u *udpListener) serve() {
 			case isVektorCellRequest(buf[:n], start, flen):
 				reply = vektorCellReply(u.d.cfg.shmPath, byte(slave))
 			case isVektorStatusRequest(buf[:n], start, flen):
-				reply = vektorStatusReply(u.d.cfg.shmPath, byte(slave))
+				reply = vektorStatusReply(u.d.cfg.shmPath, byte(slave), vektorRequestQty(buf[:n], start))
 			default:
 				debugf("UDP %s: t=%d ADR=%d — запрос не поддержан, молчу", addr, rx.UnixMicro(), slave)
 				continue

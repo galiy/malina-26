@@ -36,6 +36,18 @@ func TestIsVektorStatusRequest(t *testing.T) {
 	if !isVektorKnownRequest(req, start, n) {
 		t.Fatal("запрос состояния не считается известным")
 	}
+	// Старая прошивка MAP: 16 регистров с 0x0015.
+	req16 := withCRC([]byte{0x01, 0x03, 0x00, 0x15, 0x00, 0x10})
+	start, _, n, ok = findModbusRequest(req16)
+	if !ok {
+		t.Fatal("запрос состояния x16 не распознан")
+	}
+	if !isVektorStatusRequest(req16, start, n) || !isVektorKnownRequest(req16, start, n) {
+		t.Fatal("запрос состояния x16 не принят")
+	}
+	if got := vektorRequestQty(req16, start); got != 16 {
+		t.Fatalf("qty x16 = %d", got)
+	}
 	// Ячеечный запрос — тоже известный.
 	cell := []byte{0x01, 0x03, 0x00, 0x71, 0x00, 0x10, 0x14, 0x1D}
 	start, _, n, ok = findModbusRequest(cell)
@@ -72,6 +84,30 @@ func TestBuildVektorStatusResponse(t *testing.T) {
 		got := uint16(b[3+2*i])<<8 | uint16(b[4+2*i])
 		if got != want {
 			t.Fatalf("reg %d = 0x%04X, ожидалось 0x%04X", i, got, want)
+		}
+	}
+}
+
+// TestBuildVektorStatusResponse16 — старая прошивка MAP: 16 регистров.
+func TestBuildVektorStatusResponse16(t *testing.T) {
+	regs := make([]uint16, vektorStatusQtyAlt)
+	for i := range regs {
+		regs[i] = uint16(0x200 + i)
+	}
+	b := buildVektorRegisterResponse(1, regs)
+	if len(b) != 3+2*vektorStatusQtyAlt+2 {
+		t.Fatalf("длина ответа x16 = %d", len(b))
+	}
+	if b[0] != 1 || b[1] != modbusFnReadHolding || b[2] != 2*vektorStatusQtyAlt {
+		t.Fatalf("заголовок x16: % X", b[:3])
+	}
+	if modbusCRC(b) != 0 {
+		t.Fatalf("CRC ответа x16 неверен")
+	}
+	for i, want := range regs {
+		got := uint16(b[3+2*i])<<8 | uint16(b[4+2*i])
+		if got != want {
+			t.Fatalf("reg %d x16 = 0x%04X, ожидалось 0x%04X", i, got, want)
 		}
 	}
 }

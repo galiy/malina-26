@@ -180,7 +180,7 @@ func vektorProcess(p *transport.Port, shmPath string, buf []byte, bl *burstLogge
 		case isVektorCellRequest(buf, 0, n):
 			reply = vektorCellReply(shmPath, byte(adr))
 		case isVektorStatusRequest(buf, 0, n):
-			reply = vektorStatusReply(shmPath, byte(adr))
+			reply = vektorStatusReply(shmPath, byte(adr), vektorRequestQty(buf, 0))
 		default:
 			supported = false
 		}
