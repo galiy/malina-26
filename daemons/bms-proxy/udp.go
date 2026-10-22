@@ -149,6 +149,9 @@ func (u *udpListener) serve() {
 			debugf("UDP %s: t=%d ADR=%d — нет BMS, молчу", addr, rx.UnixMicro(), req.Adr)
 			continue
 		}
+		if responseDelay > 0 {
+			time.Sleep(responseDelay) // как в serial Seplos: пауза перед ответом BMS
+		}
 		if _, err := u.conn.WriteToUDP(frame, addr); err != nil {
 			warnf("UDP-ответ %s: %v", addr, err)
 			continue
