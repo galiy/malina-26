@@ -118,7 +118,7 @@ func TestBuildSeplosInfo(t *testing.T) {
 	if len(info) != 31+2*3+2*2 {
 		t.Fatalf("длина=%d", len(info))
 	}
-	if info[0] != 0x00 || info[1] != 0x01 {
+	if info[0] != 0x00 || info[1] != 0x00 {
 		t.Fatalf("заголовок: %#x %#x", info[0], info[1])
 	}
 	if info[2] != 3 {
@@ -138,7 +138,7 @@ func TestBuildSeplosInfo(t *testing.T) {
 	if got := int16(binary.BigEndian.Uint16(info[offI : offI+2])); got != -int16(1234) {
 		t.Fatalf("ток=%d, ожидалось -1234", got)
 	}
-	// field count/customerp после остаточной ёмкости = 0x00
+	// field count после остаточной ёмкости = 0x00
 	offRem := offI + 2         // ток
 	offField := offRem + 2 + 2 // total voltage + remaining
 	if info[offField] != 0x00 {
@@ -162,8 +162,8 @@ func TestBuildSeplosInfo75(t *testing.T) {
 	if len(info) != 67+seplosTail {
 		t.Fatalf("ядро+хвост=%d, ожидалось %d", len(info), 67+seplosTail)
 	}
-	if info[0] != 0x00 || info[1] != 0x01 {
-		t.Fatalf("dataflag/группа=%#x %#x, ожидалось 00 01", info[0], info[1])
+	if info[0] != 0x00 || info[1] != 0x00 {
+		t.Fatalf("dataflag/группа=%#x %#x, ожидалось 00 00", info[0], info[1])
 	}
 	if info[35] != seplosTemps {
 		t.Fatalf("temp count=%d, ожидалось %d", info[35], seplosTemps)
@@ -194,7 +194,7 @@ func TestBuildSeplosInfoDefaults(t *testing.T) {
 	tel.PortCV = 0
 	info := buildSeplosInfo(&tel)
 	if info[54] != 0x00 {
-		t.Fatalf("field count=%#x", info[54])
+		t.Fatalf("field count=%#x, ожидалось 0x00", info[54])
 	}
 	// полная ёмкость (offset 55) = 320000/10 = 32000 = 0x7D00
 	if got := binary.BigEndian.Uint16(info[55:57]); got != 32000 {

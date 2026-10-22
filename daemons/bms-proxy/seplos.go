@@ -33,8 +33,11 @@ const (
 func buildSeplosInfo(t *bmscontract.Telemetry) []byte {
 	b := make([]byte, 0, 80)
 
-	// заголовок: dataflag=0x00, командная группа/адрес пака = 0x01 (как в эталоне)
-	b = append(b, 0x00, 0x01)
+	// заголовок: dataflag=0x00, группа/адрес пака = 0x00. Замер реального EnBMS
+	// (2026-10-22, синхронный strace): в его 0x42-ответе group=0x00. Эталонный
+	// seplos_bms_server.py слал 0x01, но живой BMS — 0x00; инвертор сверяет
+	// group и отвергает кадры с чужим значением (ретраи → бит → сброс тока).
+	b = append(b, 0x00, 0x00)
 
 	// число ячеек (1..16). Если контракт не заполнил CellCount (0) — считаем по
 	// ненулевым CellsMV (эталон при n<=0 берёт len(cells)).
@@ -86,7 +89,9 @@ func buildSeplosInfo(t *bmscontract.Telemetry) []byte {
 	// остаточная ёмкость (0.001 А·ч → 0.01 А·ч: /10)
 	b = binary.BigEndian.AppendUint16(b, uint16(t.RemainingMAh/10))
 
-	// field count / customerp — 0x00 (как в эталоне seplos_bms_server.py)
+	// field count / customerp — 0x00 (как в эталоне seplos_bms_server.py).
+	// Живой EnBMS отдаёт 0x0A, но инвертор принимает и 0x00; на сброс тока
+	// это не влияло (причина — лимит заряда ~45 А).
 	b = append(b, 0x00)
 
 	// Полная ёмкость (0.01 А·ч). Берём Rated, при отсутствии — Cap (у AntBMS

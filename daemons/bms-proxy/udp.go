@@ -140,5 +140,6 @@ func (u *udpListener) build(req *paceRequest) []byte {
 		return nil
 	}
 	info := buildSeplosInfo(&tel)
+	info[1] = byte(slot) // slaveNo = номер пакета (слот)
 	return buildTelemetryFrame(req.Adr, info)
 }
