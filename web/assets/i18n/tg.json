@@ -1412,7 +1412,7 @@
   "bms.proxy_protocol_seplos": "Seplos(Pylon)",
   "bms.proxy_protocol_vektor": "Vektor(Growatt)",
   "bms.proxy_bad_protocol": "Протоколи BMS нодуруст аст.",
-  "bms.proxy_protocol_hint": "Seplos — реҷаи ҷорӣ; Vektor блоки ҳолат (SOC, шиддат, ҷараён, ҳарорат, лимитҳо) ва шиддатҳои 16 ҳуҷайраро аз батареяҳои фаъол ҷавоб медиҳад (реҷаи «1 дастгоҳ»).",
+    "bms.proxy_protocol_hint": "Vektor (пешфарз) блоки ҳолат (SOC, шиддат, ҷараён, ҳарорат, лимитҳо) ва шиддатҳои 16 ҳуҷайраро аз батареяҳои фаъол ҷавоб медиҳад (реҷаи «1 дастгоҳ»); Seplos — PACE/ASCII.",
   "bms.proxy_bad_baud": "Суръати порт нодуруст",
   "bms.proxy_log_level": "Сатҳи журнал",
   "bms.proxy_bad_level": "Сатҳи журнали нодуруст",

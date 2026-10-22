@@ -1412,7 +1412,7 @@
   "bms.proxy_protocol_seplos": "Seplos(Pylon)",
   "bms.proxy_protocol_vektor": "Vektor(Growatt)",
   "bms.proxy_bad_protocol": "არასწორი BMS პროტოკოლი.",
-  "bms.proxy_protocol_hint": "Seplos — მიმდინარე რეჟიმი; Vektor პასუხობს მდგომარეობის ბლოკით (SOC, ძაბვა, დენი, ტემპერატურა, ლიმიტები) და 16 ელემენტის ძაბვით აქტიური ბატარეებიდან (რეჟიმი „1 მოწყობილობა“).",
+    "bms.proxy_protocol_hint": "Vektor (ნაგულისხმევი) პასუხობს მდგომარეობის ბლოკით (SOC, ძაბვა, დენი, ტემპერატურა, ლიმიტები) და 16 ელემენტის ძაბვით აქტიური ბატარეებიდან (რეჟიმი „1 მოწყობილობა“); Seplos — PACE/ASCII.",
   "bms.proxy_bad_baud": "პორტის სიჩქარე არასწორია",
   "bms.proxy_log_level": "ლოგირების დონე",
   "bms.proxy_bad_level": "ლოგირების დონე არასწორია",

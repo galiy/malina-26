@@ -1412,7 +1412,7 @@
   "bms.proxy_protocol_seplos": "Seplos(Pylon)",
   "bms.proxy_protocol_vektor": "Vektor(Growatt)",
   "bms.proxy_bad_protocol": "Некорректный протокол BMS.",
-  "bms.proxy_protocol_hint": "Seplos — текущий режим; Vektor отвечает блоком состояния (SOC, напряжение, ток, температура, лимиты) и напряжениями 16 ячеек из активных батарей (режим «1 устройство»).",
+    "bms.proxy_protocol_hint": "Vektor (по умолчанию) отвечает блоком состояния (SOC, напряжение, ток, температура, лимиты) и напряжениями 16 ячеек из активных батарей (режим «1 устройство»); Seplos — PACE/ASCII.",
   "bms.proxy_bad_baud": "Некорректная скорость порта",
   "bms.proxy_log_level": "Уровень логирования",
   "bms.proxy_bad_level": "Некорректный уровень логирования",

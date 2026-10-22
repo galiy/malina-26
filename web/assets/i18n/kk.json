@@ -1412,7 +1412,7 @@
   "bms.proxy_protocol_seplos": "Seplos(Pylon)",
   "bms.proxy_protocol_vektor": "Vektor(Growatt)",
   "bms.proxy_bad_protocol": "BMS протоколы дұрыс емес.",
-  "bms.proxy_protocol_hint": "Seplos — ағымдағы режим; Vektor күй блогымен (SOC, кернеу, ток, температура, лимиттер) және белсенді батареялардан 16 ұяшықтың кернеуімен жауап береді («1 құрылғы» режимі).",
+    "bms.proxy_protocol_hint": "Vektor (әдепкі) күй блогымен (SOC, кернеу, ток, температура, лимиттер) және белсенді батареялардан 16 ұяшықтың кернеуімен жауап береді («1 құрылғы» режимі); Seplos — PACE/ASCII.",
   "bms.proxy_bad_baud": "Порт жылдамдығы қате",
   "bms.proxy_log_level": "Журнал деңгейі",
   "bms.proxy_bad_level": "Журнал деңгейі қате",

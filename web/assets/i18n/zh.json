@@ -1412,7 +1412,7 @@
   "bms.proxy_protocol_seplos": "Seplos(Pylon)",
   "bms.proxy_protocol_vektor": "Vektor(Growatt)",
   "bms.proxy_bad_protocol": "无效的 BMS 协议。",
-  "bms.proxy_protocol_hint": "Seplos 为当前模式；Vektor 使用状态块（SOC、电压、电流、温度、限值）和活动电池组的 16 节电芯电压应答（单设备模式）。",
+    "bms.proxy_protocol_hint": "Vektor（默认）使用状态块（SOC、电压、电流、温度、限值）和活动电池组的 16 节电芯电压应答（单设备模式）；Seplos — PACE/ASCII。",
   "bms.proxy_bad_baud": "端口速度无效",
   "bms.proxy_log_level": "日志级别",
   "bms.proxy_bad_level": "日志级别无效",

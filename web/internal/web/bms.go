@@ -298,10 +298,10 @@ type bmsProxyCfg struct {
 var bmsProxyBauds = []int{2400, 9600, 19200, 57600, 115200, 230400}
 var bmsProxyLevels = []string{"debug", "info", "warn", "error"}
 var bmsProxyAddrModes = []string{"1-16", "0-15"}
-var bmsProxyProtocols = []string{"seplos", "vektor"}
+var bmsProxyProtocols = []string{"vektor", "seplos"}
 
 func defaultBmsProxyCfg() bmsProxyCfg {
-	return bmsProxyCfg{Enabled: false, Baud: 19200, Protocol: "seplos", LogLevel: "info", AddrMode: "1-16"}
+	return bmsProxyCfg{Enabled: false, Baud: 9600, Protocol: "vektor", LogLevel: "info", AddrMode: "1-16"}
 }
 
 func loadBmsProxyCfg(path string) bmsProxyCfg {

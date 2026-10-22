@@ -487,23 +487,23 @@ func TestReadTelemetryBadCRC(t *testing.T) {
 	}
 }
 
-// TestLoadSettingsProtocol — протокол по умолчанию seplos, vektor принимается.
+// TestLoadSettingsProtocol — протокол по умолчанию vektor, seplos принимается.
 func TestLoadSettingsProtocol(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "bms-proxy.json")
-	if got := loadSettings(p); got.Protocol != protoSeplos {
+	if got := loadSettings(p); got.Protocol != protoVektor {
 		t.Fatalf("нет файла: protocol=%q", got.Protocol)
 	}
-	if err := os.WriteFile(p, []byte(`{"protocol":"vektor"}`), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(`{"protocol":"seplos"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := loadSettings(p); got.Protocol != protoVektor {
-		t.Fatalf("vektor: protocol=%q", got.Protocol)
+	if got := loadSettings(p); got.Protocol != protoSeplos {
+		t.Fatalf("seplos: protocol=%q", got.Protocol)
 	}
 	if err := os.WriteFile(p, []byte(`{"protocol":"growatt"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := loadSettings(p); got.Protocol != protoSeplos {
+	if got := loadSettings(p); got.Protocol != protoVektor {
 		t.Fatalf("неизвестный протокол: protocol=%q", got.Protocol)
 	}
 }

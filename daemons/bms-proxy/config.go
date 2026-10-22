@@ -74,10 +74,10 @@ func (s settings) udpListenAddr() string {
 	return strings.TrimSpace(s.UDPListen)
 }
 
-// defaultSettings — значения по умолчанию: выключен, 19200, INFO, адресация 1..16,
-// UDP-слушатель выключен.
+// defaultSettings — значения по умолчанию: выключен, 9600, Vektor, INFO,
+// адресация 1..16, UDP-слушатель выключен.
 func defaultSettings() settings {
-	return settings{Enabled: false, Baud: 19200, Protocol: protoSeplos, LogLevel: "info", AddrMode: addrMode1}
+	return settings{Enabled: false, Baud: 9600, Protocol: protoVektor, LogLevel: "info", AddrMode: addrMode1}
 }
 
 // normalizeAddrMode приводит вид адресации к канонической форме «0-15»/«1-16»
@@ -125,11 +125,11 @@ func loadSettings(path string) settings {
 	} else {
 		s.AddrMode = defaultSettings().AddrMode
 	}
-	// Канонизация протокола: ""/неизвестный → seplos.
+	// Канонизация протокола: ""/неизвестный → Vektor (по умолчанию).
 	if pr, ok := normalizeProtocol(s.Protocol); ok {
 		s.Protocol = pr
 	} else {
-		s.Protocol = protoSeplos
+		s.Protocol = defaultSettings().Protocol
 	}
 	return s
 }

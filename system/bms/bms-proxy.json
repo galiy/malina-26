@@ -1,7 +1,7 @@
 {
   "enabled": false,
-  "baud": 19200,
-  "protocol": "seplos",
+  "baud": 9600,
+  "protocol": "vektor",
   "log_level": "info",
   "addr_mode": "1-16"
 }
