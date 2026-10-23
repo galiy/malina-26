@@ -14,8 +14,25 @@ import (
 const (
 	vektorMaxCurrentA    = 327 // лимит 0x0019/0x0023 (A), влезает в signed 16-bit
 	vektorMaxCurrent10mA = vektorMaxCurrentA * 100
-	vektorCV10mV         = 5760 // 57.6 В для LFP 16S
+
+	// CV Voltage 0x0021 для 16S: LFP 3.6 В/яч, NMC 4.2 В/яч, LTO 2.8 В/яч.
+	vektorCVLFP10mV = 5760
+	vektorCVNMC10mV = 6720
+	vektorCVLTO10mV = 4480
 )
+
+// vektorCVForType — CV Voltage (10 мВ) для типа АКБ 0=LFP/1=NMC/2=LTO.
+// Неизвестный тип трактуем как LFP.
+func vektorCVForType(t uint16) uint16 {
+	switch t {
+	case 1:
+		return vektorCVNMC10mV
+	case 2:
+		return vektorCVLTO10mV
+	default:
+		return vektorCVLFP10mV
+	}
+}
 
 // vektorSnapshot — всё, что нужно для ответа на блок состояния.
 type vektorSnapshot struct {
@@ -88,7 +105,13 @@ func buildVektorSnapshot(ats []activeTelemetry) (vektorSnapshot, bool) {
 			}
 		}
 		remainingSum += int64(t.RemainingMAh)
-		capSum += int64(t.CapMAh)
+		// Growatt 0x001B — rated (номинальная) ёмкость. У AntBMS RatedMAh=0,
+		// поэтому fallback на CapMAh (фактическая/настроенная полная ёмкость).
+		cap := t.RatedMAh
+		if cap == 0 {
+			cap = t.CapMAh
+		}
+		capSum += int64(cap)
 		if int(t.Cycles) > cyclesMax {
 			cyclesMax = int(t.Cycles)
 		}
@@ -137,7 +160,7 @@ func vektorStatusRegisters(s vektorSnapshot) [vektorStatusCount]uint16 {
 	r[9] = uint16(s.Cycles)
 	r[10] = 0 // Box ID
 	r[11] = uint16(s.SohPct)
-	r[12] = vektorCV10mV
+	r[12] = vektorCVForType(s.Type)
 	r[13] = s.Warning | (s.Type << 14)
 	r[14] = uint16(s.MaxCurrent)
 	r[15] = 0 // Extended Error

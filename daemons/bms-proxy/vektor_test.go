@@ -127,6 +127,7 @@ func TestVektorStatusRegisters(t *testing.T) {
 	t1.TempsDC[0] = 255
 	t1.RemainingMAh = 100000
 	t1.CapMAh = 200000
+	t1.RatedMAh = 180000
 	t1.Cycles = 10
 	t1.SohDP = 900
 	t2 := mk(3150, 3200, 3250, 3300)
@@ -136,6 +137,7 @@ func TestVektorStatusRegisters(t *testing.T) {
 	t2.TempsDC[0] = 305
 	t2.RemainingMAh = 100000
 	t2.CapMAh = 200000
+	t2.RatedMAh = 0
 	t2.Cycles = 20
 	t2.SohDP = 950
 
@@ -155,7 +157,7 @@ func TestVektorStatusRegisters(t *testing.T) {
 		31,    // max 30.5 °C → 31
 		32700, // лимит 327 А
 		20000, // RM 200000 мА·ч / 10
-		40000, // FCC 400000 / 10
+		38000, // FCC: RatedMAh 180000 + fallback CapMAh 200000, /10
 		0,
 		200, // delta 3350-3150 мВ
 		20,  // cycles max
@@ -175,6 +177,24 @@ func TestVektorStatusRegisters(t *testing.T) {
 		if r[i] != want[i] {
 			t.Fatalf("reg %d = %d, ожидалось %d", i, r[i], want[i])
 		}
+	}
+}
+
+func TestVektorCVForType(t *testing.T) {
+	cases := map[uint16]uint16{0: 5760, 1: 6720, 2: 4480, 3: 5760}
+	for typ, want := range cases {
+		if got := vektorCVForType(typ); got != want {
+			t.Fatalf("type=%d CV=%d, ожидалось %d", typ, got, want)
+		}
+	}
+	var s vektorSnapshot
+	s.Type = 1
+	if got := vektorStatusRegisters(s)[12]; got != 6720 {
+		t.Fatalf("NMC status CV=%d", got)
+	}
+	s.Type = 2
+	if got := vektorStatusRegisters(s)[12]; got != 4480 {
+		t.Fatalf("LTO status CV=%d", got)
 	}
 }
 
