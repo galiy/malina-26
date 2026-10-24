@@ -385,7 +385,22 @@ func (s *Server) handleStatsSettings(w http.ResponseWriter, r *http.Request) {
 				if okv {
 					raw, _ := res["raw_archive"].(bool)
 					avg, _ := res["avg_archive"].(bool)
-					s.redirectStatsSettings(w, r, "ok=test&raw="+b01(raw)+"&avg="+b01(avg))
+					rstat, _ := res["raw_status"].(string)
+					astat, _ := res["avg_status"].(string)
+					if rstat == "error" || astat == "error" {
+						s.redirectStatsSettings(w, r, "err=test_read")
+						return
+					}
+					switch {
+					case raw && avg:
+						s.redirectStatsSettings(w, r, "ok=test_both")
+					case raw:
+						s.redirectStatsSettings(w, r, "ok=test_raw_only")
+					case avg:
+						s.redirectStatsSettings(w, r, "ok=test_avg_only")
+					default:
+						s.redirectStatsSettings(w, r, "ok=test_none")
+					}
 				} else {
 					why, _ := res["error"].(string)
 					s.redirectStatsSettings(w, r, "err=test&why="+url.QueryEscape(clipErr(why)))

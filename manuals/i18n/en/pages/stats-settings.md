@@ -47,7 +47,12 @@ If averaging is disabled, detailed data keeps being written, but the averaged hi
 2. Enter the protocol, host, port, path, user, and password.
 3. For SFTP, paste the server host key given by the network administrator.
 4. Click **Save**.
-5. Click **Test access**. A success message should appear.
+5. Click **Test access**. The message explains the result:
+   - "Access OK. Found raw and avg archives" — access works and both databases are in the archive;
+   - "Found raw archive; avg is missing" (or vice versa) — only one database is present;
+   - "No archive at this path" — access works but the folder is empty; a new session will be created when backup is enabled;
+   - "No access to the archive folder" — check the address, path, login, password, and host key;
+   - "Access OK, but the archive cannot be read" — the folder opens, but archive files are damaged or unreadable: check the folder and retry.
 6. Enable the backup with the restore or archive-erase action — see below.
 
 ## How to set up a flash drive

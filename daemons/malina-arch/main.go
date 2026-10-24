@@ -1075,13 +1075,24 @@ func (a *arch) test() any {
 		defer t.Close()
 	}
 	if err != nil {
-		return map[string]any{"ok": false, "error": err.Error()}
+		return map[string]any{"ok": false, "error": err.Error(), "reason": "connect"}
 	}
 	_, rawOK, rawErr := readRawManifest(t, pathJoin(a.device, "raw", "manifest.json"))
 	am, avgOK, avgErr := readAvgManifest(t, pathJoin(a.device, "avg", "manifest.json"))
 	avgOK = avgOK && len(am.Files) > 0
-	if rawErr != nil || avgErr != nil {
-		return map[string]any{"ok": false, "error": "archive read failed"}
+	// Статус описывает не только «есть/нет», но и «есть, но не читается»:
+	// доступ при этом рабочий, и оператору важно видеть разницу.
+	rawStatus := "missing"
+	if rawErr != nil {
+		rawStatus = "error"
+	} else if rawOK {
+		rawStatus = "ok"
+	}
+	avgStatus := "missing"
+	if avgErr != nil {
+		avgStatus = "error"
+	} else if avgOK {
+		avgStatus = "ok"
 	}
 	a.mu.Lock()
 	if !a.enabled && (rawOK || avgOK) {
@@ -1092,7 +1103,10 @@ func (a *arch) test() any {
 		a.state = "disabled"
 	}
 	a.mu.Unlock()
-	return map[string]any{"ok": true, "raw_archive": rawOK, "avg_archive": avgOK}
+	return map[string]any{
+		"ok": true, "raw_archive": rawOK, "avg_archive": avgOK,
+		"raw_status": rawStatus, "avg_status": avgStatus,
+	}
 }
 
 func (a *arch) disable() {
