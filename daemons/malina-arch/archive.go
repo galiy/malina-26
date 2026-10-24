@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -62,23 +63,210 @@ func localFiles(root string) (map[string]int64, error) {
 	return out, err
 }
 
-func readJSON(t target, rel string, v any) (bool, error) {
+func readAllTarget(t target, rel string) ([]byte, error) {
 	f, err := t.Open(rel)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return io.ReadAll(f)
+}
+
+func readJSON(t target, rel string, v any) (bool, error) {
+	b, err := readAllTarget(t, rel)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
 		return false, err
 	}
-	defer f.Close()
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return false, err
-	}
 	if err := json.Unmarshal(b, v); err != nil {
 		return false, fmt.Errorf("%w: %v", errArchiveInvalid, err)
 	}
 	return true, nil
+}
+
+// manifestCandidates — порядок поиска манифеста: основной, резервная копия
+// прошлой удачной записи и незавершённая новая версия. Порядок важен для
+// выбора при равном updated: сначала основной.
+func manifestCandidates(rel string) []string {
+	return []string{rel, rel + ".old", rel + ".new"}
+}
+
+// readRawManifest читает raw-манифест, переживая обрыв/порчу файла на сетевой
+// ФС: если основной файл битый или отсутствует, берётся .old/.new. Среди
+// валидных кандидатов выбирается самый свежий по updated.
+func readRawManifest(t target, rel string) (rawManifest, bool, error) {
+	var best rawManifest
+	found := false
+	invalid := false
+	var firstErr error
+	for i, cand := range manifestCandidates(rel) {
+		var m rawManifest
+		ok, err := readJSON(t, cand, &m)
+		if err != nil {
+			// Битый JSON — повод попробовать другую версию.
+			if errors.Is(err, errArchiveInvalid) {
+				invalid = true
+				continue
+			}
+			// I/O на основном файле — наверх: не маскируем потерю доступа.
+			// Сбой на резервной версии не должен отменять уже найденный
+			// валидный основной манифест.
+			if i == 0 {
+				return rawManifest{}, false, err
+			}
+			if found {
+				continue
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if !found || m.Updated > best.Updated {
+			best, found = m, true
+		}
+	}
+	if found {
+		return best, true, nil
+	}
+	// Структурное разрушение важнее сопутствующей I/O-ошибки на резерве:
+	// повод для реконструкции, а не для бесконечного повтора.
+	if invalid {
+		if firstErr != nil {
+			return rawManifest{}, false, fmt.Errorf("%w: ни одна версия manifest не читается (резерв: %v)", errArchiveInvalid, firstErr)
+		}
+		return rawManifest{}, false, fmt.Errorf("%w: ни одна версия manifest не читается", errArchiveInvalid)
+	}
+	if firstErr != nil {
+		return rawManifest{}, false, firstErr
+	}
+	return rawManifest{}, false, nil
+}
+
+// readAvgManifest — то же для avg-манифеста.
+func readAvgManifest(t target, rel string) (avgManifest, bool, error) {
+	var best avgManifest
+	found := false
+	invalid := false
+	var firstErr error
+	for i, cand := range manifestCandidates(rel) {
+		var m avgManifest
+		ok, err := readJSON(t, cand, &m)
+		if err != nil {
+			if errors.Is(err, errArchiveInvalid) {
+				invalid = true
+				continue
+			}
+			if i == 0 {
+				return avgManifest{}, false, err
+			}
+			if found {
+				continue
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if !found || m.Updated > best.Updated {
+			best, found = m, true
+		}
+	}
+	if found {
+		return best, true, nil
+	}
+	if invalid {
+		if firstErr != nil {
+			return avgManifest{}, false, fmt.Errorf("%w: ни одна версия manifest не читается (резерв: %v)", errArchiveInvalid, firstErr)
+		}
+		return avgManifest{}, false, fmt.Errorf("%w: ни одна версия manifest не читается", errArchiveInvalid)
+	}
+	if firstErr != nil {
+		return avgManifest{}, false, firstErr
+	}
+	return avgManifest{}, false, nil
+}
+
+// listTargetFiles рекурсивно собирает файлы под root: относительный путь
+// (без root) → размер. Отсутствие каталога — ошибка: вызывающий должен
+// отличать «пусто» от «не прочитали».
+func listTargetFiles(t target, root string) (map[string]int64, error) {
+	out := map[string]int64{}
+	var walk func(rel string) error
+	walk = func(rel string) error {
+		entries, err := t.ReadDir(rel)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			p := pathJoin(rel, e.Name())
+			if e.IsDir() {
+				if err := walk(p); err != nil {
+					return err
+				}
+				continue
+			}
+			if root != "" && !strings.HasPrefix(p, root+"/") {
+				return fmt.Errorf("неожиданный путь %q вне %q", p, root)
+			}
+			relPath := strings.TrimPrefix(strings.TrimPrefix(p, root), "/")
+			if relPath == "" {
+				continue
+			}
+			out[relPath] = e.Size()
+		}
+		return nil
+	}
+	if err := walk(root); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// reconstructRawManifest восстанавливает описание raw-архива по фактически
+// лежащим файлам. run_id в raw-сегментах не хранится, поэтому принимается
+// новый: если манифест разрушен, сессия всё равно пересоздаётся.
+func reconstructRawManifest(t target, device, runID string) (rawManifest, error) {
+	files, err := listTargetFiles(t, pathJoin(device, "raw", "files"))
+	if err != nil {
+		return rawManifest{}, err
+	}
+	if len(files) == 0 {
+		return rawManifest{}, fmt.Errorf("%w: архив пуст", errArchiveInvalid)
+	}
+	for rel := range files {
+		if _, ok := safeRelExact(rel); !ok {
+			return rawManifest{}, fmt.Errorf("%w: небезопасный путь %q", errArchiveInvalid, rel)
+		}
+	}
+	return rawManifest{RunID: runID, Updated: time.Now().Unix(), Files: files}, nil
+}
+
+// reconstructAvgManifest восстанавливает описание avg-архива по файлам.
+// Восстановленный набор считается завершённым: цель — вернуть максимум
+// данных, а не воспроизвести состояние на момент обрыва.
+func reconstructAvgManifest(t target, device string) (avgManifest, error) {
+	files, err := listTargetFiles(t, pathJoin(device, "avg", "files"))
+	if err != nil {
+		return avgManifest{}, err
+	}
+	if len(files) == 0 {
+		return avgManifest{}, fmt.Errorf("%w: архив пуст", errArchiveInvalid)
+	}
+	for rel := range files {
+		if _, ok := safeRelExact(rel); !ok {
+			return avgManifest{}, fmt.Errorf("%w: небезопасный путь %q", errArchiveInvalid, rel)
+		}
+	}
+	return avgManifest{CopyID: newRunID(), Updated: time.Now().Unix(), Completed: true, Files: files}, nil
 }
 
 func safeRel(rel string) (string, bool) {
@@ -88,6 +276,17 @@ func safeRel(rel string) (string, bool) {
 	}
 	clean := filepath.ToSlash(filepath.Clean(rel))
 	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", false
+	}
+	return clean, true
+}
+
+// safeRelExact — как safeRel, но требует уже нормализованный путь: ключ
+// манифеста должен совпадать с путём на target, иначе «a/../b» проверялся бы
+// как «b», а использовался как «a/../b».
+func safeRelExact(rel string) (string, bool) {
+	clean, ok := safeRel(rel)
+	if !ok || clean != filepath.ToSlash(rel) {
 		return "", false
 	}
 	return clean, true
@@ -109,28 +308,52 @@ func clearDir(root string) error {
 	return nil
 }
 
+// writeJSONAtomic пишет манифест через новые/старые версии: .new → проверка
+// чтением → текущий уходит в .old → .new становится основным. На сетевой ФС
+// (SMB/SFTP) rename не даёт атомарности, поэтому проверка после записи и
+// сохранённая .old-версия позволяют пережить обрыв между шагами.
 func writeJSONAtomic(t target, rel string, v any) (int64, error) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return 0, err
+	}
+	b = append(b, '\n')
 	tmp := rel + ".new"
 	w, err := t.Create(tmp)
 	if err != nil {
 		return 0, err
 	}
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(v); err != nil {
+	if _, err := w.Write(b); err != nil {
 		w.Close()
+		_ = t.Remove(tmp)
 		return 0, err
 	}
 	if err := w.Close(); err != nil {
+		_ = t.Remove(tmp)
 		return 0, err
+	}
+	// Проверка обратным чтением: обрезанный/недописанный файл не должен
+	// становиться основным.
+	rb, err := readAllTarget(t, tmp)
+	if err != nil {
+		_ = t.Remove(tmp)
+		return 0, fmt.Errorf("manifest: проверка записи: %w", err)
+	}
+	if !bytes.Equal(rb, b) {
+		_ = t.Remove(tmp)
+		return 0, errors.New("manifest: проверка записи не совпала")
+	}
+	// Предыдущая удачная версия сохраняется как .old (последняя точка опоры).
+	if _, err := t.Stat(rel); err == nil {
+		if err := t.Rename(rel, rel+".old"); err != nil {
+			_ = t.Remove(tmp)
+			return 0, err
+		}
 	}
 	if err := t.Rename(tmp, rel); err != nil {
 		return 0, err
 	}
-	if st, err := t.Stat(rel); err == nil {
-		return st.Size(), nil
-	}
-	return 0, nil
+	return int64(len(b)), nil
 }
 
 func copyPrefix(t target, rel, local string, remoteSize int64) error {
@@ -182,10 +405,23 @@ func copyFull(t target, rel, local string) error {
 // archiveRawOnce зеркалит текущее окно raw на target.
 func archiveRawOnce(t target, device, runID, localRoot, rawSock string) (int64, error) {
 	base := pathJoin(device, "raw")
-	var m rawManifest
-	ok, err := readJSON(t, pathJoin(base, "manifest.json"), &m)
+	m, ok, err := readRawManifest(t, pathJoin(base, "manifest.json"))
 	if err != nil {
-		return 0, err
+		// I/O-сбой (сеть/доступ) не лечится реконструкцией — отдаём наверх,
+		// чтобы сработал повтор/переподключение. Реконструкция уместна только
+		// когда манифест структурно разрушен, а файлы читаются.
+		if !errors.Is(err, errArchiveInvalid) {
+			return 0, err
+		}
+		rm, rerr := reconstructRawManifest(t, device, runID)
+		if rerr != nil {
+			return 0, fmt.Errorf("реконструкция raw manifest: %w (исходно: %v)", rerr, err)
+		}
+		lx.Warnf("raw: manifest невалиден (%v), реконструкция по files/, run_id=%s", err, rm.RunID)
+		if _, werr := writeJSONAtomic(t, pathJoin(base, "manifest.json"), &rm); werr != nil {
+			return 0, werr
+		}
+		m, ok = rm, true
 	}
 	if !ok {
 		// Архива ещё нет: начинаем сессию.
@@ -203,7 +439,7 @@ func archiveRawOnce(t target, device, runID, localRoot, rawSock string) (int64, 
 		m.Files = map[string]int64{}
 	}
 	for rel := range m.Files {
-		if _, ok := safeRel(rel); !ok {
+		if _, ok := safeRelExact(rel); !ok {
 			return 0, fmt.Errorf("%w: небезопасный путь %q", errArchiveInvalid, rel)
 		}
 	}
@@ -227,15 +463,17 @@ func archiveRawOnce(t target, device, runID, localRoot, rawSock string) (int64, 
 	for rel, size := range local {
 		if liveSock && !isSealed(filepath.Join(localRoot, filepath.FromSlash(rel))) {
 			typ, id, seg, ok := splitRawRel(rel)
-			if !ok {
-				continue
-			}
-			committed, ok, err := committedOffset(rawSock, typ, id, seg, false)
-			if err != nil || !ok {
-				return 0, fmt.Errorf("committed offset %s: %w", rel, err)
-			}
-			if int64(committed) < size {
-				size = int64(committed)
+			if ok {
+				committed, ok, err := committedOffset(rawSock, typ, id, seg, false)
+				if err != nil || !ok {
+					return 0, fmt.Errorf("committed offset %s: %w", rel, err)
+				}
+				if int64(committed) < size {
+					size = int64(committed)
+				}
+			} else {
+				// Раскладка неожиданная — не теряем сегмент: копируем целиком.
+				lx.Warnf("raw: не удалось разобрать путь %q, копирую целиком", rel)
 			}
 		}
 		rem := pathJoin(base, "files", rel)
@@ -288,6 +526,10 @@ func resetRaw(t target, device, runID string) error {
 	if err := removeTree(t, pathJoin(base, "files")); err != nil {
 		return err
 	}
+	// Резервные версии от старой сессии больше не нужны и не должны быть
+	// «усыновлены» реконструкцией после сброса.
+	_ = t.Remove(pathJoin(base, "manifest.json.old"))
+	_ = t.Remove(pathJoin(base, "manifest.json.new"))
 	return t.MkdirAll(pathJoin(base, "files"))
 }
 
@@ -297,10 +539,21 @@ func restoreRaw(t target, device, localRoot string) (string, bool, error) {
 
 func restoreRawCancelable(t target, device, localRoot string, cancelled func() bool) (string, bool, error) {
 	base := pathJoin(device, "raw")
-	var m rawManifest
-	ok, err := readJSON(t, pathJoin(base, "manifest.json"), &m)
+	m, ok, err := readRawManifest(t, pathJoin(base, "manifest.json"))
 	if err != nil {
-		return "", false, err
+		if !errors.Is(err, errArchiveInvalid) {
+			return "", false, err
+		}
+		// Манифест разрушен: пытаемся восстановить архив по фактическим файлам.
+		rm, rerr := reconstructRawManifest(t, device, newRunID())
+		if rerr != nil {
+			return "", false, fmt.Errorf("реконструкция raw manifest: %w (исходно: %v)", rerr, err)
+		}
+		lx.Warnf("restore raw: manifest невалиден (%v), реконструкция по files/, run_id=%s", err, rm.RunID)
+		if _, werr := writeJSONAtomic(t, pathJoin(base, "manifest.json"), &rm); werr != nil {
+			lx.Warnf("restore raw: не удалось записать восстановленный manifest: %v", werr)
+		}
+		m, ok = rm, true
 	}
 	if !ok {
 		return "", false, nil
@@ -312,7 +565,7 @@ func restoreRawCancelable(t target, device, localRoot string, cancelled func() b
 		if cancelled != nil && cancelled() {
 			return "", false, errors.New("restore отменён")
 		}
-		if _, ok := safeRel(rel); !ok {
+		if _, ok := safeRelExact(rel); !ok {
 			return "", false, fmt.Errorf("%w: небезопасный путь в raw manifest", errArchiveInvalid)
 		}
 		if _, err := t.Stat(pathJoin(base, "files", rel)); err != nil {
@@ -440,8 +693,7 @@ func backupAvgOnce(t target, device, localRoot string, includeActive bool) (int6
 		if len(existing) == 0 {
 			return 0, errors.New("avg: нет сегментов для копирования")
 		}
-		var old avgManifest
-		if ok, _ := readJSON(t, pathJoin(base, "manifest.json"), &old); ok {
+		if old, ok, _ := readAvgManifest(t, pathJoin(base, "manifest.json")); ok {
 			if len(old.Files) == 0 {
 				_ = t.Remove(pathJoin(base, "manifest.json"))
 				return 0, nil
@@ -452,8 +704,20 @@ func backupAvgOnce(t target, device, localRoot string, includeActive bool) (int6
 		}
 		return 0, nil
 	}
-	var m avgManifest
-	ok, _ := readJSON(t, pathJoin(base, "manifest.json"), &m)
+	m, ok, merr := readAvgManifest(t, pathJoin(base, "manifest.json"))
+	if merr != nil {
+		if !errors.Is(merr, errArchiveInvalid) {
+			return 0, merr
+		}
+		// Манифест разрушен: пересобираем по фактическим файлам, чтобы не
+		// потерять зеркало и продолжить копирование.
+		rec, rerr := reconstructAvgManifest(t, device)
+		if rerr != nil {
+			return 0, fmt.Errorf("реконструкция avg manifest: %w (исходно: %v)", rerr, merr)
+		}
+		lx.Warnf("avg: manifest невалиден (%v), реконструкция по files/", merr)
+		m, ok = rec, true
+	}
 	if !ok || m.Files == nil {
 		m = avgManifest{Files: map[string]int64{}}
 	}
@@ -478,7 +742,7 @@ func backupAvgOnce(t target, device, localRoot string, includeActive bool) (int6
 	// Зеркало: удаляем на target всё, чего уже нет локально (включая
 	// active-snapshot, если сегмент удалён или переименован).
 	for rel := range m.Files {
-		if _, ok := safeRel(rel); !ok {
+		if _, ok := safeRelExact(rel); !ok {
 			return 0, fmt.Errorf("%w: небезопасный путь %q", errArchiveInvalid, rel)
 		}
 		if _, ok := existing[rel]; !ok {
@@ -498,13 +762,27 @@ func backupAvgOnce(t target, device, localRoot string, includeActive bool) (int6
 }
 
 func restoreAvg(t target, device, localRoot string, cancelled func() bool) (string, bool, error) {
-	var m avgManifest
-	ok, err := readJSON(t, pathJoin(device, "avg", "manifest.json"), &m)
-	if err != nil || !ok || !m.Completed || len(m.Files) == 0 {
+	m, ok, err := readAvgManifest(t, pathJoin(device, "avg", "manifest.json"))
+	if err != nil {
+		if !errors.Is(err, errArchiveInvalid) {
+			return "", false, err
+		}
+		// Манифест разрушен: восстанавливаем описание по фактическим файлам.
+		rm, rerr := reconstructAvgManifest(t, device)
+		if rerr != nil {
+			return "", false, fmt.Errorf("реконструкция avg manifest: %w (исходно: %v)", rerr, err)
+		}
+		lx.Warnf("restore avg: manifest невалиден (%v), реконструкция по files/", err)
+		if _, werr := writeJSONAtomic(t, pathJoin(device, "avg", "manifest.json"), &rm); werr != nil {
+			lx.Warnf("restore avg: не удалось записать восстановленный manifest: %v", werr)
+		}
+		m, ok = rm, true
+	}
+	if !ok || !m.Completed || len(m.Files) == 0 {
 		return "", false, err
 	}
 	for rel := range m.Files {
-		if _, ok := safeRel(rel); !ok {
+		if _, ok := safeRelExact(rel); !ok {
 			return "", false, fmt.Errorf("%w: небезопасный путь в avg manifest", errArchiveInvalid)
 		}
 		if _, err := t.Stat(pathJoin(device, "avg", "files", rel)); err != nil {

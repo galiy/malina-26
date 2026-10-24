@@ -368,7 +368,7 @@ func (a *arch) init() {
 	if rawSockAlive(a.rawSock) {
 		lx.Infof("raw-tsdb уже работает: restore пропущен, run_id из manifest")
 		var m rawManifest
-		ok, err := readJSON(t, pathJoin(a.device, "raw", "manifest.json"), &m)
+		m, ok, err := readRawManifest(t, pathJoin(a.device, "raw", "manifest.json"))
 		a.mu.Lock()
 		defer a.mu.Unlock()
 		if err != nil || !ok || m.RunID == "" {
@@ -478,7 +478,7 @@ func (a *arch) init() {
 	a.cleanStart = false
 	a.mu.Unlock()
 	if !avgHasData(a.avgRoot) {
-		if _, avgOK, aerr := restoreAvg(t, a.device, a.avgRoot, a.cancelled); aerr != nil || !avgOK {
+		if _, avgOK, aerr := restoreAvg(t, a.device, a.avgRoot, a.cancelled); aerr != nil {
 			lx.Warnf("init: avg не восстановлена (%v), архивация выключается", aerr)
 			a.clearRawFatal()
 			if cerr := clearDir(a.avgRoot); cerr != nil {
@@ -492,6 +492,10 @@ func (a *arch) init() {
 			_ = saveConfig(a.cfgPath, a.cfg)
 			a.mu.Unlock()
 			return
+		} else if !avgOK {
+			// Avg-архива ещё нет (сессия началась, но запечатанных сегментов
+			// не было) — это не ошибка: raw уже принят, архивация продолжается.
+			lx.Infof("init: avg-архива нет — восстановление avg пропущено")
 		}
 	} else {
 		lx.Infof("init: локальная avg есть — восстановление avg пропущено, архив продолжается")
@@ -590,8 +594,7 @@ func (a *arch) reconnectTick() {
 	a.tgt = t
 	if adopt := a.adoptRunID || a.runID == ""; adopt {
 		adoptID := a.adoptRunID
-		var m rawManifest
-		ok, rerr := readJSON(t, pathJoin(a.device, "raw", "manifest.json"), &m)
+		m, ok, rerr := readRawManifest(t, pathJoin(a.device, "raw", "manifest.json"))
 		a.adoptRunID = false
 		if rerr != nil {
 			_ = t.Close()
@@ -626,8 +629,7 @@ func (a *arch) reconnectTick() {
 		}
 	}
 	if a.cleanStart {
-		var m rawManifest
-		ok, rerr := readJSON(t, pathJoin(a.device, "raw", "manifest.json"), &m)
+		m, ok, rerr := readRawManifest(t, pathJoin(a.device, "raw", "manifest.json"))
 		if rerr != nil {
 			_ = t.Close()
 			a.tgt = nil
@@ -754,8 +756,7 @@ func (a *arch) reloadConfig() {
 	adopt := a.adoptRunID || runID == ""
 	a.mu.Unlock()
 	if adopt {
-		var m rawManifest
-		ok, rerr := readJSON(t, pathJoin(a.device, "raw", "manifest.json"), &m)
+		m, ok, rerr := readRawManifest(t, pathJoin(a.device, "raw", "manifest.json"))
 		if rerr != nil {
 			a.mu.Lock()
 			_ = t.Close()
@@ -1076,9 +1077,8 @@ func (a *arch) test() any {
 	if err != nil {
 		return map[string]any{"ok": false, "error": err.Error()}
 	}
-	rawOK, rawErr := readJSON(t, pathJoin(a.device, "raw", "manifest.json"), &rawManifest{})
-	var am avgManifest
-	avgOK, avgErr := readJSON(t, pathJoin(a.device, "avg", "manifest.json"), &am)
+	_, rawOK, rawErr := readRawManifest(t, pathJoin(a.device, "raw", "manifest.json"))
+	am, avgOK, avgErr := readAvgManifest(t, pathJoin(a.device, "avg", "manifest.json"))
 	avgOK = avgOK && len(am.Files) > 0
 	if rawErr != nil || avgErr != nil {
 		return map[string]any{"ok": false, "error": "archive read failed"}
@@ -1193,10 +1193,8 @@ func (a *arch) enableAuto() (string, error) {
 		a.mu.Unlock()
 		return "", err
 	}
-	var mraw rawManifest
-	rawOK, rawErr := readJSON(t, pathJoin(a.device, "raw", "manifest.json"), &mraw)
-	var mavg avgManifest
-	avgOK, avgErr := readJSON(t, pathJoin(a.device, "avg", "manifest.json"), &mavg)
+	mraw, rawOK, rawErr := readRawManifest(t, pathJoin(a.device, "raw", "manifest.json"))
+	mavg, avgOK, avgErr := readAvgManifest(t, pathJoin(a.device, "avg", "manifest.json"))
 	avgOK = avgOK && len(mavg.Files) > 0
 	if rawErr != nil && !errors.Is(rawErr, errArchiveInvalid) {
 		return "", rawErr
