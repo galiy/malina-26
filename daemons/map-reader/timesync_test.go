@@ -96,3 +96,41 @@ func TestMaybeSyncWindowAndOnce(t *testing.T) {
 		t.Fatalf("в окне окно должно быть отмечено %d, got %d", b, e.syncWin)
 	}
 }
+
+func TestQuietPeriodAndThreshold(t *testing.T) {
+	loc := time.Local
+	at := func(h, m int) time.Time { return time.Date(2026, 10, 10, h, m, 0, 0, loc) }
+
+	// Границы ночного окна [22:30, 07:30).
+	for _, c := range []struct {
+		h, m int
+		want bool
+	}{
+		{22, 29, false}, {22, 30, true}, {23, 59, true}, {0, 0, true},
+		{7, 29, true}, {7, 30, false}, {12, 0, false},
+	} {
+		if got := inQuietPeriod(at(c.h, c.m)); got != c.want {
+			t.Errorf("inQuietPeriod(%02d:%02d)=%v, want %v", c.h, c.m, got, c.want)
+		}
+	}
+
+	// День: корректируем при diff > порога (1), не при diff <= 1.
+	if shouldCorrectTime(at(12, 0), 1, 1) {
+		t.Error("днём diff=1 не должен корректироваться")
+	}
+	if !shouldCorrectTime(at(12, 0), 2, 1) {
+		t.Error("днём diff=2 должен корректироваться")
+	}
+
+	// Ночь: корректируем только при diff >= 5 мин.
+	for _, d := range []int{0, 1, 4} {
+		if shouldCorrectTime(at(23, 0), d, 1) {
+			t.Errorf("ночью diff=%d не должен корректироваться", d)
+		}
+	}
+	for _, d := range []int{5, 6, 60} {
+		if !shouldCorrectTime(at(23, 0), d, 1) {
+			t.Errorf("ночью diff=%d должен корректироваться", d)
+		}
+	}
+}

@@ -56,10 +56,35 @@ func absInt(a int) int {
 	return a
 }
 
+// Ночное окно: с 22:30 до 07:30 локального времени мелкие расхождения
+// (< 5 мин) не корректируем, чтобы лишний раз не писать в МАП.
+const (
+	quietStartMin      = 22*60 + 30 // 22:30
+	quietEndMin        = 7*60 + 30  // 07:30
+	quietSyncThreshMin = 5          // порог коррекции в ночное окно
+)
+
+// inQuietPeriod сообщает, попадает ли момент в ночное окно [22:30, 07:30).
+func inQuietPeriod(now time.Time) bool {
+	m := now.Hour()*60 + now.Minute()
+	return m >= quietStartMin || m < quietEndMin
+}
+
+// shouldCorrectTime решает, корректировать ли время МАП при расхождении diffMin.
+// Днём — при превышении обычного порога (diff > threshMin); в ночное окно —
+// только при diff >= 5 мин (расхождение «менее 5 минут» игнорируем).
+func shouldCorrectTime(now time.Time, diffMin, threshMin int) bool {
+	if inQuietPeriod(now) {
+		return diffMin >= quietSyncThreshMin
+	}
+	return diffMin > threshMin
+}
+
 // maybeSyncTime — проверка/коррекция времени МАП (см. docs/map-reader.md).
 // Вне окна не проверяем; в окне — одна попытка на МАП за окно; корректируем
-// только при расхождении > timeSyncThreshMin; после записи — полное перечитывание
-// и публикация (это делает executeWrite). Детали — только в лог.
+// только при расхождении > timeSyncThreshMin (ночью 22:30–07:30 — при
+// расхождении >= 5 мин, см. shouldCorrectTime); после записи — полное
+// перечитывание и публикация (это делает executeWrite). Детали — только в лог.
 func maybeSyncTime(cfg *config, reg *Registry, p *Port, proto string, entries []*MapEntry, e *MapEntry, mem memMap, now time.Time) {
 	if cfg.timeSyncDisabled(now) {
 		return // синхронизация выключена файловым флагом (кэш 1 мин)
@@ -77,7 +102,7 @@ func maybeSyncTime(cfg *config, reg *Registry, p *Port, proto string, entries []
 		return
 	}
 	sysMin := now.Hour()*60 + now.Minute()
-	if absInt(mapMin-sysMin) <= cfg.timeSyncThreshMin {
+	if !shouldCorrectTime(now, absInt(mapMin-sysMin), cfg.timeSyncThreshMin) {
 		return
 	}
 	tc, minut := encodeClock(now)

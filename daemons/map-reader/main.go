@@ -53,7 +53,7 @@ const (
 
 	defTimeSyncOff       = "/malina/etc/malina/map-time-sync.off" // флаг-файл отключения синка
 	defTimeSyncWindow    = 5 * time.Second                        // окно вокруг 10-минутной точки
-	defTimeSyncThreshMin = 1                                      // порог коррекции, минут
+	defTimeSyncThreshMin = 1                                      // дневной порог коррекции, минут
 
 	defSleepPoll = 30 * time.Second // период перечитывания настроек в режиме сна
 )
