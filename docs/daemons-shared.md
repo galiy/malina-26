@@ -17,7 +17,7 @@ daemons/
 │  ├─ microart/                # ✅ кадры Микроарт: Escape, Build{Read,Write}Request, Parse{Reply,WriteReply}, Read, Write
 │  ├─ shm/                     # ✅ механика POSIX-shm: Segment (header+seqlock), Slot, Item (формат полей — у демона)
 │  ├─ control/                 # ✅ каркас unix-сокет управления (Serve + JSON-фрейминг); диспетчер — у демона
-│  ├─ logx/                    # ✅ leveled-логгер (debug/info/warn/error, сменяемый порог; io.Writer для standard log)
+│  ├─ logx/                    # ✅ leveled-логгер (debug/info/warn/error, сменяемый порог; io.Writer для standard log); вывод в syslog /dev/log с fallback stderr
 │  ├─ scanner/                 # ✅ Runner: цикл сканирования, backoff (обычный/чужой), active, занятость портов (через /proc); проба — колбэк
 │  ├─ ports/                   # ✅ device-agnostic: ListPorts, RdevOf, BusyRdevs (glob/дедуп по rdev, занятость через /proc)
 │  ├─ device/                  # ✅ коды _Device (3/5/7/9) + Name()

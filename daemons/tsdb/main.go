@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/galiy/malina-26/daemons/lib/logx"
 	"github.com/galiy/malina-26/daemons/lib/tscontract"
 )
 
@@ -45,6 +46,14 @@ func main() {
 
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.SetPrefix("tsdb: ")
+	// Вывод — в syslog (/dev/log), чтобы строки гарантированно уходили
+	// на удалённый log-хост, а не терялись при простое journald-сокета.
+	// Тег различает два инстанса одного бинарника: raw (-row) и avg.
+	tag := "tsdb-avg"
+	if *row {
+		tag = "tsdb-raw"
+	}
+	log.SetOutput(logx.Raw(tag))
 
 	store, err := NewStore(*root, Options{
 		BucketSize: uint32(*bucket),

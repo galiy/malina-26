@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/galiy/malina-26/daemons/lib/logx"
 	"github.com/galiy/malina-26/daemons/lib/transport"
 )
 
@@ -22,6 +23,9 @@ import (
 func main() {
 	log.SetPrefix("bms-proxy: ")
 	log.SetFlags(log.LstdFlags)
+	// Вывод — в syslog (/dev/log): не терять строки при простое
+	// per-service journald-сокета (см. logx.Raw).
+	log.SetOutput(logx.Raw("bms-proxy"))
 
 	cfg := newConfig()
 	cfg.settings = loadSettings(cfg.cfgPath)

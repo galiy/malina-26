@@ -15,6 +15,7 @@ import (
 	"github.com/galiy/malina-26/web/internal/events"
 	"github.com/galiy/malina-26/web/internal/mailer"
 	"github.com/galiy/malina-26/web/internal/masternode"
+	"github.com/galiy/malina-26/web/internal/syslogx"
 	"github.com/galiy/malina-26/web/internal/web"
 )
 
@@ -26,6 +27,7 @@ func envOr(key, def string) string {
 }
 
 func main() {
+	log.SetOutput(syslogx.Raw("malina-web"))
 	listen := flag.String("listen", envOr("MALINA_WEB_LISTEN", ":8080"), "listen address")
 	user := flag.String("user", envOr("MALINA_WEB_USER", "malina"), "web/linux user")
 	pamHelper := flag.String("pam-helper", envOr("MALINA_WEB_PAM_HELPER", "/malina/usr/local/libexec/malina-pamcheck"), "PAM helper path")

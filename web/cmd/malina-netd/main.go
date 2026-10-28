@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/galiy/malina-26/web/internal/netcfg"
+	"github.com/galiy/malina-26/web/internal/syslogx"
 )
 
 const runDir = "/run/malina-net"
@@ -30,6 +31,7 @@ const apIdleRestart = 2 * time.Hour
 
 func main() {
 	log.SetPrefix("malina-netd: ")
+	log.SetOutput(syslogx.Raw("malina-netd"))
 	if len(os.Args) < 2 {
 		log.Fatalf("usage: malina-netd apply|scan|status|fallback-tick")
 	}
