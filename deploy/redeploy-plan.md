@@ -378,7 +378,7 @@ tar --exclude=.git --exclude=.kilo --exclude=hardware.md -C <repo> -czf - . \
 - юниты: `systemctl enable/mask/disable` (на живой системе — **без** `--root`),
   списки из `system/provision/`;
 - purge NetworkManager (`apt-get purge -y network-manager … || true`); fstab-фиксы
-  (`/var/lib/NetworkManager` убрать; `/var/lib/dhcp`, `/run/malina-ts-raw` 200M
+  (`/var/lib/NetworkManager` убрать; `/var/lib/dhcp`, `/run/malina-ts-raw` 256M
   добавить; tmpfs-точки создать); `rm -rf /etc/NetworkManager`. Если
   NetworkManager в образе не установлен, purge штатно ничего не удаляет — это
   не ошибка;

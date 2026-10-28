@@ -2,7 +2,7 @@
 Description=Хранилище телеметрии — raw (tmpfs, row-раскладка)
 Documentation=file:/malina/usr/local/share/malina/docs/telemetry-store.md
 After=local-fs.target malina-arch.service
-# каталог смонтирован как отдельный tmpfs size=200M (см. install/stage2, fstab)
+# каталог смонтирован как отдельный tmpfs size=256M (см. install/stage2, fstab)
 
 [Service]
 Type=simple

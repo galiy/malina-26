@@ -13,8 +13,16 @@ import (
 	"time"
 )
 
-func (s *Store) retentionLoop() {
-	defer s.wg.Done()
+// rawFreeReserve — резерв свободного места на ФС raw (tmpfs). При снижении
+// ниже этого значения retention удаляет старейшие сегменты, не дожидаясь
+// формального превышения лимита объёма. Защита от ENOSPC, когда лимит близок
+// к размеру ФС (регрессия 2026-10-28 на /run/malina-ts-raw).
+const rawFreeReserve int64 = 32 << 20
+
+// freeSpaceFn — обёртка над freeSpaceBytes для подмены в тестах.
+var freeSpaceFn = freeSpaceBytes
+
+func (s *Store) retentionLoop() {	defer s.wg.Done()
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	s.retentionSweep()
@@ -39,8 +47,12 @@ func (s *Store) retentionSweep() {
 		kept := ser.sealed[:0]
 		for _, ref := range ser.sealed {
 			if s.retention > 0 && ref.maxTime < now-ageMS {
-				os.Remove(ref.path)
-				continue
+				// Убираем из учёта только если файл реально удалён.
+				if err := os.Remove(ref.path); err == nil {
+					continue
+				} else {
+					log.Printf("retention: удаление %s: %v", ref.path, err)
+				}
 			}
 			kept = append(kept, ref)
 		}
@@ -64,22 +76,48 @@ func (s *Store) retentionSweep() {
 			}
 			all = append(all, seg{ser, ref})
 		}
+		// Активный (незапечатанный) сегмент тоже занимает место на ФС, хотя и не
+		// удаляется. Без его учёта при лимите, близком к размеру ФС, сумма
+		// sealed не превышает лимит и очистка не срабатывает — запись упирается
+		// в ENOSPC (см. регрессию 2026-10-28 на /run/malina-ts-raw).
+		if ser.active != nil {
+			total += ser.active.size
+		}
 	}
-	if total <= s.limitBytes {
+	// Дополнительная защита: если свободного места меньше резерва, чистим
+	// старейшие сегменты, даже пока сумма формально в пределах лимита.
+	free, ferr := freeSpaceFn(s.root)
+	overLimit := total > s.limitBytes
+	lowFree := ferr == nil && free < rawFreeReserve
+	if !overLimit && !lowFree {
 		return
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].ref.maxTime < all[j].ref.maxTime })
 	for _, sg := range all {
-		if total <= s.limitBytes {
+		if total <= s.limitBytes && (ferr != nil || free >= rawFreeReserve) {
 			break
 		}
-		if st, err := os.Stat(sg.ref.path); err == nil {
-			total -= st.Size()
+		st, serr := os.Stat(sg.ref.path)
+		if serr != nil {
+			// Файла нет — просто убираем ссылку из учёта.
+			sg.ser.sealed = removeRef(sg.ser.sealed, sg.ref)
+			continue
 		}
-		os.Remove(sg.ref.path)
+		if err := os.Remove(sg.ref.path); err != nil {
+			// Не удалось — оставляем в учёте, не завышаем свободное место.
+			log.Printf("retention: удаление %s: %v", sg.ref.path, err)
+			continue
+		}
+		total -= st.Size()
+		free += st.Size() // приблизительно: освобождаемое место
 		sg.ser.sealed = removeRef(sg.ser.sealed, sg.ref)
 	}
-	log.Printf("retention: объём приведён к лимиту %d МБ", s.limitBytes>>20)
+	reason := "лимит"
+	if !overLimit && lowFree {
+		reason = "резерв свободного места"
+	}
+	log.Printf("retention: очистка raw (%s): total=%d МБ, limit=%d МБ, free=%d МБ",
+		reason, total>>20, s.limitBytes>>20, free>>20)
 }
 
 // --- обрезка по свободному месту (avg) ---
@@ -143,10 +181,18 @@ func (s *Store) sweepFree() {
 		if freed >= target {
 			break
 		}
-		if st, err := os.Stat(sg.ref.path); err == nil {
-			freed += st.Size()
+		st, serr := os.Stat(sg.ref.path)
+		if serr != nil {
+			// Файла нет — убираем ссылку из учёта.
+			sg.ser.sealed = removeRef(sg.ser.sealed, sg.ref)
+			continue
 		}
-		os.Remove(sg.ref.path)
+		if err := os.Remove(sg.ref.path); err != nil {
+			// Не удалось — оставляем в учёте и не завышаем освобождённое.
+			log.Printf("retention: удаление %s: %v", sg.ref.path, err)
+			continue
+		}
+		freed += st.Size()
 		sg.ser.sealed = removeRef(sg.ser.sealed, sg.ref)
 	}
 	log.Printf("retention: свободно было %d МБ (< %d МБ), освобождено %d МБ",

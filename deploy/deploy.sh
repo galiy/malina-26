@@ -303,7 +303,16 @@ if [ "${FIRST:-0}" = 1 ]; then
 	sudo rm -f /malina/etc/hostname /malina/etc/timezone
 	sudo systemctl daemon-reload
 
-	grep -q '/run/malina-ts-raw' /etc/fstab || echo 'tmpfs  /run/malina-ts-raw  tmpfs  size=200M,mode=0755,nosuid,nodev  0  0' | sudo tee -a /etc/fstab >/dev/null
+	# ВАЖНО: этот блок выполняется только при первичном развёртывании (--first-run).
+	# На уже работающем устройстве fstab здесь не правится: размер tmpfs raw
+	# применяют вручную — `sed -i 's/size=200M/size=256M/' /etc/fstab` и
+	# `mount -o remount,size=256M /run/malina-ts-raw` (или перезагрузка).
+	if grep -q '/run/malina-ts-raw' /etc/fstab; then
+		# Идемпотентно поднимаем размер tmpfs raw (200M → 256M).
+		sudo sed -i 's#\(/run/malina-ts-raw.*size=\)200M#\1256M#' /etc/fstab
+	else
+		echo 'tmpfs  /run/malina-ts-raw  tmpfs  size=256M,mode=0755,nosuid,nodev  0  0' | sudo tee -a /etc/fstab >/dev/null
+	fi
 	sudo mkdir -p /run/malina-ts-raw
 	sudo mountpoint -q /run/malina-ts-raw || sudo mount /run/malina-ts-raw 2>/dev/null || true
 

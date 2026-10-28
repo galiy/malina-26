@@ -54,7 +54,7 @@
 - **Наблюдаемость**: rsyslog + пересылка на удалённый syslog (DHCP опция 7 или
   ручной хост).
 - **Raw-хранилище телеметрии**: второй инстанс `malina-tsdb` на tmpfs
-  `/run/malina-ts-raw` (200 МБ, retention 48 ч, row-append) — детальное сырьё для
+  `/run/malina-ts-raw` (tmpfs 256 МБ, лимит объёма 200 МБ, возрастного лимита нет, row-append) — детальное сырьё для
   графиков (см. `docs/telemetry-store.md` §14).
 - **Хранилище рядов телеметрии**: демон `daemons/tsdb` (`malina-tsdb`) —
   append-only сегменты на `/malina` (ключ: тип+id+время, версия контракта,

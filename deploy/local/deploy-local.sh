@@ -269,8 +269,12 @@ log "fstab: убираю tmpfs /var/lib/NetworkManager; обеспечиваю /
 $SUDO sed -i '\#/var/lib/NetworkManager#d' "$ROOTM/etc/fstab"
 # /var/lib/dhcp — аренды dhclient (иначе запись на ro-корень падает)
 grep -q '/var/lib/dhcp' "$ROOTM/etc/fstab" || echo 'tmpfs   /var/lib/dhcp           tmpfs   defaults,noatime,nosuid,nodev,mode=0755,size=4m    0 0' | $SUDO tee -a "$ROOTM/etc/fstab" >/dev/null
-# raw-tsdb: отдельный tmpfs 200 МБ (§14)
-grep -q '/run/malina-ts-raw' "$ROOTM/etc/fstab" || echo 'tmpfs   /run/malina-ts-raw      tmpfs   size=200M,mode=0755,nosuid,nodev    0 0' | $SUDO tee -a "$ROOTM/etc/fstab" >/dev/null
+# raw-tsdb: отдельный tmpfs 256 МБ, лимит объёма 200 МБ (§14)
+if grep -q '/run/malina-ts-raw' "$ROOTM/etc/fstab"; then
+	$SUDO sed -i 's#\(/run/malina-ts-raw.*size=\)200M#\1256M#' "$ROOTM/etc/fstab"
+else
+	echo 'tmpfs   /run/malina-ts-raw      tmpfs   size=256M,mode=0755,nosuid,nodev    0 0' | $SUDO tee -a "$ROOTM/etc/fstab" >/dev/null
+fi
 awk '$3=="tmpfs"{print $2}' "$ROOTM/etc/fstab" | while read -r mp; do
 	[ -n "$mp" ] && $SUDO mkdir -p "$ROOTM$mp"
 done
