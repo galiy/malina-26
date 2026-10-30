@@ -1,0 +1,29 @@
+{
+  "device": "titanator",
+  "stage": "monitor",
+  "note": "тестовый запуск с монитором",
+  "started_local": "2026-10-29T18:00:10+03:00",
+  "started_msk": "2026-10-29T18:00:10+03:00",
+  "usb": {
+    "bus": 5,
+    "devnum": 15,
+    "serial": "<FTDI-serial>",
+    "product": "FT232R USB UART",
+    "sysfs": "5-2.4.4",
+    "idVendor": "0403",
+    "idProduct": "6001"
+  },
+  "firmware": {
+    "path": "/home/sasha/src/cleaning.malina/map2gui/mXP1p1v4_5_Titanator_tst3.map2",
+    "sha256": "d53126ca62adaf574448d02e3705ef654ce4c7badad54eb0f7f9320bfcd70a2a"
+  },
+  "host": "local-pc",
+  "kernel": "7.0.0-38-generic",
+  "tshark": "TShark (Wireshark) 4.6.4.",
+  "stopped_local": "2026-10-29T18:00:45+03:00",
+  "stopped_msk": "2026-10-29T18:00:45+03:00",
+  "pcap": {
+    "file": "usb.pcapng",
+    "size": 3840896
+  }
+}
