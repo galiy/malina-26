@@ -78,6 +78,18 @@ func (j probeJob) key() string {
 	return backoffKey(j.src.desc, j.adr)
 }
 
+// slotKey — логический ключ устройства для возврата освобождённого слота.
+//
+// Одного BASE недостаточно: у AntBMS он равен ёмкости, и несколько устройств
+// могут иметь одинаковый ID. Поэтому учитываем источник, адрес на шине и тип
+// протокола — «то же устройство на том же месте» (arch §9).
+type slotKey struct {
+	src    string
+	addr   int
+	typeID uint8
+	id     string
+}
+
 // probeOutcome — результат пробы. tr != nil только для найденного нового
 // источника: владение передаётся циклу оркестратора.
 type probeOutcome struct {
@@ -97,8 +109,13 @@ type orchestrator struct {
 	states    map[string]*srcState
 	devBySlot map[int]*device // активные устройства: слот уникален, ID — нет
 	freeSlots []int
-	backoff   map[string]*boState
-	gws       gatewaysFile
+	// hints — освобождённые слоты, которые ждут возврата того же устройства.
+	// Ключ — slotKey, значение — индекс слота. При выдаче любого слота все
+	// подсказки на него удаляются, поэтому одновременно в карте не больше
+	// maxDevices записей (на каждый свободный слот — не более одной).
+	hints   map[slotKey]int
+	backoff map[string]*boState
+	gws     gatewaysFile
 
 	genMu sync.Mutex
 	gen   uint64
@@ -155,6 +172,7 @@ func (o *orchestrator) closeAll() {
 	}
 	o.states = make(map[string]*srcState)
 	o.devBySlot = make(map[int]*device)
+	o.hints = make(map[slotKey]int)
 	// freeSlots не пересобираем: после closeAll оркестратор не переиспользуется
 	// (main создаёт новый), а сброс мог бы раздать слоты «зависшему» run().
 	o.mu.Unlock()
@@ -176,7 +194,7 @@ func newOrchestrator(seg *bmsShm, sink *stat.Sink, stop chan struct{}, rescanCh 
 	return &orchestrator{
 		seg: seg, sink: sink,
 		states: make(map[string]*srcState), devBySlot: make(map[int]*device),
-		freeSlots: free, backoff: make(map[string]*boState),
+		freeSlots: free, hints: make(map[slotKey]int), backoff: make(map[string]*boState),
 		events: make(chan devEvent, 64), rescanCh: rescanCh, stop: stop,
 		jobs: make(chan probeJob, 16), results: make(chan probeOutcome, 16),
 		inflight: make(map[string]bool),
@@ -578,16 +596,30 @@ func (o *orchestrator) addSlot(st *srcState, s probeSlot) bool {
 	}
 	st.mu.Unlock()
 
+	id, truncated := sanitizeBaseN(s.Base)
+	key := slotKey{src: st.src.desc, addr: s.Addr, typeID: st.bt.TypeID(), id: id}
+
 	o.mu.Lock()
-	if len(o.freeSlots) == 0 {
-		o.mu.Unlock()
-		return false
+	slot := -1
+	if hint, ok := o.hints[key]; ok {
+		if o.takeFreeSlotLocked(hint) {
+			slot = hint
+		}
+		delete(o.hints, key) // подсказка одноразовая; при промахе — устарела
 	}
-	slot := o.freeSlots[0]
-	o.freeSlots = o.freeSlots[1:]
+	if slot < 0 {
+		if len(o.freeSlots) == 0 {
+			o.mu.Unlock()
+			return false
+		}
+		// Пока есть непомеченные свободные слоты, не отнимаем слот у ждущего
+		// устройства: берём первый без подсказки. Если все свободные слоты
+		// подсказаны — берём первый из них и снимаем подсказку (ёмкость важнее).
+		slot = o.takeFirstUnhintedSlotLocked()
+	}
+	o.dropSlotHintsLocked(slot)
 	o.mu.Unlock()
 
-	id, truncated := sanitizeBaseN(s.Base)
 	if truncated {
 		lx.Warnf("bms-reader: BASE > %d байт, обрезан: %q", idMax, s.Base)
 	}
@@ -604,6 +636,46 @@ func (o *orchestrator) addSlot(st *srcState, s probeSlot) bool {
 	// Изменение состава слотов — топология шины изменилась: отстойник сброшен.
 	o.clearBackoffPrefix(st.src.desc)
 	return true
+}
+
+// takeFreeSlotLocked забирает конкретный слот из пула свободных. Вызывается
+// под o.mu; возвращает false, если слот уже занят.
+func (o *orchestrator) takeFreeSlotLocked(slot int) bool {
+	for i, s := range o.freeSlots {
+		if s == slot {
+			o.freeSlots = append(o.freeSlots[:i], o.freeSlots[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// takeFirstUnhintedSlotLocked берёт первый свободный слот, на который нет
+// подсказки (если такие есть), иначе — первый свободный. Вызывается под o.mu.
+func (o *orchestrator) takeFirstUnhintedSlotLocked() int {
+	hinted := make(map[int]bool, len(o.hints))
+	for _, s := range o.hints {
+		hinted[s] = true
+	}
+	for i, s := range o.freeSlots {
+		if !hinted[s] {
+			o.freeSlots = append(o.freeSlots[:i], o.freeSlots[i+1:]...)
+			return s
+		}
+	}
+	slot := o.freeSlots[0]
+	o.freeSlots = o.freeSlots[1:]
+	return slot
+}
+
+// dropSlotHintsLocked удаляет подсказки на выданный слот: он больше не ждёт
+// прежнее устройство. Вызывается под o.mu.
+func (o *orchestrator) dropSlotHintsLocked(slot int) {
+	for k, s := range o.hints {
+		if s == slot {
+			delete(o.hints, k)
+		}
+	}
 }
 
 func (o *orchestrator) snapshot(st *srcState) []*device {
@@ -737,6 +809,9 @@ func (o *orchestrator) loseDevice(d *device) {
 	}
 	delete(o.devBySlot, d.slot)
 	o.freeSlots = append(o.freeSlots, d.slot)
+	// Запоминаем, какому устройству принадлежал слот: если оно вернётся на
+	// тот же источник/адрес с тем же ID, получит прежний слот, а не новый.
+	o.hints[slotKey{src: d.st.src.desc, addr: d.addr, typeID: d.st.bt.TypeID(), id: d.id}] = d.slot
 	o.mu.Unlock()
 	o.seg.release(d.slot) // снятие записи из списка (arch §12/§13)
 
