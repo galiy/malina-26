@@ -1,0 +1,29 @@
+{
+  "device": "dominator",
+  "stage": "monitor-after-restore",
+  "note": "монитор после восстановления настроек",
+  "started_local": "2026-11-03T09:40:07+03:00",
+  "started_msk": "2026-11-03T09:40:07+03:00",
+  "usb": {
+    "bus": 5,
+    "devnum": 20,
+    "serial": "<FTDI-serial>",
+    "product": "FT232R USB UART",
+    "sysfs": "5-2.4.4",
+    "idVendor": "0403",
+    "idProduct": "6001"
+  },
+  "firmware": {
+    "path": "/home/sasha/src/cleaning.malina/map2gui/mXP11p9v30_0_46k22_d.map2",
+    "sha256": "95483ab3b512d46aee06e8a2892f2305b2ee79909b716ac74072b7cbd413923f"
+  },
+  "host": "local-pc",
+  "kernel": "7.0.0-38-generic",
+  "tshark": "TShark (Wireshark) 4.6.4.",
+  "stopped_local": "2026-11-03T09:42:27+03:00",
+  "stopped_msk": "2026-11-03T09:42:27+03:00",
+  "pcap": {
+    "file": "usb.pcapng",
+    "size": 20823148
+  }
+}

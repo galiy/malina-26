@@ -1,0 +1,27 @@
+# lsusb (2026-11-03 09:12:22 MSK)
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+Bus 003 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 003 Device 002: ID 048d:5702 Integrated Technology Express, Inc. RGB LED Controller
+Bus 003 Device 003: ID 046d:0949 Logitech, Inc. Brio 90
+Bus 003 Device 004: ID 05e3:0608 Genesys Logic, Inc. Hub
+Bus 003 Device 005: ID 0483:a26d STMicroelectronics USB Watchdog
+Bus 004 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+Bus 005 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 005 Device 002: ID 0e8d:0608 MediaTek Inc. Wireless_Device
+Bus 005 Device 003: ID 05e3:0608 Genesys Logic, Inc. Hub
+Bus 005 Device 004: ID 1a2c:4c5e China Resource Semico Co., Ltd USB Keyboard
+Bus 005 Device 005: ID 258a:0051 SINO WEALTH Wired Gaming Mouse
+Bus 005 Device 012: ID 1a40:0101 Terminus Technology Inc. Hub
+Bus 005 Device 013: ID 1a40:0101 Terminus Technology Inc. Hub
+Bus 006 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+Bus 007 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 008 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+
+# /dev/serial/by-id
+total 0
+lrwxrwxrwx 1 root root 13 Nov  3 08:58 usb-Open_Development_USB_Watchdog_20313635574D431680020028-if00 -> ../../ttyACM0
+
+# ttyACM/ttyUSB
+ls: cannot access '/dev/ttyUSB*': No such file or directory
+crw-rw---- 1 root dialout 166, 0 Nov  3 09:12 /dev/ttyACM0

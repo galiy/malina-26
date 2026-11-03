@@ -367,6 +367,7 @@ SHA-256 `d53126ca62adaf574448d02e3705ef654ce4c7badad54eb0f7f9320bfcd70a2a`.
 ## 10. Ссылки
 
 - `docs/firmware/readme.md` — общая структура задачи и устройств.
+- `docs/firmware/protocol-differences.md` — отличия от Доминатора.
 - `docs/firmware/tools/README.md` — инструменты, зависимости, ограничения.
 - `docs/firmware/titanator/logs/*/analysis.md` — разборы этапов.
 - `map2gui/README.md` — окружение Wine/COM/тайминги.
